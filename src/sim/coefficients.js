@@ -93,16 +93,8 @@ export const COEFF = {
   // Heywood 1988, ch. 12), against 2.28 during compression and expansion.
   WOSCHNI_GAS_EXCHANGE_C1: 6.18,
 
-  // --- Breathing (breathing.js): the valves and the runner ---
-  // Discharge coefficient of a poppet valve on its open area (the lesser of curtain and
-  // throat). Heywood (1988, ch. 6) shows measured coefficients from about 0.5 to 0.7 across
-  // the lift range, lowest at high lift where the throat governs and the jet separates.
-  // CALIBRATED, once, for every engine: the valves' discharge coefficient on the curtain,
-  // and on the port throat of a head with no flow-bench figure (airflow.js `intakePortCfm`).
-  // 0.61 is the value at which the naturally aspirated presets, on their published cams,
-  // centre on their published power (within -9% to +5.5% each). It sits inside the 0.6-0.7
-  // Heywood gives for poppet valves. It is the one fitted number in the gas exchange; the
-  // shape of every engine's curve, where each peaks, comes from its geometry.
+  // --- Breathing (breathing.js): the valves and the runner --- Discharge coefficient of a
+  // poppet valve on its open area (the lesser of curtain and throat).
   BREATH_VALVE_CD: 0.61,
   // The port throat behind the valve seat, as a share of the valve head diameter. The open
   // area is the lesser of the curtain and this throat, which caps what lift can buy.
@@ -113,12 +105,8 @@ export const COEFF = {
   // The lift curve's shape (breathing.js `liftShare`): the flank is sin^1.4, as full as a
   // production cam's (Heywood ch. 6 shows such curves).
   BREATH_LIFT_SHAPE_EXP: 1.4,
-  // The opening and closing ramps (breathing.js `liftShare`): constant-velocity stretches
-  // that take up lash or a hydraulic lifter's bleed-down before the flank. Production
-  // hydraulic-roller lobes run a ramp of about 0.010 inch at 0.0008-0.001 inch per cam degree
-  // (Norton, Cam Design Handbook, ch. 9; cam makers' lobe sheets), half that per crank degree.
-  // With the flank's own low-lift tail they put the duration at 0.006 inch (a cam's
-  // advertised figure) about 50 degrees past the 0.050 inch one, as stock lobes run.
+  // The opening and closing ramps (breathing.js `liftShare`): constant-velocity stretches that
+  // take up lash or a hydraulic lifter's bleed-down before the flank.
   BREATH_RAMP_LIFT_M: 0.010 * 0.0254,
   BREATH_RAMP_VELOCITY_M_PER_DEG: 0.00045 * 0.0254,
   // Exhaust valve head as a share of the intake's: exhaust valves are made smaller because
@@ -133,8 +121,7 @@ export const COEFF = {
   // Catalyst substrates, for how hard each is to push through (breathing.js
   // `catalystLossShare`): the OEM converter is a 400-cell-per-square-inch ceramic with
   // 6.5-thousandths walls (Corning's standard Celcor 400/6.5); a high-flow converter a
-  // 200-cell metallic one wound from 0.05 mm (2-thousandths) foil. EXH_K_CATALYST is the
-  // ceramic's.
+  // 200-cell metallic one wound from 0.05 mm (2-thousandths) foil.
   CAT_CERAMIC_CPSI: 400,
   CAT_CERAMIC_WALL_IN: 0.0065,
   CAT_METALLIC_CPSI: 200,
@@ -142,9 +129,7 @@ export const COEFF = {
   EXH_K_CATBACK_FREE: 1.5,
   // Exhaust primaries (breathing.js): a cast manifold's short runners into a log, against
   // long-tube headers' (about 30 inches, the length long-tube primaries are sold at) merging
-  // in a collector. The collector's area over one primary's sets the reflection: a log
-  // barely larger than its runners reflects weakly; a header's merge collector, about twice
-  // a primary, sends back a strong suction wave.
+  // in a collector.
   EXH_PRIMARY_MANIFOLD_M: 0.2,
   EXH_PRIMARY_HEADERS_M: 0.76,
   EXH_COLLECTOR_AREA_MANIFOLD: 1.3,
@@ -170,17 +155,12 @@ export const COEFF = {
   // bellmouth to 0.5 for a sharp edge; a production runner sits between).
   BREATH_RUNNER_FRICTION: 0.03,
   BREATH_RUNNER_ENTRY_K: 0.5,
-  // The intake plenum's volume as a share of the engine's displacement, where the engine
-  // does not say. Intake design guidance puts a naturally aspirated plenum at about half to
-  // the whole of the displacement (Blair, Design and Simulation of Four-Stroke Engines,
-  // ch. 6). Its cross-section, taken as the face of that volume, against a runner's sets how
-  // strongly a wave reflects where the runner opens into it (breathing.js).
+  // The intake plenum's volume as a share of the engine's displacement, where the engine does
+  // not say.
   BREATH_PLENUM_VOLUME_SHARE: 0.8,
   BREATH_TUNE_SHARE_OF_REDLINE: 0.68,
-  // --- The throttle and the intake duct (throttle.js) ---
-  // Discharge coefficient of a throttle plate's open annulus, and where the plate rests
-  // closed (degrees from across the bore). The leakage share stands for the gap a closed
-  // plate leaves: production throttles idle on a few percent of opening beyond it.
+  // --- The throttle and the intake duct (throttle.js) --- Discharge coefficient of a throttle
+  // plate's open annulus, and where the plate rests closed (degrees from across the bore).
   THROTTLE_CD: 0.8,
   THROTTLE_CLOSED_DEG: 7,
   THROTTLE_LEAK_SHARE: 0.0008,
@@ -230,11 +210,8 @@ export const COEFF = {
   // engines show 5-15 depending on charge motion.
   FLAME_DEVELOPMENT_DEG: 8,
   // A spark fired well after top dead centre lights a kernel in a chamber that is already
-  // expanding: pressure, temperature and turbulence are all falling, and a share of the
-  // charge is never reached before the exhaust valve opens (partial burns, quenched
-  // kernels). That share leaves unburned and lights in the manifold: what catalyst-heating
-  // strategies use spark 10-25° ATDC for, and what an overrun burble's pops are. None at
-  // any spark up to 5° after TDC, rising to 55% by 35° after.
+  // expanding: pressure, temperature and turbulence are all falling, and a share of the charge
+  // is never reached before the exhaust valve opens (partial burns, quenched kernels).
   LATE_SPARK_QUENCH_ONSET_ATDC: 5,
   LATE_SPARK_QUENCH_SPAN_DEG: 30,
   LATE_SPARK_QUENCH_MAX: 0.55,
@@ -512,9 +489,7 @@ export const COEFF = {
   TURBINE_PULSE_RECOVERY: 0.35,
   // Cylinder pressure at exhaust valve opening over manifold pressure, as a line in RPM
   // through the crank-angle cycle's own full-load values (turbo.js exhaustPulsePressureKpa),
-  // at the cycle's opening: the exhaust lobe's checking height. The gas exchange carries it
-  // back to the seat along the burned gas's isentrope (breathing.js); the turbine's pulse
-  // term reads it as it stands, with TURBINE_PULSE_RECOVERY fitted on that reading.
+  // at the cycle's opening: the exhaust lobe's checking height.
   EVO_PRESSURE_RATIO_AT_0: 2.75,
   EVO_PRESSURE_RATIO_PER_RPM: 0.00092,
   // AFR the exhaust-mass estimate assumes. Only total mass matters, so gasoline is close
@@ -528,13 +503,11 @@ export const COEFF = {
   INDUCTION_SPOOL_STEP_PSI: 0.5,
   INDUCTION_EDGE_PASSES: 12,
 
-  // --- Superchargers (src/sim/blower.js) ---
-  // The bypass valve's vacuum actuator: fully open at 5 inHg (16.9 kPa) of manifold vacuum,
-  // an owner's bench measurement of a factory Eaton actuator (MG Experience forum, "Supercharger
-  // bypass valve actuating pressure"), and shut for full boost within 3 inHg (10.2 kPa) of the
-  // air outside, US Patent 5,186,081's example spring reference. It had been on throttle
-  // position (shut only past 97%), which left a blower making no boost at 70% throttle with
-  // the manifold at 96 kPa.
+  // --- Superchargers (src/sim/blower.js) --- The bypass valve's vacuum actuator: fully open
+  // at 5 inHg (16.9 kPa) of manifold vacuum, an owner's bench measurement of a factory Eaton
+  // actuator (MG Experience forum, "Supercharger bypass valve actuating pressure"), and shut
+  // for full boost within 3 inHg (10.2 kPa) of the air outside, US Patent 5,186,081's example
+  // spring reference.
   BLOWER_BYPASS_OPEN_VAC_KPA: 16.9,
   BLOWER_BYPASS_SHUT_VAC_KPA: 10.2,
   // Positive-displacement efficiency map (modelling choice, shaped to the published
@@ -697,25 +670,8 @@ export const COEFF = {
   // made the overload unreachable. `tests/presets.test.js` asserts every preset clears.
   PEAK_PRESSURE_LIMIT_BAR: 105,
 
-  // --- Wear rates (percent of component life per pull) ---
-  // The MECHANISMS are sourced (MAHLE, "Engine components. Damage scenarios: causes,
-  // remedies, and avoidance", 2024): knock erodes the crown and fractures ring lands and
-  // rings (§2.1.2, §3.2); a lean mixture, low octane or too much boost melts the crown
-  // and top land (§2.1.2); fuel washing the oil off the bore "increases wear on the
-  // piston, piston rings, and cylinder surface dramatically" (§1.2); a valve that runs
-  // hot burns through (§5.7). The RATES are calibrations: no source gives life lost per
-  // degree of knock or per pull. docs/damage-model.md lists each.
-  //
-  // Knock the ECU heard and pulled timing for is charged far below knock nobody
-  // corrected. Closed-loop knock control exists so an engine can run AT its knock limit:
-  // the controller retards on the first light events and creeps back until it hears them
-  // again, so a production engine meets its limit routinely on poor fuel or a hot day
-  // (Bosch Automotive Handbook, "Knock control"). The heavy, sustained knock that erodes
-  // crowns and cracks ring lands is the knock the controller did not hear. At the old
-  // shared rate (0.06) a turbo bolted onto a stock VQ35HR at 7 psi, on its own knock
-  // control, spent 19% of its pistons in one dyno pull before it could be tuned, and a
-  // few pulls finished it; at 0.005 that pull costs about 1.6%, and the same knock unheard
-  // still costs what it did.
+  // --- Wear rates (percent of component life per pull) --- The MECHANISMS are sourced (MAHLE,
+  // "Engine components.
   WEAR_KNOCK: 0.005,           // per degree of retard the ECU pulled, per logged point
   WEAR_KNOCK_UNHEARD: 0.12,    // per degree of knock nobody corrected, per logged point
   WEAR_LEAN: 0.15,
@@ -752,96 +708,33 @@ export const COEFF = {
   BEARING_PRESSURE_FREE_BAR: 60,
   BEARING_PRESSURE_FREE_BAR_BOOST_RATED: 80,
   WEAR_BEARING_PER_BAR: 0.075,
-  // The thresholds above are for a pull's AVERAGE peak pressure. The live engine is
-  // judged one instant at a time, and a stock pull's highest point sits 6-11 bar above
-  // its average across the catalogue (VQ35HR 58 average, 69 at its torque peak; EA888 R
-  // 76 and 85). DERIVED from those pulls: an instant is free up to the threshold plus
-  // the widest of those spreads, so no factory engine on its factory tune wears its
-  // bearings anywhere in its range, as none does on the dyno. Judged against the bare
-  // average threshold, a stock VQ35DE held at full throttle on the stand lost 2% of its
-  // bearings in five minutes.
+  // The thresholds above are for a pull's AVERAGE peak pressure.
   BEARING_LIVE_POINT_SPREAD_BAR: 11,
 
-  // --- Damage: what worn parts do to the engine, and live-only wear (damage.js) ---
-  // Every value here is listed with its source, or marked as a calibration, in
-  // docs/damage-model.md. A SOURCED value comes from a cited measurement or
-  // specification; a CALIBRATION is this model's choice where no published figure exists,
-  // set to give the order of magnitude the sources describe.
-  //
-  // Extra blow-by of a worn-out ring pack, as a share of the trapped charge. SOURCED as
-  // an order of magnitude: DieselNet's rules of thumb put a worn engine's blow-by at twice
-  // a new one's (rated kW/90 against kW/180, dm³/s), and a new spark-ignition engine's at
-  // well under 1% of its intake flow (kW/180 dm³/s is about 0.5% of the air a gasoline
-  // engine breathes at rated power). So wearing out the rings adds about 1% of the charge.
-  // Leak-down percentages are a static test at cranking pressure and are NOT this number:
-  // in a running engine the leak has a few milliseconds per cycle.
+  // --- Damage: what worn parts do to the engine, and live-only wear (damage.js) --- Every
+  // value here is listed with its source, or marked as a calibration, in docs/damage-model.md.
   DAMAGE_RING_LEAK_MAX: 0.01,
-  // A burnt valve at zero: the share of its own cylinder's charge it loses back into the
-  // port. CALIBRATION: MAHLE describes the mechanism (a valve that no longer seals cannot
-  // shed its heat, cracks and melts through; damage brochure §5.7), but no source gives a
-  // running leak fraction.
+  // A burnt valve at zero: the share of its own cylinder's charge it loses back into the port.
   DAMAGE_VALVE_LEAK_MAX: 0.5,
   // Below this valve health the burnt cylinder stops firing, down to dead at zero.
   // CALIBRATION: a burnt-through valve leaves a cylinder with no compression (MAHLE §5.7);
   // where along the way it stops firing is this model's choice.
   DAMAGE_VALVE_DEAD_BELOW: 25,
-  // Worn main and rod bearings: their clearance opens, and oil escapes through them
-  // faster. A pressure-fed bearing passes oil as laminar Poiseuille flow, which goes with
-  // the CUBE of the clearance (the pressure-fed journal bearing model in MathWorks
-  // Simscape Fluids; any lubrication text). The pump is positive displacement, so below
-  // its relief valve the pressure falls in proportion to how much more the system leaks.
-  //   share of the oil flow the crank bearings take: SOURCED, about 25% (SAE 2020-28-0338,
-  //   a 1-D model of a 1.5 L four-cylinder diesel's lubrication circuit; the rest goes to
-  //   the head, the chain, piston cooling and the relief);
-  //   clearance of a worn-out bearing against a new one: SOURCED from a service limit,
-  //   Toyota 2AZ-FE rod bearings, standard 0.024-0.048 mm, maximum 0.08 mm (Toyota
-  //   T-SB-0030-15): 0.08 against the middle of the standard range is 2.22 times.
-  // Together: a bottom end worn to the limit leaks (0.75 + 0.25 × 2.22³) = 3.5 times as
-  // freely, so the pump makes under a third of the pressure below its relief, and the
-  // relief still caps it at speed: the low hot-idle pressure that is a worn engine's
-  // classic symptom.
-  // Wear does NOT add friction: hydrodynamic friction falls as clearance grows (Petroff's
-  // law, torque ∝ 1/c), and the drag of a seizing bearing is the failure itself.
+  // Worn main and rod bearings: their clearance opens, and oil escapes through them faster.
   DAMAGE_BEARING_OIL_SHARE: 0.25,
   DAMAGE_BEARING_CLEARANCE_WORN: 2.22,
-  // The oil pressure a running bearing needs, as a share of what this engine's healthy
-  // pump gives at the same speed and oil temperature, and never less than a floor.
-  // SOURCED from Toyota's service specifications, which give a minimum and a normal
-  // range: at idle 29 kPa or more; at 3000 rpm 245 kPa minimum against a range topping
-  // out at 490-539 kPa (Hilux, 1MZ-FE and 3MZ-FE manuals), so the minimum is 45-50% of a
-  // healthy engine's pressure. Below the maker's minimum is short of oil. Judged against
-  // the healthy pump, so hot thin oil at idle, which every engine shows, is not
-  // starvation. A bottom end past about two-thirds worn falls below it on its own (the
-  // clearance figures above put it at 45% of healthy there) and starts starving itself:
-  // the accelerating last stage of a worn bearing, before it knocks and spins.
+  // The oil pressure a running bearing needs, as a share of what this engine's healthy pump
+  // gives at the same speed and oil temperature, and never less than a floor.
   DAMAGE_OIL_FILM_SHARE: 0.45,
   DAMAGE_OIL_FILM_MIN_KPA: 29,
-  // Bearing life per second with no oil pressure at all. SOURCED: with its oil supply
-  // stopped, a motored 2.5 L four-cylinder on conventional bearings seized in 28 s (Nissan,
-  // US 9,109,627 B2, Comparative Example 4). 100% / 28 s. A firing engine under load
-  // loads its bearings harder, so this is the gentle end; short of oil rather than dry, it
-  // is charged in proportion to the shortfall.
+  // Bearing life per second with no oil pressure at all.
   DAMAGE_OIL_STARVE_PER_S: 3.6,
-  // Bearing life per second per unit of overspeed inertia load. The load is SOURCED
-  // physics: a reciprocating mass on a slider crank pulls on its rod with m r ω²
-  // (cos θ + cos 2θ / n), so past the rated speed it grows as (rpm / rated)² and the
-  // excess is (rpm / rated)² − 1. The rate is a CALIBRATION: 10% over the rated speed
-  // costs about 2% a second, so a limiter held past the rating wears the bottom end out in
-  // about a minute; no published rate of rod-bearing wear with overspeed exists.
+  // Bearing life per second per unit of overspeed inertia load.
   DAMAGE_OVERSPEED_PER_S: 10,
   // The overspeed load a bottom end carries without wear, as a multiple of the load at its
-  // rated speed. CALIBRATION: the rating is a practice band, not a failure point
-  // (bottomEnd.js), and a factory engine is rated at its own limiter, which every engine
-  // bounces off and overshoots by a hundred RPM or so without harm. Charged from the
-  // rated speed itself, a stock VQ35DE revved on the stand lost 3-6% of its bearings in
-  // five minutes, all of it on its own factory limiter. Wear starts at 1.25 times the
-  // rated load, 12% over the rated speed.
+  // rated speed.
   DAMAGE_OVERSPEED_FREE_LOAD: 1.25,
-  // Where the coolant boils. SOURCED: a 50/50 ethylene glycol coolant under a 15 lb
-  // pressure cap boils over at 265 °F, 129 °C (Prestone's rating for its 50/50 premix).
-  // Past it the head and bores lose their coolant contact and scuff and burn (MAHLE,
-  // piston seizure from overheating, §2.2.1). The rate per degree is a CALIBRATION: an
-  // engine at 135 °C, a dead fan, spends its pistons and valves in a few minutes.
+  // Where the coolant boils.
   DAMAGE_OVERHEAT_C: 129,
   DAMAGE_OVERHEAT_PER_C_S: 0.05,
   // Average peak pressure that raises the bottom-end advisory. It means "boosted or
@@ -872,20 +765,13 @@ export const COEFF = {
 
   // --- Mixture targets ---
   BEST_AFR_NA: 12.85,          // lambda ~0.87, mid of the published best-torque band
-  // Under boost the target richens for knock and exhaust temperature, not for power (the
-  // cycle prices torque; this is only the advice): HP Academy's Practical Standalone Tuning,
-  // "Choosing air fuel ratio": "Most boosted engines will want to see a lambda of 0.78 to
-  // 0.80 at high boost to ensure engine safety". 0.1 AFR a psi reaches the cap, 11.6:1
-  // (lambda 0.79), at about 12.5 psi; at 8 psi it asks 12.05:1 (lambda 0.82). It once
-  // stopped at 12.2:1 (lambda 0.83), and a turbo tune that followed the advice ran pump gas
-  // into boost leaner than a tuner would, on a few degrees of spark.
+  // Under boost the target richens for knock and exhaust temperature, not for power (the cycle
+  // prices torque; this is only the advice): HP Academy's Practical Standalone Tuning,
+  // "Choosing air fuel ratio": "Most boosted engines will want to see a lambda of 0.78 to 0.80
+  // at high boost to ensure engine safety".
   BEST_AFR_BOOST_SHIFT: 0.10,  // AFR richer per psi of boost
   BEST_AFR_BOOST_CAP: 1.25,    // richest the target is allowed to shift (lambda ~0.79)
-  // Below this under load, unburnt fuel starts causing harm. Under the richest power
-  // enrichment any factory runs (the LM7's λ 0.749 among 26 stock GM calibrations,
-  // gm-benchmark.json; the TUNE advisor's MIX_RICHEST_LAMBDA 0.74), so a mixture a factory or
-  // a careful boost tune runs (11:1 is λ 0.75) is never called damaging. At 0.75 a turbo VQ
-  // on an 11.2:1 target read "dangerously rich" for a 2% miss.
+  // Below this under load, unburnt fuel starts causing harm.
   RICH_DAMAGE_LAMBDA: 0.70,
   LEAN_DAMAGE_AFR: 15.2,
 

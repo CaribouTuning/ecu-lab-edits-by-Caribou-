@@ -1,10 +1,6 @@
 /**
  * The tuning workflow, played by a player who reads only the game (tests/guidedPlayer.js):
  * every story job finishes, and SANDBOX builds that once left the player stuck finish clean.
- *
- * Each was a dead end a player met: the log telling them to press a button the 8 × 6 grid
- * did not have, the log calling spark short where the advisor listed no cell, and the log
- * sending them back to Correct VE from logs when the cells had nothing left to change.
  */
 
 import { describe, expect, it } from 'vitest';

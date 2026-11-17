@@ -82,10 +82,7 @@ describe('sensors: the ECU acts on what it measures', () => {
 
   it('drives closed loop to the wrong mixture on a mis-scaled wideband, while reading on target', () => {
     // A pull's load is a throttle opening: 15% holds this 3.5 L near 36 kPa at 3500 RPM, part
-    // load in closed loop (40% opening is already near full load, in power enrichment). The
-    // ECU set to read "AFR 10-20" sees 1.00 at 2.35 V, which the fitted controller's lambda
-    // 0.5-1.5 line puts at lambda 0.970: closed loop pulls the mixture rich toward it while
-    // the gauge reads on target.
+    // load in closed loop (40% opening is already near full load, in power enrichment).
     const eng = makeEngine({ cal: { 'sensors.wideband': 'afr-10-20' } });
     const reads = S.readSensor({ kind: 'wideband', value: 0.97, part: 'lambda-0.5-1.5', scale: 'afr-10-20' }).value;
     expect(reads).toBeCloseTo(1, 2);
@@ -418,10 +415,8 @@ describe('the live engine runs its controllers in time', () => {
     expect(lowest).toBeGreaterThan(560);
   });
 
-  // A real engine catches, flares a few hundred RPM over its fast idle and comes down in
-  // a second or two. The base idle air used to be a fifth open on a cold start and the
-  // hold ran nearly a second, so every V6 shot to 2,500–2,900 RPM and took four seconds
-  // to come back: it read as the throttle sticking.
+  // A real engine catches, flares a few hundred RPM over its fast idle and comes down in a
+  // second or two.
   it.each([[null], ['vq35hr'], ['vq35de-revup'], ['n54']])('flares modestly on a start and settles (%s)', (preset) => {
     for (const coolantC of [20, 88]) {
       const { rows } = runLive(makeEngine({ preset }), { seconds: 4, coolantC });

@@ -1,10 +1,8 @@
 /**
- * Engines of the player's own, built the way a player builds them on BUILD (the spec form,
- * the safe base map it generates), and played the way a player plays them: pulled at full,
- * part and light throttle, started and idled on the stand, turbocharged and tuned from the
- * advice, given a burble. Deliberately far from the reference V6: a high-revving small four,
- * a big-bore V8, an undersquare six, a high-compression oversquare V6 and a low-compression
- * four built for boost.
+ * Engines of the player's own, built the way a player builds them on BUILD (the spec form, the
+ * safe base map it generates), and played the way a player plays them: pulled at full, part
+ * and light throttle, started and idled on the stand, turbocharged and tuned from the advice,
+ * given a burble.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -57,10 +55,7 @@ describe.each(Object.entries(ENGINES))('%s, built on BUILD', (_name, spec) => {
     expect(tuneFromTheAdvice(t)).toBeLessThanOrEqual(6);
     // TUNE's own verdict (judged on a full-throttle pull, as the app judges it) is clean.
     expect(adviceAt(t, 100).a.overAdvanced, 'past the knock limit on TUNE').toEqual([]);
-    // And the engine knocks at no throttle. Advice computed from a part-throttle pull can
-    // still flag a cell between two rows the pull never ran through (75 kPa at 6500 RPM,
-    // a 27 degree estimate) where every opening from 30% to 40% runs it 1.8-5.4 degrees
-    // clear: the between-row estimate is the pessimistic one, and no screen shows it.
+    // And the engine knocks at no throttle.
     for (const load of LOADS) {
       expect(adviceAt(t, load).pull.events.filter((e) => e.type === 'knock'), `knock at ${load}%`).toEqual([]);
     }

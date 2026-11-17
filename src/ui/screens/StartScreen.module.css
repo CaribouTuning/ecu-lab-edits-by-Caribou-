@@ -1,8 +1,6 @@
 /*
- * The title screen as a Mac app's welcome window: identity on the left, the ways in as a
- * list on the right, one window on a plain dark desktop. On a phone the panes stack and
- * the list is an inset group. Its own palette (tokens.css --start-*), remapped here, so
- * the shop's theme does not reach it.
+ * The title screen as a Mac app's welcome window: identity on the left, the ways in as a list
+ * on the right, one window on a plain dark desktop.
  */
 .screen {
   --bg: var(--start-bg);

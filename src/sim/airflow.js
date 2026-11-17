@@ -1,11 +1,4 @@
-/**
- * Airflow model: hardware in, VE out.
- *
- * This is the ONLY place hardware is allowed to change how the engine breathes. If you are
- * adding a part, it belongs here (or in the knock and fuel terms of `point.js`), never as a
- * bonus multiplier on power. The breathing itself is the cylinder's gas exchange
- * (breathing.js): valves, cam events, the intake runner and the exhaust it pushes against.
- */
+/** Airflow model: hardware in, VE out. */
 
 import { AMBIENT_K, BARO_KPA, GAMMA_AIR, GASOLINE_STOICH, KPA_PER_BAR, PSI_TO_KPA, R_AIR } from './constants.js';
 import { COEFF } from './coefficients.js';
@@ -48,9 +41,8 @@ export function computeHardwareVE(cfg, mods, hw = {}, axes = null) {
 
 /**
  * The intake runner this engine breathes through: its bore from the intake valves it feeds,
- * its length the one whose torque (filling less friction) peaks at `tuneRpm` (the published torque peak where
- * there is one), found by stepping the length and running the gas exchange. A player's
- * engine may set its own length (`cfg.runnerMm`).
+ * its length the one whose torque (filling less friction) peaks at `tuneRpm` (the published
+ * torque peak where there is one), found by stepping the length and running the gas exchange.
  * @param {object} base the breathing geometry without the runner length
  * @param {number} tuneRpm
  * @param {object|null} [derived] the engine's derived figures, for its friction
@@ -99,9 +91,7 @@ function tunedRunnerM(base, tuneRpm, derived = null, cyl = null) {
     return { peak, atTune: ves[Math.max(0, at)] };
   };
   // Of the lengths whose torque peaks at or above the tune speed, the one that fills best
-  // there: the strongest runner that still peaks where it is meant to. Choosing the length
-  // whose peak lands nearest the speed instead read a flat curve's peak, which jumps between
-  // lengths on small changes, and could pick a weak runner over a strong one beside it.
+  // there: the strongest runner that still peaks where it is meant to.
   let best = null; let bestAt = -Infinity; let nearest = 0.35; let nearestErr = Infinity;
   const search = (from, to, by) => {
     for (let L = from; L <= to + 1e-9; L += by) {
@@ -168,8 +158,7 @@ export function breathingGeometry(cfg, phase = {}) {
       : exhaustValves * (Math.PI / 4) * (COEFF.BREATH_THROAT_SHARE * exhaustValveM) ** 2 * COEFF.EXH_PRIMARY_AREA_SHARE,
     // At the collector a primary's wave meets every other branch of the merge, not one pipe:
     // the other primaries into it as well as the collector's outlet (linear junction theory:
-    // Kinsler & Frey, branched pipes; Blair, Design and Simulation of Four-Stroke Engines,
-    // ch. 2), so it reflects as into their summed area.
+    // Kinsler & Frey, branched pipes; Blair, Design and Simulation of Four-Stroke Engines, ch.
     exhaustReflection: reflectionCoefficient(phase.headers
       ? COEFF.EXH_COLLECTOR_AREA_HEADERS + (primariesPerCollector(cfg) - 1)
       : COEFF.EXH_COLLECTOR_AREA_MANIFOLD),
@@ -179,9 +168,7 @@ export function breathingGeometry(cfg, phase = {}) {
       intakeAdvanceDeg: phase.intakeCamAdvanceDeg ?? 0,
       maxLiftM: intakeLiftM, exhaustMaxLiftM: exhaustLiftM,
       // A cam card's installed intake centreline (moved by an intake phaser's advance) and
-      // lobe separation, which fix the exhaust centreline at 2 * LSA - ICL before TDC. Each
-      // phaser moves only its own lobe: the separation handed on is the one that keeps the
-      // exhaust centreline where the card puts it, and valveEvents adds an exhaust retard.
+      // lobe separation, which fix the exhaust centreline at 2 * LSA - ICL before TDC.
       iclDeg: cfg.iclDeg != null ? cfg.iclDeg - (phase.intakeCamAdvanceDeg ?? 0) : null,
       lsaDeg: cfg.lsaDeg != null ? cfg.lsaDeg - (phase.intakeCamAdvanceDeg ?? 0) / 2 : null,
     }),
@@ -230,10 +217,7 @@ export function hardwareVeAt(cfg, mods, hw = {}) {
     intakeCamAdvanceDeg = 0, exhaustCamRetardDeg = 0,
   } = hw;
   // The same engine's breathing is asked for by its factory calibration, its VE truth, the
-  // advisor and every pull: one grid per engine, kept, so no cell is solved twice. Keyed on
-  // everything below that the gas exchange reads.
-  // The bottom end's rating is the store's, not the breathing's: a catalogue engine carries it once
-  // loaded and not in its factory calibration, and keying on it solved the same grid twice.
+  // advisor and every pull: one grid per engine, kept, so no cell is solved twice.
   const { bottomEndRatedRpm: _rated, bottomEnd: _parts, ...breathed } = cfg;
   const key = JSON.stringify([breathed, !!mods.headers, !!mods.intercooler, turboOn, turbine?.effectiveAreaM2 ?? null,
     exhaustDia, fuel?.stoich ?? null, intakeCamAdvanceDeg, exhaustCamRetardDeg, COEFF.BREATH_VALVE_CD]);
@@ -333,14 +317,6 @@ function buildVeReader(cfg, mods, hw, key = null) {
     const intakeK = chargeTempK(boostPsi, !!mods.intercooler);
     // Exhaust manifold pressure is set by the flow it passes, which is set by the breathing:
     // repeated substitution from atmospheric; three passes settle it well inside 0.1% VE.
-    // Each pass is the next cycle: it starts from the waves the last one left in the runner.
-    // The burned gas the exhaust stroke starts from is set by the mixture, not by how much
-    // of it there is: a stoichiometric charge burns to the same temperature at any density.
-    // So every cell runs on the full-charge, stoichiometric exhaust temperature, the one the
-    // induction solve prices the turbine on (thermo.js `INDUCTION_REF_EXHAUST_K`).
-    // `exhaustTempK`'s load term is how a probe in the manifold reads a small flow cooled by
-    // the port: taking it as the cylinder's own gas put a light-load, high-speed cylinder
-    // at 600 K and starved its filling (cold residual is dense and hard to push out).
     const tex = INDUCTION_REF_EXHAUST_K;
     let emp = BARO_KPA;
     let r = null;
@@ -373,25 +349,18 @@ function buildVeReader(cfg, mods, hw, key = null) {
 
 /**
  * The cylinder's pressure through all four strokes, from the model's two records of it: the
- * closed cycle as `runCycle` integrates it (intake valve closing to exhaust valve opening)
- * and the open period as the gas exchange does (exhaust opening to intake closing, through
- * blowdown, the exhaust stroke, overlap and the intake stroke). One crank frame for both:
- * 0° is top dead centre between the exhaust and intake strokes and 360° is firing TDC.
- * Where they meet at exhaust opening they agree to within the cycle's scatter: the gas
- * exchange starts its blowdown from `COEFF.EVO_PRESSURE_RATIO_*`, the closed cycle's pressure
- * at ITS (later) opening, carried back to the seat along the burned gas's isentrope.
+ * closed cycle as `runCycle` integrates it (intake valve closing to exhaust valve opening) and
+ * the open period as the gas exchange does (exhaust opening to intake closing, through
+ * blowdown, the exhaust stroke, overlap and the intake stroke).
  * @param {{deg: number[], bar: number[], burned: number[]}} cycleTrace `runCycle`'s trace
- *   (degrees from firing TDC), a pull point's `cycleTrace`
  * @param {{deg: number[], cylKpa: number[]}} exchangeTrace `gasExchangeTrace`'s `trace`
- *   (degrees from the overlap TDC)
  * @returns {{phi: number[], bar: number[], burned: number[]}} sorted by crank angle, 0-720°
  */
 export function fourStrokeTrace(cycleTrace, exchangeTrace) {
   const rows = [];
-  // The two records overlap, because they time the valves differently: the closed cycle
-  // closes and opens them at their effective (0.050 in) events, the gas exchange at the seat,
-  // so it opens the exhaust valve some 40 degrees sooner. From the moment either valve is off
-  // its seat, the gas exchange's record is the one that describes the cylinder.
+  // The two records overlap, because they time the valves differently: the closed cycle closes
+  // and opens them at their effective (0.050 in) events, the gas exchange at the seat, so it
+  // opens the exhaust valve some 40 degrees sooner.
   const openFrom = exchangeTrace.deg[0] + 720; // its exhaust opening, in this frame
   const openTo = exchangeTrace.deg[exchangeTrace.deg.length - 1]; // its intake closing
   cycleTrace.deg.forEach((d, i) => {
@@ -407,11 +376,10 @@ export function fourStrokeTrace(cycleTrace, exchangeTrace) {
 }
 
 /**
- * One operating point's gas exchange laid open, for the Physics page's live diagram: the
- * same geometry, exhaust back-pressure passes and runner waves as the VE truth computes at
- * that speed and manifold pressure (`buildVeReader`), its last pass kept crank degree by
- * crank degree, and the exhaust system's pressure drop part by part. Nothing here is a second
- * model: every number is one the breathing already makes.
+ * One operating point's gas exchange laid open, for the Physics page's live diagram: the same
+ * geometry, exhaust back-pressure passes and runner waves as the VE truth computes at that
+ * speed and manifold pressure (`buildVeReader`), its last pass kept crank degree by crank
+ * degree, and the exhaust system's pressure drop part by part.
  * @param {import('./engine.js').EngineConfig} cfg
  * @param {{headers?: boolean, exhaust?: boolean, intercooler?: boolean, catalyst?: 'ceramic'|'metallic'|'none'}} mods
  * @param {{turboOn?: boolean, turbine?: any, exhaustDia?: number, fuel?: any, intakeCamAdvanceDeg?: number, exhaustCamRetardDeg?: number}} hw
@@ -489,9 +457,8 @@ export function gasExchangeTrace(cfg, mods, hw, rpm, mapKpa) {
 export function headDefaultsOf(cfg) {
   const plain = { ...cfg, intakeLiftMm: undefined, exhaustLiftMm: undefined, exhaustPortCfm: undefined, intakePortCfm: cfg.intakePortCfm, lsaDeg: undefined, iclDeg: undefined };
   // Every figure but the runner is read with the runner held at any length: none of them
-  // depends on it, and tuning the runner to the engine is the one costly step (about 0.4 s
-  // on a phone each time the block changes). The runner's own default is tuned only when
-  // asked for, below.
+  // depends on it, and tuning the runner to the engine is the one costly step (about 0.4 s on
+  // a phone each time the block changes).
   const held = { ...plain, runnerMm: cfg.runnerMm ?? 350 };
   const g = breathingGeometry(held);
   const camDuration = cfg.camDuration ?? CAM_BASE_DURATION;
@@ -539,10 +506,9 @@ function reflectionCoefficient(areaRatio) {
 }
 
 /**
- * What an exhaust pipe costs at full power: the share of its peak airflow the engine loses
- * on this pipe against one too big to restrict it, from the same gas exchange that prices
- * the pipe in every pull (its pressure drop at the flow the engine makes). Read over the
- * top 1500 rpm, where the flow is greatest.
+ * What an exhaust pipe costs at full power: the share of its peak airflow the engine loses on
+ * this pipe against one too big to restrict it, from the same gas exchange that prices the
+ * pipe in every pull (its pressure drop at the flow the engine makes).
  * @param {import('./engine.js').EngineConfig} cfg
  * @param {object} mods
  * @param {object} hw as for hardwareVeAt (turbo, turbine, fuel)

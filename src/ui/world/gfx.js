@@ -1,12 +1,7 @@
 /**
- * The drawing toolkit the world's models and levels share: flat-shaded "toon" materials,
- * crisp pixel-edge lines, and the few shapes WebGL does not give for free (a cabin that
- * tapers, a side-profile car body).
- *
- * The look is pixel art in three dimensions. The scene is drawn small and scaled up with
- * nearest-neighbour filtering (see stage.js), shaded in a handful of hard steps rather than
- * a smooth gradient, and every model of consequence gets a one-pixel dark edge. Colours are
- * only ever palette keys; this file never names one.
+ * The drawing toolkit the world's models and levels share: flat-shaded "toon" materials, crisp
+ * pixel-edge lines, and the few shapes WebGL does not give for free (a cabin that tapers, a
+ * side-profile car body).
  */
 
 import * as THREE from 'three';
@@ -428,12 +423,7 @@ export function sign(text, o = {}) {
 
 /**
  * Merge a group of scenery that never moves into a handful of meshes: one per material (and
- * shadow setting), and one line set for every edge. A town of a thousand boxes becomes a few
- * dozen draw calls, which is the difference between a phone keeping up and not.
- *
- * Only meshes and edge lines directly or indirectly under `root` are touched; give it a group
- * that holds nothing that animates, is removed later, or is looked at through a hit test.
- *
+ * shadow setting), and one line set for every edge.
  * @param {THREE.Object3D} root
  * @returns {number} how many meshes were merged away
  */

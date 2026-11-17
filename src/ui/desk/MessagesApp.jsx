@@ -1,12 +1,4 @@
-/**
- * CAREER's Messages app: your conversation with Pops, drawn the way iMessage draws one.
- *
- * The conversation list (one thread, Pops) and the thread itself; on a phone one at a time,
- * side by side where there is room. Everything Pops sends is in the one thread, oldest at
- * the top: a chapter opens with what he has to say, in bubbles, then what Ray taught him as a
- * card (as iMessage shows a link), then the goal; a text closes the chapter, and you answer
- * it. The day's tip arrives last. Opening the thread reads it all.
- */
+/** CAREER's Messages app: your conversation with Pops, drawn the way iMessage draws one. */
 
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';

@@ -1,26 +1,6 @@
 /**
  * An engine out of its car, in the game's pixel-art 3D: the model the Build app turns on
  * screen, and the one running on the stand in the shop.
- *
- * It is drawn from what is really built, so changing the engine changes the model:
- *   layout          I4, I6, V6 or V8: one bank or two, and how many cylinders on each
- *   bore and stroke how long the block is (cylinder pitch from the bore) and how tall
- *   valvetrain      a twin-cam head's wide cover with two cam humps, a single-cam's narrow
- *                   one, or a pushrod V's low covers with the cam in the block
- *   exhaust         a cast log manifold, or long-tube headers when they are fitted
- *   induction       a turbo on the exhaust side with its pipe to the throttle (and an
- *                   intercooler in that pipe when there is one), or a supercharger on top
- *   intake          the airbox pipe, or a cone filter when an aftermarket intake is fitted
- *   nitrous         a solenoid and its blue line into the intake
- *   materials       a cast-iron block or head is darker than an aluminium one
- *   cam phasers     a phaser on the nose of each cam
- *   injection       direct injection's high-pressure pump on the cam cover, and its rail
- *   twin turbos     a turbo on each bank of a V, or two along an inline's manifold
- *   spark plugs     two coils a cylinder on a twin-plug head
- * The belt, the crank pulley and the alternator turn with the revs (`update`).
- *
- * Engine-local coordinates, metres: x across, y up, z along the crank, the front (belt end)
- * toward +z. The model sits with its sump on y = 0.
  */
 
 import { world as W } from '../../tokens.js';
@@ -72,16 +52,10 @@ const HALF_V = { V6: Math.PI / 6, V8: Math.PI / 4 };
 
 /**
  * Engine damage as drawn (`setDamage`): the same three parts the simulator wears
- * (src/sim/damage.js). Worn valves blue the exhaust with heat; worn rings and bearings weep
- * oil down the block and onto the floor, and worn rings blow smoke out of the oil filler
- * while it runs; worn bearings knock, which shakes it. A failed engine is a wreck, by what
- * failed: a rod out through a hole in the block, a holed piston's oil blown over
- * everything, a burnt-through valve's port sooted black. The failure itself plays
- * once (`blowUp`): a flash, pieces thrown across the floor, and smoke that thins out to
- * wisps and stays until the engine is rebuilt.
+ * (src/sim/damage.js).
  * @param {EngineSpec} spec
  * @returns {{group: THREE.Group, size: {len: number, wid: number, hgt: number}, update: (dt: number, rpm: number) => void,
- *   setDamage: (d: EngineDamage|null, floorY?: number) => void, blowUp: () => void, busy: () => boolean}}
+ * setDamage: (d: EngineDamage|null, floorY?: number) => void, blowUp: () => void, busy: () => boolean}}
  */
 export function makeEngine(spec = {}) {
   const layout = spec.layout && PER_BANK[spec.layout] ? spec.layout : 'V6';

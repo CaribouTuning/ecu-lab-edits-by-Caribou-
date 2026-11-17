@@ -1,8 +1,7 @@
 /**
  * The intake on the Physics page: the air filter, the throttle body's butterfly, the plenum
  * and a runner to each cylinder of a bank, down through the ports past the valves into the
- * bores. Every number and colour is the model's (`gasExchangeTrace`); the shared parts are
- * in cutawayParts.jsx.
+ * bores.
  */
 
 import React, { useMemo, useRef } from 'react';

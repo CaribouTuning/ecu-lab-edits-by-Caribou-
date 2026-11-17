@@ -1,12 +1,4 @@
-/**
- * The first screen: what this is, and the three ways in.
- *
- * Laid out as a Mac app's welcome window (Xcode's, Final Cut's): the app's badge, name and
- * version on one side, the ways in as a list on the other, each a row with its own line of
- * what it is. On a phone the two stack, the list as an inset group. No glow, no clip-art
- * gauge, no tracked capitals: it is the first thing a player sees, and it should read as
- * the software it is.
- */
+/** The first screen: what this is, and the three ways in. */
 
 import React from 'react';
 import { ChevronRight, GraduationCap, Store, Wrench } from 'lucide-react';

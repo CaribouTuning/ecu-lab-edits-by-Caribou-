@@ -1,22 +1,4 @@
-/**
- * An independent check of the physics model, from outside it.
- *
- * The test suite holds the model to sourced bands (tests/benchmark.test.js and the rest,
- * docs/accuracy.md). This script asks different questions, with nothing taken from the
- * model on trust:
- *
- *   1. Do its own outputs obey the laws they claim to? On every point of every factory
- *      pull: hp = torque x rpm / 5252; the charge equals VE x MAP/(R T) x cylinder volume
- *      (ideal gas); MAF equals the charge x cylinders x rpm / 120; wheel torque equals
- *      BMEP x displacement / 4 pi through the drivetrain; BSFC equals fuel flow over crank
- *      power; and no point beats the ideal air-standard Otto cycle at its compression.
- *   2. How close are the thirteen factory engines to the makers' ratings?
- *   3. Do its sensitivities match references it was not fitted to: SAE J1349's
- *      correction for intake temperature and pressure, the textbook spark-retard curve,
- *      best-power mixture, and the Otto cycle's gain from compression?
- *
- * Run: node scripts/validate-physics.js
- */
+/** An independent check of the physics model, from outside it. */
 
 import * as S from '../src/sim/index.js';
 

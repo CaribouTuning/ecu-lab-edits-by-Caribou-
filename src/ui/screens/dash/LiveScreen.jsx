@@ -93,11 +93,8 @@ function injectorMismatch(build) {
  * @returns {string}
  */
 /**
- * An idle that hunts: over the last three seconds with the throttle shut near idle, the
- * speed swings more than 150 rpm and crosses its target at least twice. A healthy idle
- * holds within a few tens of rpm; an idle controller with its gains too high, or its
- * damping too low, overshoots back and forth (the career's idle-hunt customer swings
- * about 1,300 rpm).
+ * An idle that hunts: over the last three seconds with the throttle shut near idle, the speed
+ * swings more than 150 rpm and crosses its target at least twice.
  * @param {object[]} log the ECU's live log, newest last
  * @returns {{lo: number, hi: number, target: number}|null}
  */

@@ -60,11 +60,8 @@ const PULL_CEILING_KPA = 4;
 /** Mixture error worth reporting, AFR points. Below this it is calibration noise. */
 export const MIX_NOTABLE_AFR = 0.45;
 /**
- * Under boost the band is tighter: there the target is the knock and temperature margin,
- * not a factory's choice, and a tuner sets it to the tenth. 0.2 AFR is about what a
- * wideband resolves at lambda 0.8 (Bosch LSU 4.9: about ±0.01 lambda there). With the
- * 0.45 of the naturally aspirated band, a turbo tune left on the stock 12.4:1 sat inside it
- * at 8 psi, where the target is 12.05:1, and was never richened.
+ * Under boost the band is tighter: there the target is the knock and temperature margin, not a
+ * factory's choice, and a tuner sets it to the tenth.
  */
 export const MIX_NOTABLE_BOOST_AFR = 0.2;
 
@@ -83,9 +80,8 @@ export const offSpray = (p) => !((p.nitrousLbMin ?? 0) > 0);
 
 /**
  * Why the engine missed the mixture its AFR table asks for, in the order a tuner checks:
- * injectors out of time, the pump, the injector flow the ECU is set for, the MAF scaling,
- * and only then the ECU's air estimate (the VE table). The pull log and TUNE's mixture
- * advisor both name the fault from this, so the two send the player to the same page.
+ * injectors out of time, the pump, the injector flow the ECU is set for, the MAF scaling, and
+ * only then the ECU's air estimate (the VE table).
  * @param {object[]} points the pull points where it missed
  * @param {{injectorCc?: number, ecuInjectorCc?: number}} parts
  * @returns {'injectors'|'pump'|'injscale'|'maf'|'ve'}
@@ -99,20 +95,7 @@ export function missedMixCause(points, { injectorCc, ecuInjectorCc } = {}) {
   return 've';
 }
 
-/**
- * The mixtures a production calibration actually runs at full load, as lambda. A cell
- * inside the band is a calibration choice, not an error: factories run richer than best
- * power for exhaust and catalyst temperature, and direct-injection engines built for
- * emissions run stoichiometric (factoryFuel.js has the sources).
- *
- * RICH: lambda 0.74. The richest power enrichment in 26 stock GM calibrations is the
- * LM7's 0.749 (ECU Lab Pro, gm-benchmark.json); richer than any of those is fuel no
- * factory spends.
- * LEAN, port injection: best power plus MIX_NOTABLE_AFR, as before.
- * LEAN, direct injection: stoichiometric, where stock B58 and EA888 logs sit through a
- * full-throttle pull; in-cylinder evaporation cools the charge, and the knock model
- * already charges the spark for it.
- */
+/** The mixtures a production calibration actually runs at full load, as lambda. */
 const MIX_RICHEST_LAMBDA = 0.74;
 
 /** How far past stoichiometric a direct-injection cell may read before it is lean: sensor noise. */
@@ -123,16 +106,12 @@ const MIX_FULL_LOAD_KPA = 97;
 
 /**
  * What an ALPHA-N VE table should hold: the cylinder's fill against the OUTSIDE air at a
- * throttle opening, because that ECU reads its row by throttle and works the air out from
- * the barometric pressure. The opening's manifold pressure comes from the throttle body
- * (`throttledMapKpa`): the plate passes what the engine draws. True VE × MAP ÷ baro.
- * Naturally aspirated: a throttle-indexed table cannot see boost.
- *
+ * throttle opening, because that ECU reads its row by throttle and works the air out from the
+ * barometric pressure.
  * @param {(rpm: number, mapKpa: number) => number} veAt the engine's true breathing
  * @param {{displacementL: number, redline?: number}} derived
  * @param {{intake?: boolean}} [mods]
  * @returns {(rpm: number, loadKpa: number) => number} fill (%) at a throttle row, the row
- *   written as a pull's load (101.3 kPa is wide open)
  */
 export function alphaNFillAt(veAt, derived, mods = {}) {
   const boreM = throttleBoreM(derived);
@@ -246,26 +225,16 @@ function mbtAtRow({ rpm, mapKpa, veCell, afrCell, fuel, mods, derived, turboOn, 
 }
 
 /**
- * PAST WHAT THE ENGINE READS, NO ROW MAY ASK FOR MORE THAN THE ROW UNDER IT. A tuner
- * fills the boost rows past the highest the engine has run with that row's numbers or
- * safer, so a boost spike, a hotter day or a wastegate that sticks meets less spark and a
- * richer mixture, never more: the knock limit only falls with pressure. Without this a
- * turbo tune that followed the advice left the 200 kPa row on the stock table's full-
- * throttle spark (6.5 degrees) above a 150 kPa row the log had retarded to -1, a table no
- * tuner would load. Only where there is boost, and only over the rows the engine never
- * reads (past the row that brackets its reach, which the pull judges: richer, a boost row
- * may take more spark than the row under it, and capping it there fought the pull's own
- * verdict every round). It only ever lowers spark or richens the mixture, and a factory
- * table (written for every pressure, `factoryCalibration`) passes.
- *
+ * Past what the engine reads, no row may ask for more than the row under it. A tuner fills the
+ * boost rows past the highest the engine has run with that row's numbers or safer, so a boost
+ * spike, a hotter day or a wastegate that sticks meets less spark and a richer mixture, never
+ * more: the knock limit only falls with pressure.
  * @param {number[][]} table
  * @param {{load: number[], rpm: number[]}} axes
  * @param {(rpm: number) => number} reachAt kPa the engine reaches at a speed
  * @param {(axes: any, rpm: number, load: number) => number} kpaOf
  * @param {'spark'|'afr'} kind
  * @param {(ri: number, ci: number) => number|null} [advised] what this advice already tells a
- *   cell to become, where it does: the row under is capped at that, so the rows past it come
- *   down in the same round rather than a pull later
  * @returns {object[]} cells, each with its suggestion: the row under it
  */
 function beyondReachCells(table, axes, reachAt, kpaOf, kind, advised = () => null) {
@@ -307,9 +276,6 @@ function beyondReachCells(table, axes, reachAt, kpaOf, kind, advised = () => nul
  */
 function fuelCell(ri, ci, rpm, rowKpa, rowLoad, bracketOnly, current, pt, direct) {
   // Inside the band the factory's choice stands; outside it, the advice is best power.
-  // The lean edge ramps with load, as the factory's enrichment does: stoichiometric is a
-  // calibration's own choice where open loop begins (OPEN_LOOP_KPA), and the best-power
-  // edge applies from full load (MIX_FULL_LOAD_KPA) up.
   const full = clamp((rowKpa - OPEN_LOOP_KPA) / (MIX_FULL_LOAD_KPA - OPEN_LOOP_KPA), 0, 1);
   // The tight boost band is for port injection: a direct-injected engine's factory runs leaner
   // under boost on its in-cylinder cooling (the B58's own sourced table sits there), and the
@@ -332,11 +298,6 @@ function fuelCell(ri, ci, rpm, rowKpa, rowLoad, bracketOnly, current, pt, direct
 /**
  * The most manifold pressure the engine reaches at each speed, kPa absolute: the cells the
  * advisor judges, and the ones TUNE draws as reached.
- *
- * Highest manifold pressure the boost controller is even asking for at this speed. A
- * supercharger asks for nothing (its boost is what the pulley makes), so there the pull's
- * own boost is the answer.
- *
  * @param {object} input
  * @param {boolean} input.turboOn
  * @param {number[]} input.boostCurve
@@ -345,19 +306,9 @@ function fuelCell(ri, ci, rpm, rowKpa, rowLoad, bracketOnly, current, pt, direct
  */
 export function reachKpaAt({ turboOn, boostCurve, pull = null }) {
   const blowerPull = !turboOn && pull?.points?.some((p) => p.blowerRpm != null) ? pull.points : null;
-  // A turbo makes the boost its turbine can drive, which at low speed is far below the
-  // target: judged by the target alone, a 175 kPa cell at 750 RPM, which this engine never
-  // reaches, was flagged as past the knock limit. With a pull to read, a turbo reaches what
-  // the pull measured at that speed (never more than the target), except where a protection
-  // cut the boost there: that shortfall is the tune's, and the cell is reached once it is fixed.
-  // The pull's logged target is the target AFTER the protection's cut, so where a
-  // protection cut the boost the cell is judged at the BUILD curve's own target. Read from
-  // the pull's target, a knock cut hid the cells whose knock tripped it: they were never
-  // advised, kept their knock, and the cut came back on every pull. Below the pull's first
-  // speed nothing was measured, so there the boost it achieved at that speed stands.
-  // Read by the manifold pressure the pull logged, not atmospheric plus its boost: the intake
-  // duct and the throttle lose a few kPa before the manifold (throttle.js), and reach counted
-  // from the barometer put a turbo engine into the gap toward a row it never ran.
+  // A turbo makes the boost its turbine can drive, which at low speed is far below the target:
+  // judged by the target alone, a 175 kPa cell at 750 RPM, which this engine never reaches,
+  // was flagged as past the knock limit.
   const turboPull = turboOn && pull?.points?.length
     ? pull.points.map((p) => ({
       rpm: p.rpm,
@@ -501,10 +452,10 @@ export function calibrationAdvice({
    * pressure — so this is the ceiling that genuinely applies BETWEEN two rows.
    */
   const ceilingMemo = new Map();
-  // THE LOG OVERRULES HERE TOO. Where the pull ran at this speed and pressure, the knock
-  // limit it met is the one that holds: the static point below prices a part-spooled turbo's
-  // charge and backpressure as an estimate, and capped a 130 kPa row at 0.8 degrees where
-  // the pull at 133 kPa measured 8.2.
+  // The log overrules here too. Where the pull ran at this speed and pressure, the knock limit
+  // it met is the one that holds: the static point below prices a part-spooled turbo's charge
+  // and backpressure as an estimate, and capped a 130 kPa row at 0.8 degrees where the pull at
+  // 133 kPa measured 8.2.
   const pullNear = (rpm, mapKpa) => {
     let best = null; let bestD = Infinity;
     for (const p of pull?.points ?? []) {
@@ -514,12 +465,7 @@ export function calibrationAdvice({
     }
     return best;
   };
-  // The log CORRECTS the model; it does not stand in for it at another pressure. The knock
-  // limit moves fast with pressure and mixture (the full-load enrichment ramps in over the
-  // last few kPa), so a full-throttle pull's limit at 101 kPa, used as the limit at 97 kPa,
-  // condemned a factory cell that was 2.3 degrees clear there. What the pull measured is
-  // carried as its difference from the model at the pull's own speed and pressure, and the
-  // model's own shape supplies the rest.
+  // The log CORRECTS the model; it does not stand in for it at another pressure.
   const ceilingAt = (rpm, mapKpa) => {
     const p = pullNear(rpm, mapKpa);
     const est = staticCeilingAt(rpm, mapKpa);
@@ -564,10 +510,8 @@ export function calibrationAdvice({
   const T = L.timing;
   const A = L.afr;
   const sharedAxes = sameAxes(T, A);
-  // A column the engine never reads: the one before it already sits at or past the redline,
-  // so the ECU's interpolation never reaches it. Advised, it was graded at a speed the
-  // limiter never lets the engine reach, and the model's mixture there asked a 6.4 HEMI's
-  // 7,500 RPM full-load cell for 14.1:1. Left as it is, as a tuner leaves it.
+  // A column the engine never reads: the one before it already sits at or past the redline, so
+  // the ECU's interpolation never reaches it.
   const pastLimit = (axes, ci) => ci > 0 && derived.redline != null && axes.rpm[ci - 1] >= derived.redline;
   T.load.forEach((rowLoad, ri) => {
     T.rpm.forEach((rpm, ci) => {
@@ -694,14 +638,9 @@ export function calibrationAdvice({
       const hereKpa = kpaOf(T, rpm, T.load[ri]);
       const span = kpaOf(T, rpm, T.load[ri - 1]) - hereKpa;
       const entered = clamp((reachAt(rpm) - hereKpa) / span, 0, 1);
-      // ADVICE IS FOR EVERY PULL, NOT ONLY THIS ONE. The verdicts follow the pull the player
-      // made, but a suggestion to ADD timing is typed into a cell the engine also reads on
-      // its way into boost, at full throttle, on the boost curve it is built with. Advised
-      // only from a part-throttle pull, a turbo engine's 100 kPa row was raised into knock,
-      // the next full-throttle pull lowered it, the next part-throttle pull raised it again:
-      // following the advice never ended. So the room it may suggest is the room across
-      // everything the build reaches, the row above read as the table holds it if no pull
-      // graded it.
+      // Advice is for every pull, not only this one. The verdicts follow the pull the player
+      // made, but a suggestion to ADD timing is typed into a cell the engine also reads on its
+      // way into boost, at full throttle, on the boost curve it is built with.
       const enteredAdvice = Math.max(entered, clamp((reachFull(rpm) - hereKpa) / span, 0, 1));
       const aboveNow = above ? above.current : timing[ri - 1]?.[ci];
       const aboveAdvised = above ? above.suggested : aboveNow;
@@ -731,12 +670,7 @@ export function calibrationAdvice({
       // Judged only over what this pull entered, between rows it graded.
       if (entered <= 0 || !above) continue;
       // Except where the row above is itself past its own knock limit, so listed to come down:
-      // then the blend is unsafe because of that row, and its own advice fixes it. (Only then:
-      // a row above that is not listed keeps its number, and judging against a suggestion the
-      // player is never shown let this cell take advance that knocked.) Judged against its current number,
-      // this cell was told to drop out of the way (a turbo VQ's 100 kPa row at 3,500 RPM:
-      // 18 to -3.5 degrees), and once the row above came down the next pull put it back to
-      // 18: a pull spent going nowhere.
+      // then the blend is unsafe because of that row, and its own advice fixes it.
       const judged = interpolationRoomDeg({
         ceilingAtFrac: (f) => ceilingAt(rpm, hereKpa + f * span) - KNOCK_SAFETY_DEG,
         aboveDeg: above.suggested < above.current && !above.bracketOnly && above.current - above.knockCeiling > ADVANCE_TOLERANCE_DEG ? above.suggested : above.current,
@@ -749,14 +683,8 @@ export function calibrationAdvice({
       // suggestion without the warning would leave the player with a number to type and
       // no reason for it.
       here.knockCeiling = Math.min(here.knockCeiling, Number(judged.toFixed(1)));
-      // AND THE SUGGESTION MAY NOT CARRY MORE THAN THE JUDGEMENT ALLOWS. Following the
-      // advice means typing in the flagged cells; a neighbour that is not flagged keeps
-      // its number. Suggesting against the neighbour's SUGGESTED value alone handed a
-      // flagged cell a number past its own judged ceiling (70 kPa at 2,500 RPM on a turbo
-      // V6: ceiling 24.8, suggestion 27.5), so it stayed flagged however many times the
-      // player typed it, and once suggested MORE advance for a cell it had just called
-      // over-advanced. The lower of the two is safe whether or not the neighbour is
-      // changed too, and it only ever lowers a suggestion.
+      // And the suggestion may not carry more than the judgement allows. Following the advice
+      // means typing in the flagged cells; a neighbour that is not flagged keeps its number.
       if (judged < here.suggested) {
         here.suggested = clamp(Math.floor(judged * 2) / 2, SPARK_MIN_DEG, SPARK_MAX_DEG);
         here.delta = Number((here.suggested - here.current).toFixed(1));
@@ -812,11 +740,7 @@ export function calibrationAdvice({
   const boosted = turboOn || blowerPull;
   const advisedIn = (list) => { const m = new Map(list.map((c) => [`${c.ri}|${c.ci}`, c.suggested])); return (ri, ci) => m.get(`${ri}|${ci}`) ?? null; };
   // Capped only at advice the player is shown: a cell past its own knock limit, a mixture on
-  // the list. Capped at a suggestion that is never listed, a factory B58's stoichiometric
-  // boost rows were called lean.
-  // Against what the build reaches at full throttle, whatever throttle was pulled: judged by a
-  // part-throttle pull's reach, rows the engine runs at full throttle looked never read, and
-  // were capped into a false knock verdict.
+  // the list.
   const beyondSpark = boosted ? beyondReachCells(timing, T, reachFull, kpaOf, 'spark', advisedIn(spark.filter((c) => c.current - c.knockCeiling > ADVANCE_TOLERANCE_DEG))) : [];
   const beyondAfr = boosted ? beyondReachCells(afr, A, reachFull, kpaOf, 'afr', advisedIn(wrongMix)) : [];
   /** A list with the beyond-reach cells it does not already hold, the safer number kept. */
@@ -980,10 +904,7 @@ function judgeAgainstPull(spark, pull, inForce) {
         overAdvanced.push(c);
         continue;
       }
-      // Clean on the pull: as much advance as the pull measured room for, to MBT. The pull is
-      // the evidence here: capped by the knock limit at the row's own pressure as well, a cell
-      // the engine reads below that pressure was held short of what the pull showed it could
-      // take, and the log (which reads the pull) called spark short where TUNE listed nothing.
+      // Clean on the pull: as much advance as the pull measured room for, to MBT.
       c.suggested = clamp(Math.min(halfDown(c.mbt), halfDown(c.current + marginBy.get(key) - KNOCK_SAFETY_DEG)), SPARK_MIN_DEG, SPARK_MAX_DEG);
       c.delta = Number((c.suggested - c.current).toFixed(1));
       if (c.current - c.mbt > ADVANCE_TOLERANCE_DEG) pastMbt.push(c);

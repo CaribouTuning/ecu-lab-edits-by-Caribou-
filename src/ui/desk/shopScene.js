@@ -1,17 +1,4 @@
-/**
- * Your shop, behind the laptop: the room the sandbox happens in.
- *
- * Seen from your desk, the roller door at the far end is down: the shop is the whole world
- * of the game. The dyno is on the left with a car on its
- * rollers, a car is up on the lift on the right, and between them, nearer, the engine you
- * are building runs on its stand. The shop's sign is on the back wall, left of the door.
- *
- * Two camera poses: `desk`, sitting at the desk looking over the laptop, and `bay`, stood
- * up looking at the whole shop with the laptop shut. The scene glides between them.
- * `anchors` are the points the shop view's buttons sit on.
- *
- * Coordinates, metres: x across the shop, y up, z toward you (the door is at z = -7).
- */
+/** Your shop, behind the laptop: the room the sandbox happens in. */
 
 import { world as W } from '../tokens.js';
 import { THREE, box, cyl, floorPlane, glow, mergeStatic, strut } from '../world/gfx.js';
@@ -30,12 +17,7 @@ const POSES = {
   desk: { pos: new THREE.Vector3(0, 1.75, 7.6), look: new THREE.Vector3(0, 1.55, -6), fov: 50 },
   bay: { pos: new THREE.Vector3(0, 4.2, 9.6), look: new THREE.Vector3(0, 0.9, -1.4), fov: 58 },
   // The same, on a screen taller than wide (a phone held upright): above the front of the
-  // room, its ceiling and rafters lifted off, looking down and in at the floor. Framed by
-  // its WIDTH (`hfov`, degrees across): the stations from the dyno's car to the lift's fill
-  // the phone's width, and the back wall and the floor in front of the desk fill its height,
-  // whatever the phone's shape. Seen from straight above, the whole 16 m room had to fit
-  // the width, and left the phone's height half empty. On the room's centre line, so the shop
-  // sits in the middle of the screen.
+  // room, its ceiling and rafters lifted off, looking down and in at the floor.
   bayTall: { pos: new THREE.Vector3(0, 13, 10.6), look: new THREE.Vector3(0, 0.4, 0.5), fov: 60, hfov: 33 },
   // Walked up to one thing: the car on the dyno with the dyno's computer cart in front of
   // it, the engine on its stand with its control cart.
@@ -45,20 +27,13 @@ const POSES = {
 };
 
 /**
- * A rolling cart with a big monitor on a post and a control box under it, leaning back so
- * it reads from where you stand: the dyno's computer, or the engine stand's. Faces +z.
- * `monitor` and `console` are the screen's and the box's faces, where the page's own
- * controls are laid (Station.jsx, ShopBackdrop.jsx): the cart is the thing you use, not a
- * picture of it.
- *
- * `shape` sizes it for the view: a wide monitor, or on a phone held upright the same
- * monitor turned on its pivot to stand the tall way, as a real one can.
+ * A rolling cart with a big monitor on a post and a control box under it, leaning back so it
+ * reads from where you stand: the dyno's computer, or the engine stand's.
  */
 /**
  * What a station's computer shows when nobody is at it: its own program, idling, so from
- * across the shop you can tell the dyno's from the stand's from the bench's, and see it is
- * a thing to walk up to. Drawn into a canvas at the screen's own shape; the page's real
- * screen is laid over it when you are there.
+ * across the shop you can tell the dyno's from the stand's from the bench's, and see it is a
+ * thing to walk up to.
  * @param {'dyno'|'stand'|'build'} kind @param {number} aspect width over height
  */
 function idleScreen(kind, aspect) {
@@ -149,17 +124,15 @@ function caster(x, z, r = 0.045) {
 }
 
 /**
- * A station's computer, as a shop has it: a steel workstation on casters with the PC in
- * its cabinet, a worktop at hand height with the control box on it, and the monitor on a
- * column off the back. The build bench's is the same with no control box: there is
- * nothing to start.
+ * A station's computer, as a shop has it: a steel workstation on casters with the PC in its
+ * cabinet, a worktop at hand height with the control box on it, and the monitor on a column
+ * off the back.
  * @param {'dyno'|'stand'|'build'} kind
  */
 /**
- * The outline round a station the next step is at: an inverted hull, each of the cart's
- * meshes drawn again from the inside, pushed out along its normals, in one bright colour
- * that pulses, so the whole station stands outlined against the shop. One material for
- * every cart; its clock is the shop's.
+ * The outline round a station the next step is at: an inverted hull, each of the cart's meshes
+ * drawn again from the inside, pushed out along its normals, in one bright colour that pulses,
+ * so the whole station stands outlined against the shop.
  */
 const OUTLINE_UNIFORMS = { uTime: { value: 0 }, uColor: { value: new THREE.Color(W.nextOutline) }, uWidth: { value: 0.022 } };
 const outlineMaterial = new THREE.ShaderMaterial({
@@ -380,11 +353,7 @@ function closedDoor(w, h) {
 
 /**
  * An engine on a stand: the build bench's, where it is built a part at a time, or the run
- * stand's, plumbed to a radiator and an exhaust so it can be started. Both hold the same
- * engine, drawn from the build (`setSpec`); only the run stand's turns (`update`).
- *
- * In the stand's own frame the engine hangs off a mounting head at `MOUNT`, its crank
- * along +x, belt end outward. `turn` is the stand's heading on the floor.
+ * stand's, plumbed to a radiator and an exhaust so it can be started.
  * @param {THREE.Vector3} at @param {boolean} run @param {number} turn
  */
 function makeEngineStand(at, run, turn) {
@@ -444,9 +413,7 @@ function makeEngineStand(at, run, turn) {
   if (run) {
     // The exhaust leaves behind the head and goes up into the shop's extraction: a flexible
     // hose dropped from the ceiling, its cone pushed over the tailpipe, as on any run stand
-    // indoors. From the manifold side, behind the engine as you face it, so the hose stays
-    // out of the view. Its own group beside the stand's, so the station's framing fits the
-    // stand, not the hose.
+    // indoors.
     duct.add(cyl(0.045, 0.045, 0.5, W.steel, { axis: 'z', x: 0.25, y: 0.55, z: -0.5, edge: false }));
     duct.add(cyl(0.09, 0.055, 0.16, W.engine.hose, { axis: 'z', x: 0.25, y: 0.55, z: -0.8, edge: false }));
     // Aluminium flex, its ribs every hand's width.
@@ -591,10 +558,8 @@ export function buildShopScene(stage, init) {
   signLamp.target.position.set(-4.85, 3.2, -7.0);
   scene.add(signLamp, signLamp.target);
   root.add(box(0.5, 0.06, 0.14, W.metalDark, { x: -4.85, y: 4.72, z: -6.25, edge: false }));
-  // Ceiling LED strip fixtures in rows over the work, the way a shop is lit: long, even,
-  // white light from above, each row hung on two short chains. One light per row casts the
-  // shadows that put the cars, stands and benches on the floor.
-  // Hung from the ceiling, so they go with it when the view looks down through the roof.
+  // Ceiling LED strip fixtures in rows over the work, the way a shop is lit: long, even, white
+  // light from above, each row hung on two short chains.
   const fixtures = new THREE.Group();
   root.add(fixtures);
   for (const x of [-4.2, 0.2, 4.4]) {
@@ -714,10 +679,9 @@ export function buildShopScene(stage, init) {
   };
   placeCars(init.cars ?? { dyno: {}, lift: {} });
 
-  // ---- the engine: on the build bench, and on the run stand ----
-  // The same engine on both, as the shop's one engine moves from one to the other: built on
-  // the bench a part at a time, started and run on the stand.
-  // Each turned a little toward you, so you see the belt end and the intake side together.
+  // ---- the engine: on the build bench, and on the run stand ---- The same engine on both, as
+  // the shop's one engine moves from one to the other: built on the bench a part at a time,
+  // started and run on the stand.
   const buildStand = makeEngineStand(AT.build, false, -0.5);
   const runStand = makeEngineStand(AT.stand, true, -0.5);
   for (const st of [buildStand, runStand]) { st.setSpec(init.engineSpec); root.add(st.group, st.duct); }
@@ -832,11 +796,8 @@ export function buildShopScene(stage, init) {
 
   /**
    * Standing at a station, ready to work it: its cart's monitor and control box fill what of
-   * the screen the page leaves clear, whatever its shape, as you stand at a real dyno or a
-   * run stand. At the engine stand on a wide screen the engine on the stand is in the frame
-   * too, beside its computer, so you see each part go on as you choose it. The camera looks
-   * along the monitor's own normal, tipped a little down onto the box, and is moved until
-   * every corner lands inside the clear area: an exact fit, not an estimate.
+   * the screen the page leaves clear, whatever its shape, as you stand at a real dyno or a run
+   * stand.
    * @param {'dyno'|'stand'|'build'} name
    */
   const stationPose = (name) => {
@@ -995,12 +956,7 @@ export function buildShopScene(stage, init) {
     /** Whether smoke, debris or a flash is still moving and has to be drawn. */
     busy() { return buildStand.busy() || runStand.busy() || dynoFx.smoke.busy() || dynoFx.debris.busy() || dynoFx.flash.busy(); },
     /**
-     * The engine's condition, drawn on it, and its failure played where it happened. Both
-     * stands hold the shop's one engine, so both show the wear and the wreck; the failure
-     * plays once, on the run stand if it failed running there, or in the car on the dyno
-     * if it failed in a pull. `key` names the failure: a new one plays, the same one
-     * again does not, and one already there when the shop is first drawn is shown
-     * wrecked without playing.
+     * The engine's condition, drawn on it, and its failure played where it happened.
      * @param {import('../world/models/engine.js').EngineDamage|null} d
      * @param {'stand'|'dyno'|null} where @param {string|null} key
      */

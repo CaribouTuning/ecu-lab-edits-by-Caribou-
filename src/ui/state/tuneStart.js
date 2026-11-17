@@ -1,14 +1,4 @@
-/**
- * SANDBOX's three ways to start tuning a freshly built engine (components/TuneStart.jsx):
- *
- *   1. a safe base map, generated and checked on the dyno for the player (safeBaseMap.js);
- *   2. the same base map built by the player, step by step, with the targets the game
- *      worked out and a check against each, but every cell typed by the player;
- *   3. the tables as they stand, and the log and TUNE's advice as always.
- *
- * Nothing here writes a table. Which way the player chose, and for which build, is kept in
- * the browser (as the first-run walkthrough is), so a new build asks again.
- */
+/** SANDBOX's three ways to start tuning a freshly built engine (components/TuneStart.jsx): */
 
 import { useSyncExternalStore } from 'react';
 
@@ -94,12 +84,7 @@ const RICH_ENOUGH_AFR = 14.0;
 
 /**
  * The guided base map's steps for the tables as they stand, against the safe base map's.
- * Graded only where the checking pull ran (`samples`): the cells the engine uses, read as the
- * ECU reads them, between cells as well as on them. The targets are given for a few speeds,
- * not cell by cell: filling the rest is the player's.
  * @param {{build: any, tune: any, target: {ve: number[][], timing: number[][], afr: number[][], layout?: any, mafScalar?: number}, samples: {rpm: number, map: number, airCharge: number}[], advice?: {overAdvanced?: any[], wrongMix?: any[]}|null}} s
- *   `advice` is TUNE's advisor on the tables as they stand: where it is given, the spark and
- *   mixture steps name its cells and tick only when it lists none, so the two never disagree
  * @returns {GuideStep[]}
  */
 export function guidedSteps({ build, tune, target, samples, advice = null }) {
@@ -122,8 +107,7 @@ export function guidedSteps({ build, tune, target, samples, advice = null }) {
   const steps = boostSteps(build);
   // Spark cells past the knock limit, as TUNE's advisor judges them on the tables as they
   // stand (the limit moves with the mixture and the air, so a table comparison alone once
-  // ticked a cell the advisor called past it). Without the advisor, the cells above the base
-  // map's, on the rows the engine reaches and past the idle column.
+  // ticked a cell the advisor called past it).
   /** @type {{load: number, rpm: number, want: number}[]} */
   const hotCells = [];
   const sparkAx = layoutById(tune.layout).timing;

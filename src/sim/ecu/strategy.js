@@ -92,20 +92,12 @@ const NM_PER_LBFT = 1 / 0.7376;
  */
 
 /**
- * A manifold pressure, read against the table as a factory ECU's "normalized load" does:
- * as a share of the air pressure outside, so a wide-open throttle is a wide-open throttle
- * at any altitude. The fuel table is indexed by absolute pressure, and its enrichment rows
- * sit at the top of it: wide open at 2000 m the engine sees 78 kPa, which an unnormalized
- * lookup reads as a cruise cell, and a stock engine went to lambda 1.00 at full throttle
- * and lost far more power than the air alone takes. Above ambient (boost) the table is read
- * as it is, from ambient up. At sea level the scale is exactly 1.
- *
- * Only for the fuel lookup. VE is physical, indexed by the pressure the cylinder sees, and
- * spark has its own barometric correction (`ignition.baroCorr`).
+ * A manifold pressure, read against the table as a factory ECU's "normalized load" does: as a
+ * share of the air pressure outside, so a wide-open throttle is a wide-open throttle at any
+ * altitude.
  * @param {number} mapKpa sensed manifold pressure
  * @param {number} baroKpa the barometric pressure the ECU saw at key-on
  * @returns {{mapKpa: number, scale: number}} the pressure to read at, and the factor it
- *   was scaled by (1 above ambient, or at sea level)
  */
 export function ambientNormalized(mapKpa, baroKpa) {
   if (!(baroKpa < BARO_KPA)) return { mapKpa, scale: 1 };

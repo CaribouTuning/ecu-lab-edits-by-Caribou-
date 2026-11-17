@@ -154,9 +154,7 @@ describe('loading a preset', () => {
 describe('editing a calibration table', () => {
   it('keeps naming the engine after a table edit: the build line is the hardware', () => {
     // withTableEdit crosses the build/tune boundary, clearing presetId (build) and setting
-    // tablesDirty (tune). The build line names the engine the build started as
-    // (originPresetId), which a calibration edit does not change: a retuned VQ35DE is still
-    // a VQ35DE.
+    // tablesDirty (tune).
     launch();
     const picker = presetPicker();
     const target = [...picker.querySelectorAll('option')]
@@ -192,11 +190,8 @@ describe('running a dyno pull', () => {
     launch();
     goTo('DYNO');
     fireEvent.click(screen.getByRole('button', { name: 'Run a pull' }));
-    // doRun() calls setResult(r) synchronously (before the reveal interval even
-    // starts), so the dyno computer's curves mount immediately — no need to wait for the
-    // sweep to finish. This is the actual point of the test: if setResult were wired to
-    // the wrong slice (or dropped entirely), they never appear, regardless of what the
-    // button label does.
+    // doRun() calls setResult(r) synchronously (before the reveal interval even starts), so
+    // the dyno computer's curves mount immediately — no need to wait for the sweep to finish.
     expect(screen.getByText('Power and torque against rpm')).toBeTruthy();
     // The reveal is a setInterval that ends by setting running false, so the button
     // returns to its idle label. Real timers + waitFor is less brittle here than fake

@@ -371,9 +371,7 @@ export function evaluatePoint({
   const richRisk = lambdaActual < COEFF.RICH_DAMAGE_LAMBDA && mapKpa >= 55;
   const valveRisk = leanRisk && boostPsi > 3;
   // A MAF reading the air wrong by more than a professional's tolerance
-  // (MIXTURE_TOLERANCE_PCT) fuels the engine that far off. It was "more than 8%", and a turbo's
-  // plumbing on its own reads exactly 8% low: the turbo conversion ran 8% lean with no
-  // MAF entry in the log, and the advice fell through to the VE table.
+  // (MIXTURE_TOLERANCE_PCT) fuels the engine that far off.
   const mafFlag = Math.abs(trimPct) > MIXTURE_TOLERANCE_PCT && (mods.intake || mods.turboFitted);
   const injMismatch = Math.abs(injectorCc / ecuInjectorCc - 1) > 0.05;
 

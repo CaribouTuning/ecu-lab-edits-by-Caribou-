@@ -1,13 +1,6 @@
 /**
- * The shop lit as a real room: every flat toon material in it swapped, once, for a
- * physically based one with the roughness and metalness of what it is made of.
- *
- * The open world keeps its drawn look (stage.js `sketch`); the shop is a workshop you stand
- * in, so it is lit like one: overhead strip lights, soft shadows that put things on the
- * floor, metal that reflects the room and paint that does not glow.
- *
- * What a colour is made of is looked up by the palette value it was drawn in (tokens.js);
- * anything not listed is painted or plastic, matte.
+ * The shop lit as a real room: every flat toon material in it swapped, once, for a physically
+ * based one with the roughness and metalness of what it is made of.
  */
 
 import { world as W } from '../tokens.js';

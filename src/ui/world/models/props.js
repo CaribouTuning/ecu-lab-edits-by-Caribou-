@@ -8,11 +8,9 @@ import { THREE, box, cyl, edged, glow, strut, toon, tyreGeometry } from '../gfx.
 const G = () => new THREE.Group();
 
 /**
- * A two-post lift, as one is bolted to a shop floor: two posts either side of the car on
- * base plates, an overhead bar between their tops carrying the hydraulic line and the
- * shut-off bar, the power unit on one post. On each post a carriage rides up and down,
- * and from it two swing arms reach in under the car's sills to its lifting points, each
- * ending in a screw-up pad. Posts across x, the car along z.
+ * A two-post lift, as one is bolted to a shop floor: two posts either side of the car on base
+ * plates, an overhead bar between their tops carrying the hydraulic line and the shut-off bar,
+ * the power unit on one post.
  */
 export function makeLift() {
   const g = G();
@@ -77,13 +75,11 @@ export function makeLift() {
 }
 
 /**
- * A chassis dyno set into the floor, as most tuning shops have one: a steel deck flush
- * with the slab, two pairs of rollers showing through it where the driven wheels sit,
- * each wheel cradled between a pair, and tie-down rings let into the deck. A drum fan
- * stands at the car's nose. The car faces -z; its driven wheels sit at `rollerZ`.
+ * A chassis dyno set into the floor, as most tuning shops have one: a steel deck flush with
+ * the slab, two pairs of rollers showing through it where the driven wheels sit, each wheel
+ * cradled between a pair, and tie-down rings let into the deck.
  * @param {boolean} [owned] false: only the painted bay where one will go
  * @param {{monitor?: boolean, fanZ?: number, rollerZ?: number}} [o] `monitor: false` leaves the stand off (the shop's own
- *   dyno has its computer on a cart beside it)
  */
 export function makeDyno(owned = true, o = {}) {
   const g = G();

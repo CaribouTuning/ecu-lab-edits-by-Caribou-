@@ -182,37 +182,21 @@ function flatTopRpm(points) {
  */
 
 /*
- * Where a preset is known to sit outside the ordinary band, and why, with the measurement
- * that says so. A change that brings it inside the ordinary band should DELETE the entry.
- *
- * The rating misses recorded here before October 2026 (VQ35DE -9%, VQ35HR, B58 M1, LS6 and
- * the GTI's torque) closed when the cycle started counting molar expansion (thermo.js,
- * molarExpansion) and the factory fuel tables took the engines' real full-load mixtures
- * (factoryFuel.js): best power moved from lambda 0.94 to 0.90, as real engines have it.
+ * Where a preset is known to sit outside the ordinary band, and why, with the measurement that
+ * says so.
  */
 const KNOWN_GAPS = {
   // The N54 is underrated: measured stock, it makes more torque than BMW publishes.
-  // Automobile magazine's stock 335i laid down 300 lb-ft at the wheels on a DynoJet
-  // (bimmerfile.com, 2010-09-14, "Automobile pits the N54 against N55"), and an owner's
-  // stock baseline read 298 (f30.bimmerpost.com). The model's wheel torque sits under those
-  // measurements, so its ceiling is the measured figure, not the rating.
   n54: { tqHighWheel: 300 },
   // MEASURED (November 2026): the VQ35DE Rev-Up makes 285 hp against its 300, -5.1%, on its
-  // published cams. It read -4.7% until the blowdown began from the seat's pressure, which
-  // took about 1 hp off it at the top; the catalogue as a whole sits near -1%, so this is the
-  // engine's own miss and not one the shared Cd would close.
+  // published cams.
   'vq35de-revup': { hp: -0.051 },
-  // MEASURED on the gas-exchange model (November 2026), BREATH_VALVE_CD 0.61: the VQ35HR
-  // makes 8-9% under its 306 hp on every intake cam from 218 to 234 (its own figure is
-  // inferred, see presets.js), so its cam is not what it is short of. Its revised head and
-  // twin-runner intake are what Nissan credits for the HR's power, and no flow-bench figure
-  // for that head was found, so it breathes through the universal port.
+  // MEASURED on the gas-exchange model (November 2026), BREATH_VALVE_CD 0.61: the VQ35HR makes
+  // 8-9% under its 306 hp on every intake cam from 218 to 234 (its own figure is inferred, see
+  // presets.js), so its cam is not what it is short of.
   'vq35hr': { hp: -0.09 },
   // MEASURED likewise: the GM truck V8s read high on peak torque, peaking 300-700 RPM before
-  // their published 4000 (LQ4 +9.7%, LM7 +7.8%, LR4 +11.7% of the rating). GM rates them on
-  // 87 regular, which the fuel list does not carry; calibrated and run on 87 (RON 91, MON
-  // 83) they read 1.2-1.9 points lower, so the octane is a part of it and not the whole.
-  // The LR4 is the one past the band; its ceiling is its measured torque on 91.
+  // their published 4000 (LQ4 +9.7%, LM7 +7.8%, LR4 +11.7% of the rating).
   lr4: { tqHighWheel: 281 },
 };
 

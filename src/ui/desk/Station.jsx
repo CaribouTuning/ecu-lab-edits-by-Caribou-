@@ -1,15 +1,4 @@
-/**
- * A place in the shop you walk up to: the dyno, the engine on its stand, the build bench.
- *
- * Its controls are not a panel laid over the picture: they are on the things in the room
- * (ShopBackdrop.jsx lays each `Surface` onto its face). The dyno's software is on its
- * computer's monitor and the RUN button on the cart's console; the engine stand's cart has
- * its own screen and its start switch and throttle. You stand at it framed to use it: every face is full size from where you are,
- * and a tap on it is a tap on what is under your finger.
- *
- * Where there is no WebGL (an old browser, a test runner) there is no room to put them in,
- * and the same controls are laid out flat, one after the other.
- */
+/** A place in the shop you walk up to: the dyno, the engine on its stand, the build bench. */
 
 import React from 'react';
 import { createPortal } from 'react-dom';

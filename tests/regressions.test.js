@@ -440,10 +440,7 @@ describe('preset-readiness hardening', () => {
 
 describe('twin turbos pass twice the air', () => {
   it('a 7 L V8 on one Large turbo is held back by its turbine; two hold the boost through far less back-pressure', () => {
-    // Each turbo carries its own compressor and its own turbine. At the same boost, one
-    // turbine housing passing 7 L of exhaust holds far more pressure on the cylinders than
-    // two, and that back-pressure costs the charge (the gas-exchange model's residuals and
-    // pumping): the pair makes the power.
+    // Each turbo carries its own compressor and its own turbine.
     const top = (count) => {
       const eng = makeEngine({
         build: {

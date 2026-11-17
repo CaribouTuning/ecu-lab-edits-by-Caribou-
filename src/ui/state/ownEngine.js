@@ -1,9 +1,7 @@
 /**
  * The engine BUILD puts on the bench when the player chooses to build their own: an ordinary
  * square two-litre four, on a safe base map generated from the physics, with every figure
- * marked as assumed. The player sets each on the short block (layout, bore, stroke,
- * compression, redline) and the stages after it, and the base map follows the block as built
- * until they edit a table themselves (EngineScreen's short-block note).
+ * marked as assumed.
  */
 
 import { customEnginePatch, layoutById, startUpTiming, validateCustomEngine } from '../../sim/index.js';

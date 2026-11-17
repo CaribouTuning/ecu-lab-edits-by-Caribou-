@@ -1,8 +1,7 @@
 /**
  * The simulator worker (src/ui/sim/simWorker.js) solves an engine's breathing off the drawing
  * thread and hands back the nodes it solved (`breathingSnapshot`); the page takes them in
- * (`seedBreathing`). That is only a saving of time if the numbers are the ones the page would
- * have worked out itself. A fresh module instance stands in for each thread here.
+ * (`seedBreathing`).
  */
 
 import { describe, expect, it, vi } from 'vitest';

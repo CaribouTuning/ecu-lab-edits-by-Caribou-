@@ -1,15 +1,4 @@
-/**
- * SANDBOX: how to start tuning an engine just built (state/tuneStart.js). Three ways, as a
- * shop would offer them:
- *
- *   - a safe base map: generated from the physics and checked on the dyno until it runs
- *     clean, what a tuner loads before the first power pull (state/safeBaseMap.js);
- *   - build that base map yourself, with the targets and a check on each step;
- *   - tune from the log and the advice, as always.
- *
- * Shown above TUNE's pages until the player picks one, and again when the build changes.
- * Loading the map is one LOAD_BASE_MAP: Undo brings the old tables back.
- */
+/** Sandbox: how to start tuning an engine just built (state/tuneStart.js). */
 
 import React from 'react';
 import { Check, ChevronDown, ChevronRight, Circle, Gauge, ListChecks, Wrench, X } from 'lucide-react';

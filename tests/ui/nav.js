@@ -1,13 +1,4 @@
-/**
- * Getting round the app in a test the way a player does.
- *
- * Both modes work on a laptop in your shop (src/ui/desk/Desk.jsx): Tune (and in SANDBOX,
- * Learn and Physics) are apps on its desktop, and the dyno and the engine stand are in the
- * shop, reached by shutting the laptop. The engine is built on the build bench (BUILD) and
- * run on the engine stand (LIVE). The game opens stood in the shop, the laptop shut. `goTo`
- * takes either route to the same screen, so a test says where it wants to be and not how
- * the chrome gets there.
- */
+/** Getting round the app in a test the way a player does. */
 
 import { fireEvent, screen, within } from '@testing-library/react';
 

@@ -1,31 +1,6 @@
 /**
- * Engine damage: what a worn part does to the engine, how parts wear while it runs, and
- * how it fails.
- *
- * Health is three numbers, percent of life left: the pistons and rings, the bearings
- * (crank and rod), and the valves. They are worn by the conditions that wear the real
- * parts, all of them quantities the model already solves: knock that happened, a lean or
- * rich mixture under load, peak cylinder pressure past what the parts carry, and on the
- * live engine oil starvation, overspeed past the bottom end's rating and boiling coolant.
- *
- * A worn part changes the engine through the physics, never by docking power:
- *   pistons and rings  blow-by. Part of the trapped charge, air and fuel together, escapes
- *                      past the rings into the crankcase before it burns. The breather
- *                      returns it to the intake, so the MAF and the wideband read the
- *                      same mixture as before; the cylinder simply burns less of it. A
- *                      worn-out ring pack loses about 1% of the charge this way: worn
- *                      rings show far more as smoke and crankcase pressure than as power.
- *   valves             a burnt valve leaks its cylinder's charge back into the port, and
- *                      past a point that cylinder stops firing. Either way it is one
- *                      cylinder's work lost, never more.
- *   bearings           opened clearances pass more oil (Poiseuille flow, the cube of the
- *                      clearance), so the pump makes less pressure below its relief
- *                      valve: low oil pressure at hot idle. They do not add friction.
- *
- * At zero a part has failed and the engine with it: the failure is a state, not a
- * number. A failed engine does not run until it is rebuilt.
- *
- * Every number, with its source or marked as a calibration: docs/damage-model.md.
+ * Engine damage: what a worn part does to the engine, how parts wear while it runs, and how it
+ * fails.
  */
 
 import { COEFF } from './coefficients.js';
@@ -82,18 +57,10 @@ export function applyWear(health, wear) {
 }
 
 /**
- * What the wear does to the running engine, as the physical quantities `evaluatePoint`
- * takes (its `wear` input). A healthy engine returns null: nothing to apply.
- *
- *   ringLeakFrac   share of every cylinder's trapped charge lost past the rings
- *   cylLossFrac    share of the engine's work lost to the burnt valve's cylinder: what
- *                  leaks out of it, and all of it once it stops firing (counted once)
- *   deadFrac       share of the engine's firing events that no longer fire (the log's
- *                  misfire column)
+ * What the wear does to the running engine, as the physical quantities `evaluatePoint` takes
+ * (its `wear` input).
  * @param {Health|null|undefined} health
  * @param {number} cyl cylinders
- *   oilConductance how much more freely the oil system leaks than when new (1 new): the
- *                  pump's pressure below its relief valve divides by it
  * @returns {{ringLeakFrac: number, cylLossFrac: number, deadFrac: number, oilConductance: number}|null}
  */
 export function wearEffects(health, cyl) {
@@ -140,14 +107,7 @@ export function oilConductance(wear) {
  */
 export function pointWear(p) {
   let piston = 0, valve = 0;
-  // Only knock that happened wears the piston. When the retard came from valvetrain
-  // noise read as knock (the controller sits at the larger of the two, see
-  // knockRetard in point.js), the engine ran further from its limit, not into it: that
-  // costs power, which the pull log reports as false knock, but it hammers nothing.
-  // It was once charged as detonation, so a big cam with the factory knock threshold
-  // lost half its pistons to a noise.
-  // `knockFalse` is logged to a tenth of a degree and `knockPull` is not, so the
-  // comparison allows for that rounding.
+  // Only knock that happened wears the piston.
   const realKnockDeg = p.knockPull > (p.knockFalse ?? 0) + 0.05 ? p.knockPull : 0;
   if (p.knock) piston += realKnockDeg * COEFF.WEAR_KNOCK;
   if (p.leanRisk) {
@@ -156,11 +116,8 @@ export function pointWear(p) {
   }
   // Bore wash: unburnt fuel stripping the cylinder film is a ring/bore wear mode.
   if (p.richRisk) piston += (COEFF.RICH_DAMAGE_LAMBDA - p.lambda) * COEFF.WEAR_RICH_BORE_WASH;
-  // Mechanical overload: past a certain peak cylinder pressure the piston crown, the
-  // ring lands and the rod are simply out of strength. This is a SEPARATE failure
-  // mode from knock — a tune can be perfectly knock-free and still be pounding the
-  // bottom end apart, which is what happens when a high-octane fuel is used to make
-  // high static compression survivable under boost.
+  // Mechanical overload: past a certain peak cylinder pressure the piston crown, the ring
+  // lands and the rod are simply out of strength.
   if (p.pressureRisk) piston += (p.peakPressure - COEFF.PEAK_PRESSURE_LIMIT_BAR) * COEFF.WEAR_PISTON_PER_BAR;
   // Knock nobody corrected: the ECU could not hear it, so it ran on. This is the knock
   // that destroys pistons, charged far above knock the controller caught and pulled.
@@ -170,19 +127,12 @@ export function pointWear(p) {
 
 /**
  * Where in a dyno pull an engine that started it at `health` fails, if it does.
- *
- * The pull's wear is charged as it always is; this spreads each part's share along the
- * pull by where it was earned (pistons and valves point by point, bearings by each
- * point's peak pressure over the bottom end's free threshold) and finds the first point
- * at which a part's life runs out.
  * @param {object[]} points the pull's records
  * @param {Health} wear what the whole pull costs each part
  * @param {Health} health each part's life at the start of the pull
  * @param {number} bearingFreeBar the bottom end's free threshold
  * @param {{piston: number, valve: number}[]} [per] each point's `pointWear`, if the
- *   caller already has it
  * @returns {{index: number, part: Part, spent: Health}|null} where it fails, and what
- *   the pull to there cost each part
  */
 export function sweepFailure(points, wear, health, bearingFreeBar, per = points.map(pointWear)) {
   const already = failedPart(health);
@@ -208,18 +158,12 @@ export function sweepFailure(points, wear, health, bearingFreeBar, per = points.
 
 /**
  * The live engine's wear over one step, percent of each part's life.
- *
- * The dyno's own rates, per second: a logged dyno point stands for `pointSeconds` of
- * running, so a second at the same point costs the same as on the dyno. Then what only
- * a running engine on the stand can do to itself: run its bearings short of oil, rev
- * past what its bottom end is rated for, and boil its coolant.
  * @param {object} input
  * @param {object} input.pt the step's `evaluatePoint` record
  * @param {number} input.dt seconds
  * @param {number} input.rpm
  * @param {number} input.oilKpa oil pressure
  * @param {number} input.healthyOilKpa what a healthy pump and bearings give at this speed
- *   and oil temperature
  * @param {number} input.coolantC
  * @param {number} input.ratedRpm the bottom end's rated speed
  * @param {number} input.bearingFreeBar the bottom end's free threshold
@@ -233,10 +177,8 @@ export function liveWear({ pt, dt, rpm, oilKpa, healthyOilKpa, coolantC, ratedRp
   const k = dt / pointSeconds;
   let piston = w.piston * k;
   let valve = w.valve * k;
-  // A dyno pull charges its average peak pressure over the threshold once; a second of
-  // running at it costs that over the pull's length. The threshold is for a pull's
-  // average, so one instant is judged against it plus the spread a stock pull shows
-  // between its average and its highest point.
+  // A dyno pull charges its average peak pressure over the threshold once; a second of running
+  // at it costs that over the pull's length.
   const pointFreeBar = bearingFreeBar + COEFF.BEARING_LIVE_POINT_SPREAD_BAR;
   let bearing = Math.max(0, pt.peakPressure - pointFreeBar) * COEFF.WEAR_BEARING_PER_BAR * bearingWearMult * (dt / pullSeconds);
   // Oil starvation: the film holds while pressure stays within a share of what this

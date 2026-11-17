@@ -1,10 +1,4 @@
-/**
- * A stock engine on its stock calibration does not pop on the overrun, cold or warm. Its
- * overrun fuel cut works cold, at speeds the coolant table raises (Toyota US 4,506,638,
- * Honda US 4,434,769), its idle air catches the engine where the fuel comes back, and its
- * wall-film account takes out what the film gives back. Take those away and a cold overrun
- * runs rich, misfires and pops, as an untuned engine does.
- */
+/** A stock engine on its stock calibration does not pop on the overrun, cold or warm. */
 
 /* global structuredClone */
 import { describe, expect, it } from 'vitest';

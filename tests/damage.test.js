@@ -290,10 +290,7 @@ describe('a stock engine run as its maker meant lasts', () => {
 
   it('a turbo bolted on before the tables are tuned costs a little per pull, not half the engine', () => {
     // The ECU's knock control hears it and pulls timing: knock at the limit, which is what
-    // knock control is for. It once cost 19% of the pistons per pull.
-    // On breakpoints sized to the NA engine, whose top row is 100 kPa: the boost reads the edge,
-    // the NA spark, as on an engine the player has not yet extended the tables for. (On the
-    // game's 8 × 6 its factory calibration already has knock-limited 150 and 200 kPa rows.)
+    // knock control is for.
     const sized = S.presetLayout(S.presetById('vq35hr'), { rpmCount: 16, loadCount: 16 });
     const eng = makeEngine({ preset: 'vq35hr', layout: sized, build: { turboOn: true, boostCurve: Array(8).fill(7), injIdx: 3, ecuInjectorCc: 650 } });
     const r = S.simulateSweep({ ...sweepOf(eng), health: NEW });

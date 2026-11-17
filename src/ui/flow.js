@@ -1,26 +1,10 @@
-/**
- * Where to go next: the game's flow, as one step at a time.
- *
- * Both modes are one loop, the loop a tuner works in. SANDBOX: choose an engine and build it
- * on the stand, then start it and hear it on the run stand, pull it on the dyno, read what the pull's log says and
- * fix that on the laptop, pull again. CAREER: take a customer's car in the Jobs app, pull
- * it on the dyno, fix what the log points at, pull again, and hand it back. This works
- * out which step the player is on from what is true now (no checklist to fall out of step
- * with the game), and the chrome shows it in the same words wherever they are: over the
- * shop floor, on the station's bar, on the laptop.
- *
- * Pure: no React, no store. EcuLab.jsx gathers the facts and acts on `go`.
- */
+/** Where to go next: the game's flow, as one step at a time. */
 
 /**
- * Where a step sends the player:
- *   build      the build bench's computer
- *   live       the run stand's computer
- *   dyno       the dyno
- *   tune:PAGE  that page of the laptop's Tune app
- *   board      the Jobs app (the shop's customers and books)
- *   messages   Pops's messages, on the laptop
- *   ticket     the job ticket, open, where the car is handed back
+ * Where a step sends the player: build the build bench's computer live the run stand's
+ * computer dyno the dyno tune:PAGE that page of the laptop's Tune app board the Jobs app (the
+ * shop's customers and books) messages Pops's messages, on the laptop ticket the job ticket,
+ * open, where the car is handed back
  * @typedef {'build'|'live'|'dyno'|'board'|'messages'|'ticket'|`tune:${string}`} Go
  */
 

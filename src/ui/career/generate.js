@@ -339,9 +339,7 @@ const TEMPLATES = /** @type {Template[]} */ ([
       const octaneIdx = r.pick([0, 1]);
       // +2% to +4%: bolt-ons, a street cam a step up from stock and a retune from the log make
       // +4.5% on the VQ35DE, +5.9% on the VQ35HR and +6.4% on the V6 in the air model
-      // (tests/careerFixes.js 'build-na'), so the hardest ask leaves room on every car. Real
-      // VQ builds measure more (MotoIQ's JWT C2 test: +6% from the cams alone); the model's
-      // VQ answers a cam less than that (CLAUDE.md, preset fidelity).
+      // (tests/careerFixes.js 'build-na'), so the hardest ask leaves room on every car.
       const share = r.range(1.02, 1.03 + level * 0.0025);
       const redline = r.pick([null, null, 7200]);
       return {

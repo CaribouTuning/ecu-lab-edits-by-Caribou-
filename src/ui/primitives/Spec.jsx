@@ -1,14 +1,4 @@
-/**
- * The engine builder's spec-sheet parts: how one engine parameter is shown and set.
- *
- * Laid out as an engineering datasheet is, not as a settings form: a ruled heading names a
- * group of related figures, each figure is a row with its name on the left and its value, big
- * and in a monospaced face, on the right, and the factory figure sits under it once it has
- * changed. A slider is a thin rule with a blade for a thumb, the way a caliper or a fader reads.
- *
- * Presentation only. Every control still writes the same build field through the same
- * action; these hold no state and know nothing about the engine.
- */
+/** The engine builder's spec-sheet parts: how one engine parameter is shown and set. */
 
 import React, { useId } from 'react';
 

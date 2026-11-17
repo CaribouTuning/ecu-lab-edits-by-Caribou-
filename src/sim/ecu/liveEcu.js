@@ -285,10 +285,7 @@ export function liveStepEcu(st, dt, input, cfg) {
   e.idleAir = idleAir;
   let effThrottle = clamp(Math.max(e.throttle, idleAir), 0, 100);
 
-  // ---- OVERRUN BURBLE: the "pops and bangs" a tuner writes in on purpose. For a set time
-  // after the throttle closes, inside an RPM window, the ECU keeps fuelling where it would
-  // cut, holds the throttle cracked for air, and fires the spark far after TDC
-  // (strategy.js); the late flame finishes in the manifold (point.js `afterfire`).
+  // ---- overrun burble: the "pops and bangs" a tuner writes in on purpose.
   e.liftT = pedal < 3 ? (e.liftT ?? 0) + dt : 0;
   const ig = cal.ignition;
   const burble = !!(ig.burbleEnabled && s.running && !s.cranking && idleZone && pedal < 3
@@ -297,11 +294,11 @@ export function liveStepEcu(st, dt, input, cfg) {
   e.burble = burble;
   if (burble) effThrottle = Math.max(effThrottle, ig.burbleAirPct ?? 3);
 
-  // ---- OVERRUN FUEL CUT AND REV LIMITER.
-  // Cold, the cut comes in and the fuel comes back at higher speeds (the coolant table every
-  // factory fuel cut carries: Toyota US 4,506,638, Honda US 4,434,769), so a cold engine
-  // still cuts on the overrun, where a closed throttle holds the manifold so far into vacuum
-  // that a fuelled charge will not light, and does not stall as the fuel returns.
+  // ---- overrun fuel cut and rev limiter. Cold, the cut comes in and the fuel comes back at
+  // higher speeds (the coolant table every factory fuel cut carries: Toyota US 4,506,638,
+  // Honda US 4,434,769), so a cold engine still cuts on the overrun, where a closed throttle
+  // holds the manifold so far into vacuum that a fuelled charge will not light, and does not
+  // stall as the fuel returns.
   const dfcoCold = cal.fuel.dfcoColdRpm ? read1(cal.fuel.dfcoColdRpm, e.sEct) : 0;
   // The ECU commands its own throttle blade, so it knows the moment the throttle is told to
   // shut, a step before its position sensor reads it: the cut starts with the lift, not
@@ -474,35 +471,26 @@ export function liveStepEcu(st, dt, input, cfg) {
     if (Math.abs(e.aePct) < 0.05) e.aePct = 0;
     // WALL-FILM COMPENSATION, the release side of the ECU's X-tau account (Aquino, SAE
     // 810494): the ECU keeps its own estimate of the film from what it injected and its
-    // coolant sensor, and takes out of each injection what the film is giving back beyond
-    // what it is taking up, for as long as the film drains, not only while the throttle
-    // moves. Commanding c so that c (1 - X) + release = wanted. Its gain is the calibration's
-    // decel enleanment: 1 removes exactly the estimate, less leaves a lift rich (and a cold
-    // overrun popping as the misfired charge lights in the exhaust).
+    // coolant sensor, and takes out of each injection what the film is giving back beyond what
+    // it is taking up, for as long as the film drains, not only while the throttle moves.
     const est = filmParams(e.sEct, derived.injection);
-    // Last step's command was sized for last step's air. At a fixed speed the air, and the
-    // fuel it needs, follow the manifold pressure the ECU reads, so the injection about to be
-    // made is that one moved by the pressure since. Without it, the fuel returning after an
-    // overrun cut was corrected for the 15 kPa of the cut while the idle valve had the
-    // manifold at 27, and the whole correction landed on twice the fuel: lean misfires.
+    // Last step's command was sized for last step's air.
     const mapStep = clamp(e.sMap / Math.max(5, e.filmMapPrev ?? e.sMap), 0.25, 4);
     e.filmMapPrev = e.sMap;
     const wanted = injPerCycle > 0 ? injPerCycle * mapStep / Math.max(0.05, 1 + (e.filmCompPct ?? 0) / 100) : 0;
     const releaseEst = cycles > 0 ? (e.filmEst ?? 0) * clamp(dt / est.tau, 0, 1) / cycles : 0;
     const factor = wanted > 0 ? (wanted - releaseEst) / ((1 - est.X) * wanted) : 1;
     // Both ways: what the film gives back is taken out (its gain the decel enleanment), and
-    // after a fuel cut, when the film is empty and takes up X of every injection until it
-    // is wet again, that is put back, so the fuel's return does not misfire lean. On a
-    // tip-in the film's uptake is the acceleration enrichment's job (the player's table), so
-    // the account puts fuel back only on a closed throttle, for the fuel's return after a cut.
+    // after a fuel cut, when the film is empty and takes up X of every injection until it is
+    // wet again, that is put back, so the fuel's return does not misfire lean.
     e.filmCompPct = factor < 1
       ? Math.max(-95, (factor - 1) * 100 * (cal.fuel.decelEnlean ?? 1))
       : e.aePct > 0.5 || pedal >= 3 ? 0 : Math.min(100, (factor - 1) * 100);
     e.filmEst = Math.max(0, (e.filmEst ?? 0) + est.X * injPerCycle * mapStep * Math.max(0.05, 1 + (e.aePct + e.filmCompPct) / 100) / Math.max(0.05, e.transPrev ?? 1) * cycles - (e.filmEst ?? 0) * clamp(dt / est.tau, 0, 1));
-    // The film works on the fuel injected THIS step, which is last step's command moved by
-    // the change in the transient correction since: its evaporation is a mass, not a share
-    // of the command, so sizing it on last step's command over-leaned the step a large
-    // correction came in on and over-richened the one after.
+    // The film works on the fuel injected THIS step, which is last step's command moved by the
+    // change in the transient correction since: its evaporation is a mass, not a share of the
+    // command, so sizing it on last step's command over-leaned the step a large correction
+    // came in on and over-richened the one after.
     const transNow = 1 + (e.aePct + e.filmCompPct) / 100;
     const injNow = injPerCycle * mapStep * Math.max(0.05, transNow) / Math.max(0.05, e.transPrev ?? 1);
     e.transPrev = transNow;
@@ -617,11 +605,8 @@ export function liveStepEcu(st, dt, input, cfg) {
       else if (P.leanAction === 'torque') e.torqueRetard = Math.min(E.LEAN_RETARD_MAX_DEG, e.torqueRetard + E.LEAN_RETARD_RATE_DEG_S * dt);
       else e.boostCutPsi = Math.max(e.boostCutPsi, P.boostCutPsi);
     }
-    // The lean cut judges the mixture the nitrous makes, so it waits for the wideband to
-    // read the spray and then for the reading to hold, as the lean protection does. Judged
-    // on the first step, it read the mixture from before the shot's fuel arrived, and a
-    // base tune near the limit (or a correction that brought the spray to its target) shut
-    // the nitrous off the instant it opened.
+    // The lean cut judges the mixture the nitrous makes, so it waits for the wideband to read
+    // the spray and then for the reading to hold, as the lean protection does.
     if (nitrousFrac > 0 && cal.nitrous.leanCutEnabled && e.sLambda > cal.nitrous.leanCutLambda) e.nitrousLeanT = (e.nitrousLeanT ?? 0) + dt;
     else e.nitrousLeanT = 0;
     if (e.nitrousLeanT > E.LEAN_CONFIRM_S) {

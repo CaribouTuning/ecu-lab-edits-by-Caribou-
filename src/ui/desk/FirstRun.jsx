@@ -1,8 +1,7 @@
 /**
- * The first time the shop opens in a mode, a few short cards over the 3D shop say how the
- * game goes: in SANDBOX the build, run, pull and fix loop and how to experiment; in CAREER
- * the Jobs app's customers and how a job is done and handed back. Shown once per mode
- * (remembered in this browser), skippable, and never a screen of its own.
+ * The first time the shop opens in a mode, a few short cards over the 3D shop say how the game
+ * goes: in SANDBOX the build, run, pull and fix loop and how to experiment; in CAREER the Jobs
+ * app's customers and how a job is done and handed back.
  */
 
 import React, { useEffect, useState } from 'react';

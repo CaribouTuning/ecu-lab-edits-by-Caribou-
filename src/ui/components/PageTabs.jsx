@@ -1,10 +1,6 @@
 /**
  * On a phone, the pages of an app as a grid of small tabs, every page in sight and one tap
- * away: an icon over a short name, the open one keyed. Where the app has room, its sidebar
- * does this job and the grid is not drawn (`when`).
- *
- * It replaced a drop-down ("All pages"), which hid the pages behind a press, and before
- * that a row of tabs that ran off the right edge of the screen.
+ * away: an icon over a short name, the open one keyed.
  */
 
 import { Lock } from 'lucide-react';

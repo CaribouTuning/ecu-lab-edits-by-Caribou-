@@ -35,12 +35,7 @@ import * as S from '../src/sim/index.js';
  */
 const REAL = {
   // Full-load mixture at peak power, as factories ship it (src/sim/factoryFuel.js has each
-  // engine's sources). NA: GM's stock Power Enrichment runs 0.77-0.83 at peak-power speed
-  // across 26 stock P01/P59 calibrations (the LM7 0.77, the LS1 0.82; ECU Lab Pro's
-  // gm-benchmark.json), stock VQ35s about 0.82-0.85 near the top; best power itself is
-  // 0.86-0.91 (HEYWOOD). Boosted: the N54 about 0.78-0.82 under load (JB4 logging guide);
-  // the direct-injection B58 and EA888 hold lambda 1 through most of a pull and are about
-  // 0.90-0.95 by redline (Bimmerpost B58 logs; Stratified Auto on the EA888).
+  // engine's sources).
   lambdaNa: [0.74, 0.91],
   lambdaBoosted: [0.76, 1.0],
   // Fuel per horsepower-hour at peak power (ENGINELABS, GARRETT). The lower edges are

@@ -54,11 +54,10 @@ export function EcuSection({ section, title, icon, intro, liveVars = null, embed
   const cal = tune.ecu;
   const [showPro, setShowPro] = React.useState(false);
   // The factory setting, on the breakpoints its tables left the factory on: the stock layout
-  // for this engine on the induction it left the factory with, chosen as `presetLayout` chooses
-  // it (the game's 8 × 6 where the engine fits it, else breakpoints sized to it), so as RESET
-  // ALL TO STOCK writes it, whatever the axes have been extended or switched to since. Judged
-  // against any other grid, a factory N54 opened BOOST with "1 setting changed", and Factory
-  // moved its breakpoints off its own.
+  // for this engine on the induction it left the factory with, chosen as `presetLayout`
+  // chooses it (the game's 8 × 6 where the engine fits it, else breakpoints sized to it), so
+  // as RESET ALL TO STOCK writes it, whatever the axes have been extended or switched to
+  // since.
   const def = React.useMemo(() => {
     const f = build.factoryInduction ?? null;
     const redline = build.engineConfig.redline ?? 7000;

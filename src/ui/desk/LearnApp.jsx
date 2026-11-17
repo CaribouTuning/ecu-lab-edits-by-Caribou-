@@ -1,9 +1,4 @@
-/**
- * The Learn app: the guide as pages, laid out as the Physics app is. One page at a time,
- * chosen from a list on a phone and a row of tabs where there is room; each page opens with
- * what you can do after it, then its articles as open sections (learnShelf.jsx). The pages
- * run in the order a tuner learns the job, and the last button on each goes to the next.
- */
+/** The Learn app: the guide as pages, laid out as the Physics app is. */
 
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import React, { useEffect, useState } from 'react';

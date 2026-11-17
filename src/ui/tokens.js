@@ -266,13 +266,7 @@ export const accAlpha = (alpha) => `rgba(${tokens.accRgb}, ${alpha})`;
  */
 export const shadowAlpha = (alpha) => `rgba(${tokens.shadowRgb}, ${alpha})`;
 
-/**
- * The career shop's ART PALETTE: the side-on garage on the shop screen. Scenery, not the
- * interface: a red car is not a danger state, so it is kept apart from `tokens`' status
- * colours. It lives in this file all the same, so no colour is invisible to the token
- * layer (`no-hardcoded-colours.test.js`). Not mirrored into `tokens.css`, because the
- * scene is inline SVG.
- */
+/** The career shop's ART PALETTE: the side-on garage on the shop screen. */
 export const shop = Object.freeze({
   road: '#232a36',
   roadLine: '#3b4556',
@@ -327,13 +321,7 @@ export const shop = Object.freeze({
 
 /**
  * The career WORLD's art palette: the 3-D shop, town and cars the player walks and drives
- * through. Scenery, like `shop` above, and for the same reason: a red car or
- * a green lawn is not a status colour. Not mirrored into `tokens.css` because the scene
- * is drawn by WebGL, not styled by CSS.
- *
- * Everything the world draws names a key from here, so the no-hard-coded-colours rule
- * holds for the models and levels too. Clothing and hair are keyed by NAME (`cloth.red`)
- * so the wardrobe catalogue stays plain data a screen can print without WebGL.
+ * through.
  */
 export const world = Object.freeze({
   // The sandbox shop drawn as a sketch (stage.js, `sketch`): the ink its lines and

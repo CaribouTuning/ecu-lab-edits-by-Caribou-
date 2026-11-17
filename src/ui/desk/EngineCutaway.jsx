@@ -1,16 +1,4 @@
-/**
- * One cylinder of your engine, cut away and running: the Physics app's "engine in action".
- *
- * Drawn to the engine's own bore, stroke and compression, and driven by the slider-crank
- * kinematics the simulator uses. The crank turns at the chosen RPM, slowed down so it can
- * be followed; the cams turn at half speed and lift the valves through their duration; the
- * spark fires at the tune's timing; the charge is coloured by stroke (fresh mixture,
- * burning, spent); and the pressure in the cylinder is drawn on a p-V diagram as it goes.
- * Every number beside it is worked live, with the equation it comes from.
- *
- * Crank angle φ runs 0-720° over one cycle: 0 is TDC at the start of intake, 180 BDC,
- * 360 TDC between compression and power (where the spark fires), 540 BDC, 720 TDC.
- */
+/** One cylinder of your engine, cut away and running: the Physics app's "engine in action". */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
@@ -47,12 +35,10 @@ const readSorted = (xs, ys, x) => {
  * The cylinder as the model has it, at any crank angle of the 720: its geometry (the
  * slider-crank on the model's rod ratio), its valve events and lift (the gas exchange's), and
  * its pressure and burned share (the four-stroke record: the closed cycle as `runCycle`
- * integrated it, the open period as the gas exchange did). Crank angle `phi`: 0° is top dead
- * centre between the exhaust and intake strokes, 360° firing TDC. Nothing here is a second
- * model: it reads the model's numbers and draws them.
+ * integrated it, the open period as the gas exchange did).
  * @param {{bore: number, stroke: number, cr: number, timing: number,
- *   trace: {phi: number[], bar: number[], burned: number[]},
- *   gx: {events: {ivo: number, ivc: number, evo: number, evc: number}, trace: {deg: number[], inAreaMm2: number[], exAreaMm2: number[]}}}} e
+ * trace: {phi: number[], bar: number[], burned: number[]},
+ * gx: {events: {ivo: number, ivc: number, evo: number, evc: number}, trace: {deg: number[], inAreaMm2: number[], exAreaMm2: number[]}}}} e
  */
 export function cylinderModel(e) {
   const r = e.stroke / 2; // crank throw, mm

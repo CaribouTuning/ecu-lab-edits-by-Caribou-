@@ -1,9 +1,4 @@
-/*
- * The faces of the things in the shop (Station.jsx): a monitor's screen and a cart's console.
- * Each fills the face ShopBackdrop lays it on. These are machines in a room, so they are
- * drawn as machines: a screen is flat and square, a console is a plate with real-sized
- * controls.
- */
+/* The faces of the things in the shop (Station.jsx): a monitor's screen and a cart's console. */
 
 .station { position: relative; flex: 1; min-height: 0; pointer-events: none; }
 /* No room to put them in: the faces one after the other, a page to scroll. */
@@ -55,10 +50,7 @@
 .light[data-light='close'] { background: var(--mac-red); }
 .light[data-light='min'] { background: var(--mac-yellow); }
 .light[data-light='zoom'] { background: var(--mac-green); }
-/* The name takes the room between the lights and the status, centred in it. Centred on the
-   whole bar, a phone's narrow window drew "Caribou Dyno" over "Peak 317 whp, 295 lb-ft"; and
-   squeezed with an ellipsis it became a stub ("Caribou D…"). The reading matters more than
-   the name, so below the width where both fit, the name goes (see the query below). */
+/* The name takes the room between the lights and the status, centred in it. */
 .appName {
   flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-align: center;
   font-size: 13px; font-weight: 600; color: var(--mac-label2); white-space: nowrap; pointer-events: none;
@@ -90,10 +82,10 @@
 
 @container (max-width: 360px) { .appName { display: none; } .titleBar { justify-content: space-between; } }
 
-/* A phone on its side: 390 px of height cannot hold a screen and a console docked under it
-   (Run a pull sat below the fold). The two go side by side, as on a real dyno cart: the
-   screen takes the width and scrolls inside itself, the console is a column beside it,
-   always in reach. */
+/*
+ * A phone on its side: 390 px of height cannot hold a screen and a console docked under it
+ * (Run a pull sat below the fold).
+ */
 @media (max-height: 500px) and (orientation: landscape) {
   .station[data-flat='true'] {
     flex-direction: row; align-items: stretch; height: 100%; overflow: hidden; max-width: none;

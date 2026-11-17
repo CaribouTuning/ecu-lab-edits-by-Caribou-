@@ -1,9 +1,6 @@
 /**
- * When the engine does not get the mixture its AFR table asks for, the table is not the
- * fault and nothing should send the player to change it. A turbo V8 whose VE table read
- * low under boost ran 14.1:1 against a 12.9:1 target: the pull log told the player to
- * richen the target, while TUNE's mixture advisor, rightly, passed the table. Both now
- * name the fuelling (the VE table, the injectors, the pump), from the same threshold.
+ * When the engine does not get the mixture its AFR table asks for, the table is not the fault
+ * and nothing should send the player to change it.
  */
 
 import { describe, expect, it } from 'vitest';

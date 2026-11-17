@@ -92,10 +92,7 @@ export const RHO_AIR = (BARO_KPA * 1000) / (R_AIR * AMBIENT_K);
 
 /**
  * How far, percent, the delivered mixture may miss the AFR table at full load: where a
- * professional holds it, and the line the career's strictest customers grade at. Past it
- * the fuelling (the air estimate, the MAF, the injectors) is the fault, not the table:
- * the pull log's MAF and missed-mixture entries, TUNE's mixture advisor and the career's
- * headers jobs all read this one number. Every factory calibration lands within 1.1%.
+ * professional holds it, and the line the career's strictest customers grade at.
  */
 export const MIXTURE_TOLERANCE_PCT = 2;
 

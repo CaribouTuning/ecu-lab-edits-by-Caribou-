@@ -1,7 +1,8 @@
-/* The carts' control plates (Consoles.jsx), drawn as the hardware they are: a machined panel
-   with its legends engraved, latching keys with an indicator lamp, a recessed display window,
-   illuminated mushroom buttons, a throttle slot with a handle, a volume fader. One language at
-   every size; only the layout changes when the plate is wide (the full-screen station). */
+/*
+ * The carts' control plates (Consoles.jsx), drawn as the hardware they are: a machined panel
+ * with its legends engraved, latching keys with an indicator lamp, a recessed display window,
+ * illuminated mushroom buttons, a throttle slot with a handle, a volume fader.
+ */
 
 /* ---------- the panel ---------- */
 /* One row, as a real control box is laid out: the face is twice as wide as it is tall, and a

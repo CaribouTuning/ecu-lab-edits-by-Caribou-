@@ -1,14 +1,6 @@
 /**
  * Alpha-N: the ECU reads its tables by throttle opening and works the air out from the
- * barometric pressure, the way Speeduino and MegaSquirt do with the barometric correction
- * on. It is how a carburetted engine is first put on injection.
- *
- * What makes it alpha-N, and not speed-density with a different label:
- *   - the table row is chosen by the THROTTLE, whatever the manifold pressure is;
- *   - the air sum runs on the outside air's pressure, so the right VE cell holds the
- *     cylinder's fill against the outside air (true VE × MAP ÷ baro), and a table written
- *     for speed-density runs rich wherever the throttle loses pressure;
- *   - the same wideband log tunes it, cell by cell, on the throttle rows.
+ * barometric pressure, the way Speeduino and MegaSquirt do with the barometric correction on.
  */
 
 import { describe, expect, it } from 'vitest';

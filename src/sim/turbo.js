@@ -174,10 +174,9 @@ export function solveInduction({
   blower = null, blowerRatio = 1, intakeKAtEff = null, throttle = null, exhaust = null,
 }) {
   const throttleFrac = clamp(loadKpa / BARO_KPA, 0, 1);
-  // With the throttle body given, the opening's manifold pressure is solved from the
-  // plate's flow against what the engine draws at this speed (throttle.js), upstream of any
-  // compressor. Without it, `loadKpa` is that pressure already, as the sea-level figure:
-  // at altitude the same opening gives proportionally less.
+  // With the throttle body given, the opening's manifold pressure is solved from the plate's
+  // flow against what the engine draws at this speed (throttle.js), upstream of any
+  // compressor.
   const sweptPerCylM3 = (derived.displacementL / derived.cyl) / 1000;
   const throttledKpa = throttle
     ? throttledMapKpa({
@@ -361,11 +360,8 @@ export function solveInduction({
  * @returns {{boostPsi: number, empKpa: number, compressorEff: number}|null}
  */
 /**
- * The induction state at full throttle at this speed: the highest manifold pressure the
- * turbo reaches here, with its boost, backpressure and the compressor's efficiency there.
- * A table cell above it is one the engine never runs; read at this edge, as the ECU reads
- * past its axes, it continues the table the engine does run on.
- *
+ * The induction state at full throttle at this speed: the highest manifold pressure the turbo
+ * reaches here, with its boost, backpressure and the compressor's efficiency there.
  * @param {Omit<Parameters<typeof inductionAtMap>[0], 'mapKpa'>} input
  * @returns {{mapKpa: number, boostPsi: number, empKpa: number, compressorEff: number}}
  */

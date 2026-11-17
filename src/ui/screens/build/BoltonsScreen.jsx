@@ -1,15 +1,4 @@
-/**
- * BUILD > Bolt-ons (the route keeps its old id, `exhaust`).
- *
- * The parts that bolt on without changing what the engine is: the cold air intake, the
- * long-tube headers and the cat-back, then the exhaust pipe's diameter and what it costs
- * this engine at full power. Induction keeps what forces air in: the turbo, the
- * supercharger, their intercooler, and nitrous.
- *
- * The pipe is sized from the physics (airflow.js exhaustPowerCost): what it costs against a
- * pipe too big to restrict, on the same gas exchange every pull runs. A shop rule of an inch
- * per 100 hp from a guessed 82 hp per litre had asked a stock LS1 for 4.65 in.
- */
+/** BUILD > Bolt-ons (the route keeps its old id, `exhaust`). */
 
 import { Flame } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -49,9 +38,7 @@ export function BoltonsScreen({ active, onToggle }) {
   const catalyst = mods.catalyst ?? 'ceramic';
 
   // What each pipe costs this engine at full throttle and full boost, and the smallest that
-  // costs under 1%. Each pipe is four cells of the gas exchange (about 0.1 s each for an
-  // engine not solved before), so it runs after the screen paints and once a slider has
-  // stopped moving, never inside a render: dragging the header tube stays smooth.
+  // costs under 1%.
   const [sizing, setSizing] = useState(/** @type {{fitted: number, freeDia: number, boosted: boolean}|null} */ (null));
   useEffect(() => {
     setSizing(null);

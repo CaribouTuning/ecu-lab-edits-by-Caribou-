@@ -36,9 +36,7 @@ const HEAD_KEYS = ['camDuration', 'exhaustCamDuration', 'springRate', 'valvetrai
 
 /**
  * Which of the engine's parts differ from the factory engine it started as: none on a stock
- * engine, the changed ones on a modified one. Compared against the catalogue entry itself
- * (its engine, induction, parts and bolt-ons), so nothing is calibrated to find out. Boost
- * raised on a factory turbo counts as induction changed.
+ * engine, the changed ones on a modified one.
  * @param {any} build @param {any} preset the factory engine, or null for one of the player's own
  * @returns {Set<string>} part ids: block, head, ignition, induction, fuel, boltons
  */
@@ -103,17 +101,11 @@ export function isOwnEngine(build) {
 }
 
 /**
- * The safe base map for an engine of the player's own as its block and head now stand, on
- * the induction it was created with (naturally aspirated: `build.factoryInduction`), with
- * the bolt-ons fitted. What a tuner loads so a new engine starts and survives a first pull:
- * generated from the physics, its full-load spark START_UP_RETARD_DEG short of the target
- * (sim/presets.js `startUpTiming`): conservative, not tuned. A
- * turbo, a supercharger, nitrous, a fuel or an injector change is not in it: no tuner
- * would calculate boost cells for a customer, so those cells are the player's to tune.
+ * The safe base map for an engine of the player's own as its block and head now stand, on the
+ * induction it was created with (naturally aspirated: `build.factoryInduction`), with the
+ * bolt-ons fitted.
  * @param {import('./initialState.js').StoreState['build']} build
  * @param {string|null} [layoutChoice] the tables' layout id now: a player on the finer grid,
- *   or an engine computer's own, stays on it (left out, or the game grid: the grid a new
- *   engine of this size starts on)
  * @returns {Omit<import('./reducer.js').LoadBaseMapAction, 'type'>}
  */
 export function ownEngineBaseMap(build, layoutChoice = null) {

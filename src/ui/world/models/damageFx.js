@@ -1,10 +1,4 @@
-/**
- * What a damaged engine gives off, as drawn: smoke, flying debris, the flash of a failure.
- *
- * Each is a small pool of meshes in its owner's own coordinates (the engine's), updated by
- * the owner's frame, so it rocks and turns with the engine and costs nothing when idle.
- * Nothing here decides how damaged anything is; the owner says what to emit, and where.
- */
+/** What a damaged engine gives off, as drawn: smoke, flying debris, the flash of a failure. */
 
 import { world as W } from '../../tokens.js';
 import { THREE } from '../gfx.js';

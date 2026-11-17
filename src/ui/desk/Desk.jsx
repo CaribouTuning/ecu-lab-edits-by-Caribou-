@@ -1,18 +1,4 @@
-/**
- * The chrome both modes work in: a laptop on your desk, in your shop. Played on a phone it
- * is your phone instead (usePhone): the same apps on a home screen, each full screen.
- *
- *   desktop   the laptop open on its desktop: four apps (Tune, Learn, Build, Physics) and a
- *             taskbar (home, search, settings, the clock, notifications)
- *   app       one of those apps open in a window that fills the screen; its close button
- *             (and the taskbar's home button) goes back to the desktop
- *   bay       click the shop behind the laptop and it folds shut: you are stood in the shop,
- *             and the dyno, the engine on its stand and the laptop are there to click
- *   page      the dyno or the engine stand: their page, with the way back to the shop
- *
- * Chrome, and only chrome, as AppShell was: the app (EcuLab.jsx) says where you are and
- * hands over the screen for it; this decides how it is framed.
- */
+/** The chrome both modes work in: a laptop on your desk, in your shop. */
 
 import { read3d, write3d } from './render3d.js';
 import { Atom, Bell, BookOpen, ChevronLeft, ChevronRight, ClipboardList, Gauge, Home, MessageCircle, Search, Settings, Store, Wrench, X } from 'lucide-react';

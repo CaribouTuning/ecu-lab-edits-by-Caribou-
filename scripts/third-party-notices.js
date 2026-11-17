@@ -1,10 +1,7 @@
 /**
  * Writes THIRD-PARTY-NOTICES.md from the installed runtime dependencies: name, version,
  * licence, the copyright line from the package's own licence file, and where it comes from.
- * MIT, ISC and the SIL Open Font Licence all ask that their notice travel with the software
- * that uses them; this keeps the list true to package.json.
- *
- *   node scripts/third-party-notices.js
+ * node scripts/third-party-notices.js
  */
 
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';

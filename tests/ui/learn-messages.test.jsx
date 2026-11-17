@@ -1,11 +1,5 @@
 // @vitest-environment jsdom
-/**
- * The Learn app as pages, and CAREER's Messages as a conversation with Pops.
- *
- * Learn: one page at a time, every article on exactly one page, the page turning to the
- * next. Messages: one thread, Pops's messages oldest first with his lessons in it, your
- * replies on the right, and opening it reads everything.
- */
+/** The Learn app as pages, and CAREER's Messages as a conversation with Pops. */
 
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import React from 'react';

@@ -1,8 +1,8 @@
 /**
  * SANDBOX's three ways to start a tune: the safe base map is checked on the dyno and runs
- * clean (or names what a map cannot fix), the guide grades the player's own tables against
- * it only where the engine runs, and the start is offered for a built engine, never in the
- * career or for a stock one.
+ * clean (or names what a map cannot fix), the guide grades the player's own tables against it
+ * only where the engine runs, and the start is offered for a built engine, never in the career
+ * or for a stock one.
  */
 
 import { describe, expect, it } from 'vitest';

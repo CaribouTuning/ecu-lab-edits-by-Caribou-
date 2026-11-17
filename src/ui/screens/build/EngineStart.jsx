@@ -55,14 +55,7 @@ export function PrebuiltEngines({ onPick, picked = null, detail = undefined }) {
   );
 }
 
-/**
- * Where the engine comes from, chosen first: a factory engine, or one of the player's own.
- * Nothing of either path shows until it is chosen. The factory path is a catalogue to pick
- * from, the engine's published figures to read, and a confirm; the custom path puts a typical
- * engine on the bench at once, for the player to set part by part from its short block.
- * Both land on the same build bench with the engine loaded. The factory engine picked
- * survives Back, for as long as this screen is up.
- */
+/** Where the engine comes from, chosen first: a factory engine, or one of the player's own. */
 /**
  * @param {object} [props]
  * @param {() => void} [props.onCancel] swapping an engine already on the bench: keep it after all

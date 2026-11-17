@@ -613,8 +613,8 @@ function baseReducer(state, action) {
       };
       // An engine of the player's own, its tables untouched since they were generated: the
       // caller sends the safe base map for the block and head as they now are, in the same
-      // write (`ownEngineBaseMap`, baseMap.js), so the engine still starts and a first pull
-      // is safe. Tables the player has worked on are never replaced by a hardware change.
+      // write (`ownEngineBaseMap`, baseMap.js), so the engine still starts and a first pull is
+      // safe.
       const b = action.base;
       if (!b || state.tune.tablesDirty) return { ...state, build };
       return {
@@ -708,11 +708,7 @@ function baseReducer(state, action) {
     }
 
     case ACTIONS.LOAD_BASE_MAP:
-      // The player asked for a starting point for the parts on the bench. The parts are
-      // left alone; the tables, their breakpoints, the MAF scaling and (where it carries one)
-      // the injector flow the ECU is told are the base map's.
-      // What the CHANGES view compares against from here is the base map, so the player
-      // sees their own work on top of it.
+      // The player asked for a starting point for the parts on the bench.
       return {
         ...state,
         build: { ...state.build, mafScalar: action.mafScalar ?? state.build.mafScalar, ecuInjectorCc: action.ecuInjectorCc ?? state.build.ecuInjectorCc, presetId: null },

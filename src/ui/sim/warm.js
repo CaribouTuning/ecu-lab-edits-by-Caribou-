@@ -1,10 +1,6 @@
 /**
- * Asks the simulator worker (simWorker.js) to do a slow first step off the drawing thread,
- * and takes back what it solved, so the screen that needs it then reads it at once. The
- * numbers are the same either way: the worker runs this same code.
- *
- * Where a worker cannot be made (a test runner, a host that forbids it), `warm` resolves at
- * once and the screen works it out itself, as it always did.
+ * Asks the simulator worker (simWorker.js) to do a slow first step off the drawing thread, and
+ * takes back what it solved, so the screen that needs it then reads it at once.
  */
 
 import { seedBreathing } from '../../sim/index.js';

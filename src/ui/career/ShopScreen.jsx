@@ -1,9 +1,4 @@
-/**
- * CAREER's Jobs app, on the laptop and the phone: the shop's paperwork. Today's cars, the
- * customers waiting, what to buy, what to learn, and the books.
- * Everything here is a decision about the shop; the tuning itself happens at the stations
- * and on the laptop, on the customer's car, with the job ticket above them.
- */
+/** CAREER's Jobs app, on the laptop and the phone: the shop's paperwork. */
 
 import React, { useEffect, useState } from 'react';
 

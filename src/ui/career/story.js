@@ -1,25 +1,4 @@
-/**
- * The career's story: Pops's messages, from your first customer to Master tuner.
- *
- * Your dad, Ray, was a master tuner. This was his shop. He died when you were a kid, and
- * his brother, your uncle Pops, kept the keys and ran the diner across town. Now he has
- * reopened the shop for you, and he is teaching you the trade the way Ray taught him: by
- * text and by email, one lesson at a time, while you work.
- *
- * The story is a line of chapters. Each opens with an email from Pops that teaches one
- * real thing about tuning, and names a goal the shop already has (jobs done well, a
- * training course, an engine built to order, a reputation reached). Meet it and Pops texts you, pays
- * a little towards the next step, and the next chapter opens. The last one ends it: you
- * are a master tuner, and the shop is Ray's again.
- *
- * Every lesson is something the simulator already teaches, in its own words, and says
- * where it comes from: the Learn guide's articles, Pops's tips (tips.js, checked against
- * docs/accuracy.md), and the published sources in the Learn guide (articles 21, 22, 33).
- * The procedural customers carry on alongside, and once the story is finished, without end.
- *
- * Pure functions from one save to the next, like the rest of the career. The story's own
- * state is `c.saga`: which chapter is open, and which messages have been read.
- */
+/** The career's story: Pops's messages, from your first customer to Master tuner. */
 
 import { tipFor } from './tips.js';
 

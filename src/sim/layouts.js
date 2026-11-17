@@ -115,10 +115,9 @@ export function layoutById(id) {
 }
 
 /**
- * Whether an engine runs inside the game grid: its limiter no further past the last RPM
- * column than a limiter is ever placed (`AXIS_RPM_PAST_LIMIT`), and no more manifold
- * pressure than the top load row. Past either, the ECU would read the edge for the whole
- * top end, so the engine's tables are sized to it instead.
+ * Whether an engine runs inside the game grid: its limiter no further past the last RPM column
+ * than a limiter is ever placed (`AXIS_RPM_PAST_LIMIT`), and no more manifold pressure than
+ * the top load row.
  * @param {{redline: number, peakMapKpa: number}} spec
  */
 export function fitsGameGrid({ redline, peakMapKpa }) {
@@ -208,17 +207,9 @@ export function engineLayout(spec) {
 /**
  * Axes that reach `want`, made by ADDING breakpoints to `axes`: new load rows above the top
  * and new RPM columns past the last, every existing breakpoint kept exactly where it was.
- * This is what tuning software's "extend axis" does, and why it is safe on a table someone
- * has tuned: a cell's breakpoints do not move, so no value is re-sampled or blurred (a new
- * evenly spaced grid, re-reading the old one at its points, turned a single tuned cell into
- * the average of its neighbours).
- *
- * New load rows step by the old top spacing, or 10 kPa if that is finer: boost is not tuned
- * at the 5 kPa a vacuum table is. New columns step by the last two columns' spacing.
  * @param {TableAxes} axes in kPa on the load axis (descending) and RPM (ascending)
  * @param {{loadKpa: number, rpm: number}} want the top load and last RPM to reach
  * @returns {{axes: TableAxes, addRows: number, addCols: number}} the new axes, and how many
- *   rows were put above and columns after
  */
 export function extendAxesTo(axes, want) {
   if (axes.loadUnit !== 'kPa') return { axes, addRows: 0, addCols: 0 };

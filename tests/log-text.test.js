@@ -1,9 +1,6 @@
 /**
- * What the pull log, the VE correction and the start-up map say, held to what a player can
- * act on. Each was a dead end the guided player met (tests/guidedPlayer.js): an intercooler
- * asked for on a car that has one, a lean the protection hid from Correct VE from logs, an
- * EGT entry quoting the temperature after the protection cooled it, a knock entry saying the
- * ECU "pulled 0.0°", and a player's own engine starting already tuned.
+ * What the pull log, the VE correction and the start-up map say, held to what a player can act
+ * on.
  */
 
 import { describe, expect, it } from 'vitest';

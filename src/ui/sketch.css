@@ -1,16 +1,4 @@
-/*
- * How things are drawn (DESIGN.md).
- *
- * The devices (the laptop's and the phone's bodies) have a plain bezel (`.ink-frame-lg`).
- *
- * Software on a screen (the apps, the dyno and engine computers, every control on them) is
- * drawn as instrument software is: straight edges and small corners (`--hand-*` resolve to
- * those), one-pixel rules, no jitter on chart lines. Colour is data: the chrome is slate,
- * a selection is a lighter slate key, blue is the thing to do, and hue is kept for what a
- * value means (table heat, curves, ok / warning / danger).
- *
- * Colours stay in tokens.css; this file only shapes how they are drawn.
- */
+/* How things are drawn (DESIGN.md). */
 
 :root {
   /* Software corners. The old names are kept so every stylesheet that used them now

@@ -1,16 +1,4 @@
-/**
- * The Learn app's pages, and the article wrapper that puts each article on one.
- *
- * Learn is laid out as the Physics app is: one page at a time, chosen from a list on a phone
- * and a row of tabs where there is room. The pages run in the order a tuner learns the job:
- * the idea, air, fuel, spark and knock, reading a pull, a whole job worked through, boost and
- * the adders, then the rest of the ECU, the engine science and where the model comes from.
- *
- * Every article in the guide (LearnScreen, LearnDeep) is an `Article`, and its number puts it
- * on a page (`PAGE_OF`). With no page chosen (HOME's guide) they all show as the guide's usual
- * expandable rows; on a page each is an open section with its title, as the Physics app's
- * panels are. The articles keep their numbers, which the rest of the app cites them by.
- */
+/** The Learn app's pages, and the article wrapper that puts each article on one. */
 
 import { BookOpen, Compass, Cpu, Droplet, Flame, Gauge, Rocket, Wind, Wrench, Zap } from 'lucide-react';
 import React, { createContext, useContext } from 'react';

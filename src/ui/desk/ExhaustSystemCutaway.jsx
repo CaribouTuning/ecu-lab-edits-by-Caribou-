@@ -1,8 +1,7 @@
 /**
  * The exhaust system on the Physics page: the collector's outlet, the oxygen sensors, the
- * catalytic converter's substrate, the muffler's chambers and the tailpipe, with the
- * pressure along the pipe under it. Every number is the model's (`gasExchangeTrace`'s
- * exhaust pipe, catalyst and losses); the shared parts are in cutawayParts.jsx.
+ * catalytic converter's substrate, the muffler's chambers and the tailpipe, with the pressure
+ * along the pipe under it.
  */
 
 import React, { useCallback, useMemo, useRef } from 'react';

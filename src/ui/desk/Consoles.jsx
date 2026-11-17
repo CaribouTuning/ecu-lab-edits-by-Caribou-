@@ -1,10 +1,7 @@
 /**
- * The control plates on the shop's two carts (Station.jsx): the dyno's, with its load
- * switch, the nitrous arming switch and the button that makes a pull; and the engine
- * stand's, with the start switch, the throttle and the volume.
- *
- * They are drawn as the hardware they stand for: a row of latching keys, a big round
- * button, a lever you hold open. The numbers on them are what the machine is reading.
+ * The control plates on the shop's two carts (Station.jsx): the dyno's, with its load switch,
+ * the nitrous arming switch and the button that makes a pull; and the engine stand's, with the
+ * start switch, the throttle and the volume.
  */
 
 import React from 'react';
@@ -15,13 +12,7 @@ import { useSession } from '../state/StoreProvider.jsx';
 
 import styles from './Consoles.module.css';
 
-/**
- * What each load key is, under its number where the plate is wide enough to print it. The
- * keys set the THROTTLE the pull is made at (the sweep opens it to load / 101.3 kPa of the
- * way): manifold pressure is what follows from it, and on a boosted engine it runs past
- * 100 kPa even at part throttle. Naming the keys in kPa read as "a 70 kPa pull", which on a
- * turbo engine it is not.
- */
+/** What each load key is, under its number where the plate is wide enough to print it. */
 const LOAD_SUB = { 100: 'Wide open', 70: 'Part', 40: 'Light' };
 
 /**

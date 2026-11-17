@@ -1,15 +1,8 @@
 /**
  * Turns the production build (`dist/`) into ONE html file with its script, styles and fonts
- * inside it, for places that serve a single page and nothing beside it: a Claude artifact,
- * an email attachment, a file opened from a phone.
- *
- *   npm run build && node scripts/build-single-file.js [out.html]
- *
- * The page is written as the body of a document (a title, meta, styles, the app's markup and
- * its script, with no doctype, html, head or body tags), which is what an artifact host
- * wraps in a skeleton of its own. Opened as a plain file it still works: browsers build the
- * missing structure. Files the page only linked to (the manifest, the touch icon) are left
- * out, since nothing beside it would answer them.
+ * inside it, for places that serve a single page and nothing beside it: a Claude artifact, an
+ * email attachment, a file opened from a phone.
+ * npm run build && node scripts/build-single-file.js [out.html]
  */
 
 import { Buffer } from 'node:buffer';

@@ -173,10 +173,8 @@ export function ResultScreen({ chartData, engineDerived, ghostLabel, bands = [],
   const whp = U.metric ? 'Wheel kW' : 'WHP';
   const powerScale = niceScale(Math.max(1, ...chartData.flatMap((d) => [d.hp, d.torque, d.prevHp, d.prevTorque].filter((v) => Number.isFinite(v)))));
 
-  // THE DYNO CURSOR. Dyno software reads a curve at one speed: a line you drag along it,
-  // the power and torque at that speed beside it. It rests on peak power after a pull and
-  // follows the sweep while one draws; the player moves it by dragging on either chart, or
-  // with the slider under them (touch and keyboard).
+  // The dyno cursor. Dyno software reads a curve at one speed: a line you drag along it, the
+  // power and torque at that speed beside it.
   const [picked, setPicked] = useState(/** @type {number|null} */ (null));
   const drag = useRef({ down: false, moved: false });
   const first = chartData[0]?.rpm ?? 1500;

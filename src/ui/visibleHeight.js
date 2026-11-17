@@ -1,16 +1,4 @@
-/**
- * The height of the page a viewer can actually see, as the CSS variable `--app-h`.
- *
- * Embedded in another page (an iframe), the frame can be taller than the part of it on
- * screen: the host sizes it to its own 100vh, which on iOS is the screen with the toolbars
- * gone, so the bottom of every screen sits under the host's chrome or off the screen. The
- * frame's own `100dvh` is the frame, so it cannot tell. An IntersectionObserver can: with no
- * root it measures against the top-level viewport, clipped by every frame in between, and
- * reports the visible part in this page's own coordinates.
- *
- * Unclipped (a normal tab, or a frame that fits), the variable is removed and the layouts
- * fall back to `100dvh`.
- */
+/** The height of the page a viewer can actually see, as the CSS variable `--app-h`. */
 export function trackVisibleHeight() {
   if (typeof window === 'undefined' || typeof window.IntersectionObserver === 'undefined') return;
   const root = document.documentElement;

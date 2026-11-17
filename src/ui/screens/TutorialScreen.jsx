@@ -1,12 +1,4 @@
-/**
- * The lesson reader for the five-minute tutorial (tutorial/books.js).
- *
- * A contents page first, doing what the best tutorials do first: what the reader will
- * be able to do by the end, what they need and how long it takes. Then the lessons, one
- * idea each, showing the real game screens (ScreenSnippet). Lessons read are ticked on
- * the contents page, and the tutorial reopens where the player left it. Everything
- * deeper is in the Learn app.
- */
+/** The lesson reader for the five-minute tutorial (tutorial/books.js). */
 
 import { Check, ChevronLeft, List as ListIcon } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';

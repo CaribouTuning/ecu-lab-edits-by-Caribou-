@@ -1,10 +1,6 @@
 /**
- * The loop a player runs after bolting a turbo on: pull, read the log and TUNE's advice,
- * do what they name (the log's MAF and VE entries, TUNE's cells), pull again. It has to end somewhere true: clean at every
- * throttle (no "safe at full throttle, knocks at half"), a Tuning Score of 100, and more
- * power than the engine made before the turbo. Each of those once failed: the advice never
- * converged, part-throttle rows stayed past the knock limit, and an over-retarded tune
- * scored 100 while making naturally aspirated power.
+ * The loop a player runs after bolting a turbo on: pull, read the log and TUNE's advice, do
+ * what they name (the log's MAF and VE entries, TUNE's cells), pull again.
  */
 
 import { describe, expect, it } from 'vitest';

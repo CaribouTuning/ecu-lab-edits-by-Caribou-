@@ -16,9 +16,7 @@ export const SAVE_VERSION = 1;
 
 /**
  * How a save of one version becomes the next: `MIGRATIONS[n]` takes a version-n save and
- * returns a version-(n + 1) one. RAISING `SAVE_VERSION` WITHOUT ADDING ITS STEP HERE WIPES
- * EVERY PLAYER'S SHOP: money, reputation, equipment, history. `reviveCareer` used to start a
- * new career for any save that was not exactly the current version.
+ * returns a version-(n + 1) one.
  * @type {Record<number, (save: any) => any>}
  */
 export const MIGRATIONS = {};

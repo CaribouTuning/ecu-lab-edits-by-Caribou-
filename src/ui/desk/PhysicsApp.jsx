@@ -1,25 +1,4 @@
-/**
- * The Physics app: the engine model laid open on your own engine, in four panels, as drawn.
- *
- *   your build      the build's numbers and what the model makes of each, with a small
- *                   cut-away of one cylinder drawn to its bore, stroke and compression
- *   the graph       power and torque against RPM, or VE (the VE button), or the VE map in
- *                   3-D (the 3D button); the RPM you pick here sets every other panel
- *   the raw model   every calculation the simulator makes at that RPM, stage by stage,
- *                   each with its equation, its numbers and what it means
- *   the engine      the 3-D engine from Build, running at that RPM, with its cylinder's
- *                   four strokes going round beside it
- *
- * The numbers are the full-throttle pull the advisor and the dyno also use (the app's
- * `advisorPull`), so this page, the TUNE advice and the DYNO never disagree. The stages:
- *
- *   1 Air       how much air the cylinder takes in            m = VE x rho x V, rho = MAP / (R T)
- *   2 Fuel      how much fuel that needs, and the injector time m_f = m_air / (AFR_s x lambda)
- *   3 Burn      when the spark fires and where the pressure peaks (MFB50, MBT)
- *   4 Knock     the end gas's race against its ignition delay   integral dt / tau = 1
- *   5 Work      from cylinder pressure to torque at the crank    BMEP = IMEP - FMEP - PMEP
- *   6 Heat      where the rest of the fuel's energy goes         BSFC, EGT
- */
+/** The Physics app: the engine model laid open on your own engine, in four panels, as drawn. */
 
 import React, { useDeferredValue, useMemo, useRef, useState } from 'react';
 
@@ -46,10 +25,9 @@ const NM_PER_LBFT = 1.3558;
 
 /** @param {number} v @param {number} [d] */
 /**
- * The Physics app's pages, in the order the air goes through the engine and then the sums:
- * the engine and its curves, the intake, the header, the exhaust, one cylinder firing, the
- * model's calculations in order, and the wear. `needs`: a page shown only when the build has
- * its data (the breathing trace, the damage model).
+ * The Physics app's pages, in the order the air goes through the engine and then the sums: the
+ * engine and its curves, the intake, the header, the exhaust, one cylinder firing, the model's
+ * calculations in order, and the wear.
  */
 export const PHYSICS_PAGES = /** @type {const} */ ([
   { id: 'model', name: 'Engine overview', short: 'Overview', icon: Gauge },
@@ -86,10 +64,10 @@ function Stage({ n, title, what, eq, rows, open = false, children }) {
 }
 
 /**
- * The cylinder pressure against crank angle through the closed cycle, intake valve closing
- * to exhaust valve opening, exactly as the model integrated it (`runCycle`'s trace): the
+ * The cylinder pressure against crank angle through the closed cycle, intake valve closing to
+ * exhaust valve opening, exactly as the model integrated it (`runCycle`'s trace): the
  * compression, the burn from the spark and the expansion, with the spark and the 50%-burned
- * angle marked. Nothing here is drawn from a second model.
+ * angle marked.
  * @param {{p: any, trace: {deg: number[], bar: number[], burned: number[]}|null}} props
  */
 function PressureTrace({ p, trace }) {

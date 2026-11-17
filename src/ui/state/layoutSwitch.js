@@ -58,11 +58,8 @@ export function layoutFor(build, choice) {
 const EXTENDABLE = new Set(['game', 'engine']);
 
 /**
- * Whether the engine reaches past its tables' breakpoints: more boost than the top load
- * row, or a limiter past the last RPM column. A real ECU reads the edge there; the player
- * extends the axes when they are ready to tune the new cells (`extendAxes`). For the game's
- * grid and breakpoints sized to the engine: an engine computer's own do not move. The game
- * grid grows by whole rows above its top (and columns past its last), every cell it had kept.
+ * Whether the engine reaches past its tables' breakpoints: more boost than the top load row,
+ * or a limiter past the last RPM column.
  * @param {Pick<StoreState, 'build'|'tune'>} state
  * @returns {boolean}
  */
@@ -75,12 +72,10 @@ export function engineOutgrowsTables(state) {
 }
 
 /**
- * The SET_LAYOUT that extends breakpoints sized to the engine to reach what it reaches
- * now, as tuning software's "extend axis" does: new rows and columns are ADDED, and every
- * existing breakpoint and cell stays exactly as it was (nothing is re-sampled, so a value the
- * player typed is the value that is there). The new cells hold the edge's values: exactly
- * what the ECU read past the edge before, so the engine runs the same until the player tunes
- * them. They are marked not tuned. Nothing is calculated for the player.
+ * The SET_LAYOUT that extends breakpoints sized to the engine to reach what it reaches now, as
+ * tuning software's "extend axis" does: new rows and columns are ADDED, and every existing
+ * breakpoint and cell stays exactly as it was (nothing is re-sampled, so a value the player
+ * typed is the value that is there).
  * @param {Pick<StoreState, 'build'|'tune'>} state
  * @returns {import('./reducer.js').SetLayoutAction}
  */
@@ -199,10 +194,8 @@ export function layoutSwitch(state, layoutId) {
   const { build, tune } = state;
   const to = layoutFor(build, layoutId ?? 'engine');
   const preset = build.presetId ? presetById(build.presetId) : null;
-  // Untouched tables on a factory engine are its factory calibration, generated afresh on
-  // the new breakpoints. Not once its induction has changed: the factory never wrote a
-  // calibration for a turbo it did not fit, and generating one would be tuning it for the
-  // player. Then the tables are carried across like anyone's.
+  // Untouched tables on a factory engine are its factory calibration, generated afresh on the
+  // new breakpoints.
   const stockInduction = preset && !!build.turboOn === !!preset.induction.turboOn && !build.blowerId && !build.nitrous;
   if (preset && !tune.tablesDirty && stockInduction) {
     const f = factoryCalibrationOn(preset, to);

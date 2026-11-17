@@ -1,17 +1,6 @@
 /**
- * The build bench's software: the engine on the bench is built here, a part at a
- * time, and it changes on the stand as you choose (shopScene.js redraws it from the build).
- *
- * Laid out as engine-building software is: the engine's parts down the left, each with what
- * is on it now, and the chosen part's options on the right, the figures that part decides at
- * the head of its sheet. The options are BUILD's own screens (screens/build), shown one part
- * at a time (BuildBenchMode), so every control is the same control writing the same build.
- *
- * On a screen taller than wide the bench's camera has only the computer in view, so the
- * software shows the engine itself, turning above the sheet, where the stand would be.
- *
- * It says which of three things is being built: a factory engine as it was built (stock), a
- * factory engine with parts changed (modified, each changed part marked), or the player's own.
+ * The build bench's software: the engine on the bench is built here, a part at a time, and it
+ * changes on the stand as you choose (shopScene.js redraws it from the build).
  */
 
 import { ChevronDown, ChevronUp } from 'lucide-react';

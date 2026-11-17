@@ -256,10 +256,9 @@ export function runCycle({
   // at wall temperature and takes no part in combustion, then comes back out on
   // expansion. This is where most unburnt hydrocarbon actually comes from.
   const creviceM3 = clearanceM3 * COEFF.CREVICE_VOLUME_FRAC;
-  // MOLAR EXPANSION (thermo.js molarExpansion): the products hold more moles than the
-  // charge they came from, so each slice that burns raises the pressure by that share as
-  // well as by its heat. Without it a rich mixture, whose products gain the most moles,
-  // was charged for its unburned CO and H2 and paid nothing back.
+  // MOLAR EXPANSION (thermo.js molarExpansion): the products hold more moles than the charge
+  // they came from, so each slice that burns raises the pressure by that share as well as by
+  // its heat.
   const molarGain = products ? molarExpansion(products) - 1 : 0;
 
   let p = trappedPa;
@@ -499,10 +498,7 @@ export function runCycle({
     blowbyFrac,
     knockIntegral,
     mfb50Deg,
-    // The share of the charge still unburned when the exhaust valve opens. Nil at any
-    // timing near MBT; with the spark well after top dead centre (an overrun burble, a
-    // badly retarded map) the flame is still crossing the chamber at EVO, and that charge
-    // finishes burning in the exhaust manifold: heat the piston never saw, and the pops.
+    // The share of the charge still unburned when the exhaust valve opens.
     unburnedAtEvoFrac: 1 - burnedFraction(evoAtdc),
   };
 }

@@ -44,14 +44,8 @@ import { compressorMap } from './compressorMap.js';
 import { BLOWER_OPTS } from './hardware.js';
 
 /**
- * How closed the bypass valve is. Its actuator is a diaphragm on manifold vacuum against a
- * spring: vacuum holds it open, and as the vacuum falls the spring closes it, fully once
- * the manifold is within about 3 inHg of the air outside (US Patent 5,186,081's example
- * reference), and it is fully open by about 5 inHg (an owner's bench measurement of a
- * factory Eaton actuator, MG Experience forum). Between the two it closes in proportion.
- *
+ * How closed the bypass valve is.
  * @param {number} vacuumKpa how far below the outside air the throttle alone holds the
- *   manifold, kPa
  * @returns {number} 0 fully bypassed .. 1 all flow through the blower
  */
 export function bypassClosedFrac(vacuumKpa) {

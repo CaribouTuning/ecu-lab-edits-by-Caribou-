@@ -106,11 +106,8 @@ const NO_PULL = Object.freeze({ points: [], events: [], peakHp: 0, peakTq: 0 });
 const NO_ADVICE = Object.freeze({ spark: [], fuelAdv: [], overAdvanced: [], underAdvanced: [], pastMbt: [], wrongMix: [] });
 
 /**
- * `useMemo` that only computes while `wanted`: otherwise it hands back what it last
- * computed (or null), and computes on the first render it is wanted with inputs it has not
- * seen. For work nothing on screen reads. `now()` gets the value for this render's inputs
- * whether or not it is wanted, for an action that needs it this instant (a pull started
- * from the command palette, on another tab).
+ * `useMemo` that only computes while `wanted`: otherwise it hands back what it last computed
+ * (or null), and computes on the first render it is wanted with inputs it has not seen.
  * @template T
  * @param {boolean} wanted
  * @param {() => T} compute
@@ -190,11 +187,7 @@ export const DYNO_PULL_MS = DYNO_PULL.SETTLE_MS + DYNO_PULL.SWEEP_MS
 const SETTLE_MS = /** @type {any} */ (import.meta).env?.MODE === 'test' ? 0 : 180;
 
 /**
- * A value once it has stopped changing for SETTLE_MS: the same value, later. Under the test
- * runner it is the value itself, so a test that sets a part sees the engine for it at once.
- * A new `jump` (a whole engine put on the bench, a reset, an undo: hardware no slider drags)
- * takes the value at once, so the engine is never seen with one part settled and the rest new:
- * the old block on the new turbo once cost a whole breathing grid nobody would read.
+ * A value once it has stopped changing for SETTLE_MS: the same value, later.
  * @template T
  * @param {T} value
  * @param {string} [jump] what no drag changes; a new one settles at once
@@ -228,8 +221,7 @@ export function EcuLabApp() {
   const [liveBuild, dispatch] = useBuild();
   // The engine's hardware as it settles: everything a new engine costs (its breathing grid,
   // the full-throttle pull, the advice) follows a slider once it stops for a moment, not at
-  // every step of a drag, which held the page for most of a second a step. The controls
-  // read the store themselves and move at once; every other field here is the live one.
+  // every step of a drag, which held the page for most of a second a step.
   const jump = [liveBuild.presetId, liveBuild.engineReady, liveBuild.engineConfig?.configuration, liveBuild.turboOn, liveBuild.turbineIdx,
     liveBuild.turbineCount, liveBuild.compressorIdx, liveBuild.exhaustDiaIdx, liveBuild.blowerId].join('|');
   const settledCfg = useSettled(liveBuild.engineConfig, jump);
@@ -438,13 +430,10 @@ export function EcuLabApp() {
   // and a pull a step is not worth re-solving for a hundredth of a percent of wear.
   const hp = Math.round(health.piston), hb = Math.round(health.bearing), hv = Math.round(health.valve);
   const advisorHealth = useMemo(() => ({ piston: hp, bearing: hb, valve: hv }), [hp, hb, hv]);
-  // ONLY WHEN SOMETHING READS IT. The advisor's full-throttle pull and the spark and fuel
-  // advice it feeds take about a second of a phone's main thread, and nothing on BUILD,
-  // LIVE or the laptop's other apps shows them: computed on every BUILD slider step they
-  // froze the page for seconds at a time. They are worked out when TUNE, DYNO or PHYSICS is
-  // open, and kept, so coming back with nothing changed is instant.
-  // Nor before there is an engine: SANDBOX's placeholder behind the start screen is nobody's
-  // engine and no screen shows advice on it, yet working it out cost a second of the gas exchange.
+  // Only when something reads it. The advisor's full-throttle pull and the spark and fuel
+  // advice it feeds take about a second of a phone's main thread, and nothing on BUILD, LIVE
+  // or the laptop's other apps shows them: computed on every BUILD slider step they froze the
+  // page for seconds at a time.
   const advisorShown = (tab === 'tune' || tab === 'dyno' || tab === 'physics') && build.engineReady !== false;
   // And only after the screen that wants it has painted: opening TUNE draws TUNE at once,
   // then works the advice out, rather than holding the tap for a second first.
@@ -673,9 +662,7 @@ export function EcuLabApp() {
     [build, tune, loadKpa, env, faults],
   );
   // The hardware on the stand, signed, and the hardware it last ran on: the game's flow asks
-  // to hear an engine again after a part goes on it (flow.js). A cursor is not hardware.
-  // The hardware, not the ECU's settings kept beside it on the build (the MAF scalar and the
-  // injector flow the ECU is set for are TUNE's): setting one sent a tuner back to the stand.
+  // to hear an engine again after a part goes on it (flow.js).
   const hwSig = useMemo(() => JSON.stringify({ ...build, boostSel: 0, presetPrompt: null, mafScalar: null, ecuInjectorCc: null }), [build]);
   const [heardSig, setHeardSig] = useState(/** @type {string|null} */ (null));
   const liveRunning = !!session.live.running;
@@ -1236,11 +1223,10 @@ export function EcuLabApp() {
     };
   }, [tab]);
 
-  // `engineName`/`overallColor` are gone: both were the header's, and the header is
-  // gone with them — `StatusStrip` in AppShell.jsx now derives the same figures from
-  // the store itself rather than being handed them from here (see that file's header
-  // for why it reads the store directly instead of taking props). `overallHealth`
-  // stays: the laptop's notifications read it.
+  // `engineName`/`overallColor` are gone: both were the header's, and the header is gone with
+  // them — `StatusStrip` in AppShell.jsx now derives the same figures from the store itself
+  // rather than being handed them from here (see that file's header for why it reads the store
+  // directly instead of taking props).
   const overallHealth = Math.min(health.piston, health.bearing, health.valve);
   const activePreset = presetId ? presetById(presetId) : null;
 
@@ -1604,11 +1590,7 @@ export function EcuLabApp() {
             dyno's own controls (the load, the nitrous switch, RUN) are its control box, and
             what the pull measured is on the bench computer beside it, a screen a button. */}
         {tab === 'dyno' && !engineMissing && (!inCareer || career.working) && (() => {
-          // DYNO's gating is irregular ON PURPOSE. While a pull is running the computer
-          // shows the curves, drawing as it sweeps, and offers nothing else, whatever section the URL has selected: a
-          // DATALOG/PULL LOG/SCORE view would otherwise go blank the moment a pull starts.
-          // HISTORY is offered without a result: its data (`runs`) is restored from storage
-          // on a cold start, while `result` is not persisted and is cleared by APPLY_PRESET.
+          // DYNO's gating is irregular ON PURPOSE.
           const shown = running ? 'result' : dynoView;
           /** @type {{id: string, label: string, flag?: boolean}[]} */
           const keys = [];
@@ -1755,10 +1737,7 @@ export function EcuLabApp() {
     ? { dyno: lookOf(career.working), lift: lookOf((career.lifts ?? []).find((l) => l.jobId !== career.working)?.jobId ?? null) }
     : undefined;
   // The engine's condition for the shop to draw on it (engine.js `setDamage`), in whole
-  // percent so the shop redraws its wear when it moves, not twenty times a second. A
-  // failure is named once it has happened where it happened: in the car on the dyno when
-  // the pull that killed it has drawn to its end, or on the stand when it died running
-  // (a dead engine refusing to start is not a new failure, and plays nothing).
+  // percent so the shop redraws its wear when it moves, not twenty times a second.
   const liveFailure = /** @type {any} */ (session.live).failure;
   const pullFailure = result?.failure && revealCount >= result.points.length ? result.failure : null;
   const failedWhere = /** @type {'stand'|'dyno'|null} */ (!blown ? null : result?.failure ? 'dyno' : liveFailure?.rpm > 300 ? 'stand' : null);
@@ -1772,10 +1751,9 @@ export function EcuLabApp() {
     key: failedWhere === 'dyno' ? (pullFailure ? `dyno:${runs[0]?.id ?? ''}` : null)
       : failedWhere === 'stand' ? `stand:${liveFailure.t}` : null,
   };
-  // ---- the game's flow: the next step, from what is true now (flow.js) ----
-  // In the log's order (fixLinks.js `tuneAttention` walks the causes as the log lists them):
-  // the next step is the log's first cause, as the log says to fix the top one first.
-  // Sorted by count, it once sent the player to Injectors while the log's first entry was the MAF.
+  // ---- the game's flow: the next step, from what is true now (flow.js) ---- In the log's
+  // order (fixLinks.js `tuneAttention` walks the causes as the log lists them): the next step
+  // is the log's first cause, as the log says to fix the top one first.
   const attentionList = Object.entries(attention)
     .map(([page, count]) => ({ page, count, label: tuneViews.find((v) => v.id === page)?.name ?? page }));
   const step = nextStep({

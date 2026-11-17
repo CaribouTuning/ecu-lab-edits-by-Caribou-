@@ -1,35 +1,4 @@
-/**
- * BREATHING: the gas exchange of one cylinder, crank angle by crank angle.
- *
- * Volumetric efficiency is not looked up. It is what is left in the cylinder when the
- * intake valve closes, from the engine's own geometry and the pressures around it:
- *
- *   - the EXHAUST VALVE, an orifice between the cylinder and the exhaust manifold, open from
- *     EVO to EVC. Gas flows whichever way the pressures push it: out on the exhaust stroke,
- *     and back in during overlap when the manifold sits above the cylinder (a throttled
- *     engine, or a turbine holding pressure upstream of itself);
- *   - the INTAKE VALVE, an orifice whose area follows the lift, open from IVO to IVC;
- *   - the INTAKE RUNNER, a column of air with mass. Pressure difference accelerates it,
- *     the valve's restriction slows it. Late in the intake stroke the moving column keeps
- *     packing air in against a rising piston (ram), and at low speed the rising piston
- *     pushes charge back out past a valve that is still open. Both come out of the one
- *     equation, as the speed changes; neither is a fitted term;
- *   - the CYLINDER, one zone, its mass and temperature from the first law with the piston
- *     moving (slider-crank, the cycle's own rod ratio) and the walls heating the charge.
- *
- * The trapped FRESH charge at IVC, against the plenum's density times the displacement, is
- * the volumetric efficiency on the speed-density basis the ECU's VE table uses. The burned
- * gas still in the cylinder is the residual.
- *
- * Equations: compressible orifice flow, Heywood, Internal Combustion Engine Fundamentals
- * (McGraw-Hill, 1988), Appendix C, used for both valves; the valve open area is the lesser
- * of the curtain area pi*Dv*L and the port throat; the gas-exchange heat transfer is
- * Woschni's correlation with his gas-exchange velocity constant (SAE 670931; Heywood ch. 12).
- * The runner is the lumped-inertia (Helmholtz) intake of Engelman's tuned-manifold analysis,
- * and of the "filling and emptying" class of engine models (Heywood ch. 14): one mode of the
- * runner's acoustics, not the full wave action of a 1-D code. What that leaves out is said
- * where it matters, below.
- */
+/** Breathing: the gas exchange of one cylinder, crank angle by crank angle. */
 
 import { BARO_KPA, GAMMA_AIR, R_AIR } from './constants.js';
 import { COEFF } from './coefficients.js';
@@ -63,17 +32,9 @@ const ORIFICE_PSI_K = (2 * GAMMA) / (GAMMA - 1);
 const ORIFICE_CRITICAL_PR = (2 / (GAMMA + 1)) ** (GAMMA / (GAMMA - 1));
 
 /**
- * Valve lift at a point in its event, as a share of the maximum. A production cam lifts the
- * valve in two parts. First the opening ramp: a stretch of constant, gentle velocity that
- * takes up the valve train's lash (or a hydraulic lifter's bleed-down) and sets the valve off
- * its seat without a hammer blow, up to about a quarter of a millimetre. Then the flank,
- * which accelerates the valve to full lift and back down to the closing ramp. The ramps are
- * why a cam's seat-to-seat duration runs some 45-60 degrees longer than its duration at
- * 0.050 inch, and why the exhaust valve is still off its seat at TDC through the overlap.
- * The flank is sin(pi * x)^COEFF.BREATH_LIFT_SHAPE_EXP across its own share of the event.
+ * Valve lift at a point in its event, as a share of the maximum.
  * @param {number} phase 0 at the seat opening, 1 at the seat closing
  * @param {{rampShare?: number, rampLiftShare?: number}} [ramp] each ramp's share of the
- *   seat-to-seat event, and the lift it reaches as a share of the maximum
  * @returns {number} 0..1
  */
 export function liftShare(phase, ramp = {}) {
@@ -89,24 +50,13 @@ export function liftShare(phase, ramp = {}) {
 export const DURATION_CHECK_LIFT_M = 0.050 * 0.0254;
 
 /**
- * The valve events, crank degrees from TDC of the gas-exchange stroke (0 = TDC overlap):
- * the exhaust opens before the bottom of the power stroke and closes after TDC, the intake
- * opens before TDC and closes after the bottom of the intake stroke. IVO and EVO negative.
- *
- * Duration is the cam's duration at 0.050 inch lift, as cams are specified, and the intake
- * closes at that height where the cycle already has it (cycle.js `ivcAfterBdcDeg`, moved by
- * a phaser's advance). The valve itself is open longer, from its seat: the flank's share of
- * the event below the checking height follows from the maximum lift on the flank's curve,
- * and each ramp adds its own length (`COEFF.BREATH_RAMP_LIFT_M` at
- * `COEFF.BREATH_RAMP_VELOCITY_M_PER_DEG`). The exhaust lobe mirrors the intake about TDC,
- * moved by an exhaust phaser's retard; each lobe has its own duration, as real cams do.
- *
+ * The valve events, crank degrees from TDC of the gas-exchange stroke (0 = TDC overlap): the
+ * exhaust opens before the bottom of the power stroke and closes after TDC, the intake opens
+ * before TDC and closes after the bottom of the intake stroke.
  * @param {{ivcAbdc: number, durationDeg: number, exhaustDurationDeg?: number, exhaustRetardDeg?: number,
- *   maxLiftM?: number, exhaustMaxLiftM?: number, iclDeg?: number|null, lsaDeg?: number|null, intakeAdvanceDeg?: number}} cam each lobe's duration at 0.050 inch and
- *   its valve's maximum lift; the exhaust lobe is the intake's where not given
+ * maxLiftM?: number, exhaustMaxLiftM?: number, iclDeg?: number|null, lsaDeg?: number|null, intakeAdvanceDeg?: number}} cam each lobe's duration at 0.050 inch and
  * @returns {{ivo: number, ivc: number, evo: number, evc: number, evoCheck: number, rampShare: number, rampLiftShare: number,
- *   exhaustRampShare: number, exhaustRampLiftShare: number}} seat-to-seat events, the exhaust
- *   lobe's opening at the checking height, and each lobe's ramps as `liftShare` takes them
+ * exhaustRampShare: number, exhaustRampLiftShare: number}} seat-to-seat events, the exhaust
  */
 export function valveEvents({ ivcAbdc, durationDeg, exhaustDurationDeg = durationDeg, exhaustRetardDeg = 0, maxLiftM = 0, exhaustMaxLiftM = maxLiftM, iclDeg = null, lsaDeg = null, intakeAdvanceDeg = 0 }) {
   /** One lobe from its duration at 0.050 inch: its seat-to-seat length and its ramps. */
@@ -124,14 +74,6 @@ export function valveEvents({ ivcAbdc, durationDeg, exhaustDurationDeg = duratio
   const exLobe = lobe(exhaustDurationDeg, exhaustMaxLiftM);
   // The intake lobe's centre, from where it closes at the checking height; the exhaust's
   // mirrors it about TDC, moved by an exhaust phaser's retard.
-  // A cam card's figures place both where it gives them: the intake centreline after TDC as
-  // installed, and the lobe separation, the angle between the two centrelines in cam degrees,
-  // which puts the exhaust centreline 2 * LSA - ICL before TDC (crank degrees). Without them,
-  // a lobe pair ground symmetric about TDC: the lobe separation equal to the centreline.
-  // An intake phaser's advance moves the intake lobe only (`ivcAbdc` is already advanced):
-  // the exhaust lobe mirrors where the intake lobe sits parked, and moves only with its own
-  // phaser's retard. Mirroring the advanced intake moved the exhaust lobe the other way too,
-  // doubling the overlap an intake phaser adds.
   const centre = iclDeg != null ? iclDeg : 180 + ivcAbdc - durationDeg / 2;
   const parked = centre + intakeAdvanceDeg;
   const exCentre = -(lsaDeg != null ? 2 * lsaDeg - centre : parked) + exhaustRetardDeg;
@@ -247,33 +189,21 @@ export function gasExchange(g, op) {
 
   // Start: the exhaust valve opening, the cylinder at the pressure the expansion stroke has
   // left (the cycle's own ratio to the intake pressure, turbo.js `exhaustPulsePressureKpa`)
-  // and the burned gas at the temperature that blows down to the manifold's. With a primary
-  // pipe the blowdown is what sets its column moving.
+  // and the burned gas at the temperature that blows down to the manifold's.
   let theta = evo;
   let v = volume(theta);
   // Each valve's flow at the last step, where its next solve starts.
   let lastEx = null; let lastIn = null;
   // The ratio is the closed cycle's pressure at ITS exhaust opening, the lobe's checking
-  // height, some 35-45 degrees after the valve leaves its seat. Back at the seat the gas is at
-  // a smaller volume and so a higher pressure: carried back along the burned gas's isentrope
-  // (its own gamma), which matches the closed cycle's pressure at the seat angle to within
-  // its scatter (docs/accuracy.md). Starting the blowdown from the later angle's pressure
-  // made it about a third too weak.
+  // height, some 35-45 degrees after the valve leaves its seat.
   const evoCheck = g.events.evoCheck ?? evo;
   const backToSeat = (volume(evoCheck) / volume(evo)) ** COEFF.GAMMA_BURNED;
   const pEvo = Math.max(pExh * 1.05, pPlenum * backToSeat * clamp(COEFF.EVO_PRESSURE_RATIO_AT_0 + COEFF.EVO_PRESSURE_RATIO_PER_RPM * rpm, 3.5, 6.2));
   let t = exhaustK * (pEvo / pExh) ** ((COEFF.GAMMA_BURNED - 1) / COEFF.GAMMA_BURNED);
   let m = pEvo * v / (R_AIR * t);
   let fresh = 0;
-  // THE EXHAUST PRIMARY AS AN ACOUSTIC LINE. The pipe carries a forward wave (from the
-  // valve to the collector) and a backward one (its reflection, returning). Gas pushed out
-  // of the port launches a forward wave of amplitude (a / A) * mdot, the plane-wave relation
-  // dp = rho * a * u; at the collector it reflects with coefficient (A1 - A2)/(A1 + A2),
-  // negative into the collector's larger area, so it comes back as suction, attenuated by
-  // the pipe; at the valve end it reflects again, by the valve's open area against the
-  // pipe's, and goes round once more. The valve pushes against the collector's pressure plus
-  // both waves. Timed so suction sits at the port through overlap, the train draws the
-  // cylinder below the collector: how long primaries scavenge at the speeds they are tuned to.
+  // The exhaust primary as an acoustic line. The pipe carries a forward wave (from the valve
+  // to the collector) and a backward one (its reflection, returning).
   const sound = Math.sqrt(COEFF.GAMMA_BURNED * R_AIR * exhaustK);
   const primaryArea = g.exhaustPrimaryAreaM2 ?? 0;
   const impedance = primaryArea > 0 ? sound / primaryArea : 0;
@@ -297,14 +227,10 @@ export function gasExchange(g, op) {
     const f0 = forward[n] ?? 0; const f1 = forward[n + 1] ?? f0;
     return collectorR * (f0 + (f1 - f0) * f);
   };
-  // THE INTAKE RUNNER AS AN ACOUSTIC LINE, the same way: the valve drawing air launches a
-  // suction wave, -(a / A) * mdot, up the runner; at the plenum, much larger than the
-  // runner, it reflects inverted (nearly an open end, by the area ratio: g.runnerReflection),
-  // so it comes back as a pressure wave 2L/a later. Where that return lands before the valve shuts the
-  // runner rams charge in past what the plenum alone would push: the tuning that places an
-  // engine's torque peak, at a speed set by the runner's length. A shut valve is a closed
-  // end and sends the wave straight back. The steady losses (the runner's wall friction,
-  // Darcy f L/D, and the entrance from the plenum) are taken on the flow's dynamic pressure.
+  // The intake runner as an acoustic line, the same way: the valve drawing air launches a
+  // suction wave, -(a / A) * mdot, up the runner; at the plenum, much larger than the runner,
+  // it reflects inverted (nearly an open end, by the area ratio: g.runnerReflection), so it
+  // comes back as a pressure wave 2L/a later.
   const soundIn = Math.sqrt(GAMMA * R_AIR * intakeK);
   const impedanceIn = soundIn / g.runnerAreaM2;
   const delayStepsIn = ((2 * g.runnerLengthM) / soundIn) * 6 * Math.max(rpm, 60) / step;
@@ -330,10 +256,8 @@ export function gasExchange(g, op) {
     return plenumR * (f0 + (f1 - f0) * f);
   };
   // What the runner still holds from the cycle before: the waves left ringing when its intake
-  // valve shut (op.runnerWaves, the steps up to IVC), carried round the closed valve, a
-  // closed end, to this cycle's EVO. The valve slamming shut on a moving column launches the
-  // strongest wave of the cycle, and the ringing it leaves is much of what a tuned runner
-  // does, so a cycle that started from a quiet runner would miss it.
+  // valve shut (op.runnerWaves, the steps up to IVC), carried round the closed valve, a closed
+  // end, to this cycle's EVO.
   if (op.runnerWaves?.length) {
     outgoing.push(...op.runnerWaves);
     const closedSteps = Math.round((720 - (ivc - evo)) / step);
@@ -484,12 +408,7 @@ const FLOW_SOLVE_MAX = 40;
 /**
  * The valve flow that is its own answer: `flowAt(mdot) = mdot`, with `flowAt(mdot) - mdot`
  * falling through zero between `lo` and `hi` (a flow raises the port pressure that opposes
- * it). Bracketed false position with the Illinois modification, the method cycle.js searches
- * the knock limit with: it keeps a bracket around the root as bisection does, but steps to
- * where the line through the bracket's ends crosses zero, halving the weight of an end that
- * stays put so it cannot stall. The flow function is smooth and monotonic, so it closes to a
- * billionth of the bracket in a handful of evaluations, where twenty halvings stopped at a
- * millionth.
+ * it).
  * @param {(mdot: number) => number} flowAt
  * @param {number} lo flow at which flowAt(lo) > lo
  * @param {number} hi flow at which flowAt(hi) < hi
@@ -532,16 +451,7 @@ function solveFlow(flowAt, lo, hi, guess = null) {
 
 /**
  * Pressure lost through the exhaust system downstream of the ports, kPa: a sum of loss
- * coefficients times the dynamic pressure in the pipe, dp = K * rho * u^2 / 2. The pipe is
- * the player's diameter; K is the manifold (or headers), the catalyst and the cat-back
- * together. Headers and a free-flowing cat-back lower their own share of K; a narrower pipe
- * raises u, which the loss goes with the square of.
- *
- * The split of K is allocated so a stock system passes a factory engine's rated exhaust flow
- * at the backpressure the model carried before it had a pipe (about 19 kPa at 0.21 kg/s for
- * the VQ35DE on its 3.0 inch pipe): manifold 1.8, catalyst 1.5, cat-back 3.5; long-tube
- * headers 0.8 and a performance cat-back 1.5 in their place.
- *
+ * coefficients times the dynamic pressure in the pipe, dp = K * rho * u^2 / 2.
  * @param {object} input
  * @param {number} input.flowKgS exhaust mass flow, kg/s
  * @param {number} input.exhaustK gas temperature, K
@@ -559,15 +469,7 @@ export function exhaustSystemDropKpa({ flowKgS, exhaustK, pipeDiaIn, mods = {}, 
 }
 
 /**
- * How hard a catalyst is to push through, against the OEM ceramic's (1). Its substrate is a
- * honeycomb of square channels a millimetre or so across, and the flow in them is laminar,
- * so the drop goes as Hagen-Poiseuille's: viscosity times length times the channel speed over
- * the channel's hydraulic diameter squared. For the same converter size and flow, the
- * channel speed goes as one over the open frontal area, so the drop goes as
- * 1 / (open area * d_h^2), from the cell density and the wall thickness: the cell pitch is
- * 1 / sqrt(cells per square inch), the channel the pitch less one wall, the open area the
- * channel over the pitch squared. A 200-cell metallic substrate on thin foil comes out at
- * about a third of the 400-cell ceramic's. No converter (a test pipe) costs nothing here.
+ * How hard a catalyst is to push through, against the OEM ceramic's (1).
  * @param {'ceramic'|'metallic'|'none'|undefined} catalyst absent is the OEM ceramic
  * @returns {number}
  */
@@ -579,10 +481,9 @@ export function catalystLossShare(catalyst) {
 }
 
 /**
- * A catalyst substrate's honeycomb, from its cell density and wall: the cell pitch is
- * 1 / sqrt(cells per square inch), the channel the pitch less one wall, the open frontal
- * area the channel over the pitch, squared. What `catalystLossShare` prices, and what the
- * Physics page draws and shows the working of.
+ * A catalyst substrate's honeycomb, from its cell density and wall: the cell pitch is 1 /
+ * sqrt(cells per square inch), the channel the pitch less one wall, the open frontal area the
+ * channel over the pitch, squared.
  * @param {'ceramic'|'metallic'} kind
  * @returns {{cpsi: number, wallIn: number, pitchIn: number, channelIn: number, openArea: number}}
  */

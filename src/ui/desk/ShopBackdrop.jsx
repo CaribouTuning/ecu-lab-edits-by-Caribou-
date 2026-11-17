@@ -1,17 +1,6 @@
 /**
- * Your shop, drawn behind the laptop (shopScene.js), and its things to use when the laptop
- * is shut: the dyno, the build bench, the engine stand and the laptop itself. (CAREER's jobs
- * are an app on the laptop and the phone, not a board on the wall.)
- *
- * The things are the buttons: a click or a tap on the dyno, an engine, a cart's screen, the
- * desk goes there (`pickAt`). Each also has a real button kept on it as the
- * camera moves, unseen until the keyboard reaches it, for keyboard and screen reader; with
- * no WebGL at all they are a row of plain buttons over a plain backdrop.
- *
- * Walked up to the dyno or the stand, the page's own controls are laid onto the things
- * themselves: the dyno computer's screen and console, the stand cart's (`surfaces`). They are ordinary page elements, laid flat over where each face is on
- * screen, so they are as real to a pointer, a keyboard or a screen reader as anywhere else.
- * `onSurfaces` hands them to the page, which renders into them.
+ * Your shop, drawn behind the laptop (shopScene.js), and its things to use when the laptop is
+ * shut: the dyno, the build bench, the engine stand and the laptop itself.
  */
 
 import React, { useEffect, useRef } from 'react';
@@ -74,12 +63,9 @@ export function ShopBackdrop({ mode, phone = false, covered = false, engineSpec,
     live.current.carsDirty = false;
     let idle = 0;
 
-    // ---- the faces the page's controls are laid on ----
-    // Each is an ordinary page element laid FLAT over where its face is on screen: placed
-    // and sized from the face's projected corners every frame, never turned in 3-D. The
-    // camera stands square on to each face, so the picture is the same; and a flat element
-    // is hit-tested like any other, where Chromium's 3-D hit testing let taps on a turned
-    // one fall through (the dyno's RUN and the stand's throttle used to miss).
+    // ---- the faces the page's controls are laid on ---- Each is an ordinary page element
+    // laid FLAT over where its face is on screen: placed and sized from the face's projected
+    // corners every frame, never turned in 3-D.
     const host = stage.canvas.parentElement;
     // In the shop view the stations themselves are what you click: a cart, an engine on its
     // stand, the car on the dyno. Pointed at, one lights its screen and the cursor says so.
@@ -188,9 +174,7 @@ export function ShopBackdrop({ mode, phone = false, covered = false, engineSpec,
         shop.camera.updateMatrixWorld();
         const moving = shop.moving();
         // Nothing is a button until the camera has stopped: a tap that lands as the view
-        // swings is on whatever has just arrived under the finger. A key press (a click with no
-        // pointer, `detail` 0) cannot be mis-aimed, so a hotspot takes it even then.
-        // Written only when it changes: this runs every frame.
+        // swings is on whatever has just arrived under the finger.
         const flipped = l.moving !== moving;
         l.moving = moving;
         for (const f of faces) {
@@ -207,10 +191,8 @@ export function ShopBackdrop({ mode, phone = false, covered = false, engineSpec,
             x0 = Math.min(x0, sx); x1 = Math.max(x1, sx); y0 = Math.min(y0, sy); y1 = Math.max(y1, sy);
           }
           const bw = Math.max(1, x1 - x0); const bh = Math.max(1, y1 - y0);
-          // Laid out at the size it shows at, so its words are the page's own size there,
-          // once the camera has stopped (not again every frame on the way). Never narrower
-          // than its controls need in one row: a narrow screen shows the whole control box
-          // a little smaller rather than cutting its right end off.
+          // Laid out at the size it shows at, so its words are the page's own size there, once
+          // the camera has stopped (not again every frame on the way).
           const minPx = f.name.endsWith('Console') ? (bh > bw ? 220 : 420) : 340;
           if (!moving || f.pw === 0) {
             const pw = Math.round(Math.max(minPx, bw));

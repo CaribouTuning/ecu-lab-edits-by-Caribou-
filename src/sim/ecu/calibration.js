@@ -676,12 +676,7 @@ export function setCal(cal, path, value) {
   return { ...cal, [head]: setCal(cal?.[head] ?? {}, rest.join('.'), value) };
 }
 
-/**
- * Stock values a later build changed, as [path, old stock, new stock]. A saved calibration
- * still holding the old stock value takes the new one; one the player edited keeps theirs.
- * Without this a save from before the cold overrun fix (November 2026) kept no overrun
- * fuel cut below 45 °C and popped on every cold lift, while a freshly loaded engine did not.
- */
+/** Stock values a later build changed, as [path, old stock, new stock]. */
 /** @type {[string, number, number][]} */
 const STOCK_CHANGES = [
   ['fuel.dfcoMinEctC', 45, -10],

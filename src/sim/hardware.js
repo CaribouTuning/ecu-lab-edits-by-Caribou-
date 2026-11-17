@@ -329,21 +329,7 @@ export const COMPRESSOR_OPTS = [
     label: 'Large', size: 'large', boostCeiling: 30,
     etaMax: 0.80, pkFlowKgS: 0.28, pkPr: 2.4, surgeSlope: 0.150, chokeFlowKgS: 0.50,
   },
-  // THE FACTORY COMPRESSORS, one per turbo engine in the catalogue. The three sizes above are
-  // aftermarket classes, and the smallest of them surges at twice the flow of the N54's real
-  // compressor: on the factory engines they held full boost at low speed past their surge
-  // line. Mitsubishi publishes each of its compressors' surge and choke flows at 2 bar
-  // absolute (Mitsubishi Turbocharger performance data, Saito, the Italian distributor:
-  // TD03-10TK3 surge 0.034 m³/s, choke 0.13 m³/s, 2.7 bar maximum). The IHI and BMTS units
-  // publish no map; their flows are the TD03-10TK3's scaled by inducer area, as a family of
-  // similar compressors at one tip speed passes volume flow in proportion to it (the
-  // affinity laws: Dixon & Hall, Fluid Mechanics and Thermodynamics of Turbomachinery,
-  // ch. 1), on the inducers the wheels' sellers agree on: TD03-10TK3 35.6 mm, IHI IS20
-  // 42.5 mm, IHI IS38 45.2 mm, BMTS 7643147 (B58) 50.7 mm. They land on Mitsubishi's own
-  // neighbours: the IS20 on the TD04-14T (0.048/0.18), the IS38 on the TD04H-15T
-  // (0.055/0.20). Volume flow is turned into mass at 20 °C and 1 atm, 1.204 kg/m³. The
-  // island's centre sits at 57% of choke flow, as on the classes above, and at PR 2.0,
-  // where the catalogue quotes its flows; the peak efficiency is the small class's.
+  // THE FACTORY COMPRESSORS, one per turbo engine in the catalogue.
   .../** @type {[string, string, number, number][]} */ ([
     ['Mitsubishi TD03-10TK3 (N54, each)', 'td03-10tk3', 1.0, 24],
     ['IHI IS20 (EA888 GTI)', 'is20', (42.5 / 35.6) ** 2, 26],

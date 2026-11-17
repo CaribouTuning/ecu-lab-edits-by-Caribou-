@@ -1,14 +1,4 @@
-/**
- * Decides when a 3D stage that cannot hold its frame rate gives up resolution.
- *
- * A phone with a 3x screen drawing the lit shop (a multisampled target, soft shadows and a
- * depth post pass) can spend more than it has. Rather than guess at devices, the stage times
- * its own frames: if drawn frames keep arriving slower than about 40 a second, it steps down
- * a ladder of drawn pixels per screen pixel and stays there. Never back up: a stage that
- * steps up again finds the limit again and flickers between the two.
- *
- * Pure, so the rule is tested without a GPU (tests/ui/stage-governor.test.js).
- */
+/** Decides when a 3D stage that cannot hold its frame rate gives up resolution. */
 
 /** Drawn pixels per screen pixel, best first. */
 export const DPR_LADDER = [2, 1.5, 1.25, 1];

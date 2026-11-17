@@ -1,14 +1,4 @@
-/**
- * The simulator off the drawing thread. Runs the same code the screens run, on the same inputs,
- * and hands back the breathing it solved (`breathingSnapshot`), so the thread that draws the
- * screen only reads it back (`seedBreathing`) and never freezes on the gas exchange.
- *
- * Tasks, each the slow first step of something a player does:
- *   preset  a factory engine put on the bench: its factory calibration (`applyPreset`)
- *   advice  TUNE's advice for the store as it stands: the full-throttle pull and the advisor
- *   demo    one of the Learn guide's worked examples (tutorial/scenarios.js), by name
- *   safemap SANDBOX's safe base map for the store as it stands: its checking pulls (safeBaseMap.js)
- */
+/** The simulator off the drawing thread. */
 
 import {
   applyPreset, breathingSnapshot, calibrationAdvice, intakeCamAt, presetById, simulateSweep,

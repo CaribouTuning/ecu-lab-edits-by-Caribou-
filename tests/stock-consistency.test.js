@@ -185,11 +185,8 @@ describe('the advisor judges a turbo by the boost it makes', () => {
 
 describe('a turbo bolted onto a factory engine can be tuned by following the advice', () => {
   it('one round of TUNE\'s advice on the extended tables clears the knock, and the knock cut with it', async () => {
-    // SANDBOX: a stock VQ35HR, a turbo at 7 psi, 650 cc injectors scaled, the axes extended
-    // (the new boost cells carry the edge row, marked not tuned). Knock past 4300 RPM
-    // tripped the knock protection, which cut the boost below 4300 RPM; the advisor read the
-    // cut target as the turbo's reach, never advised the cells that knocked, and the cut
-    // came back on every pull however closely the player followed it.
+    // Sandbox: a stock VQ35HR, a turbo at 7 psi, 650 cc injectors scaled, the axes extended
+    // (the new boost cells carry the edge row, marked not tuned).
     const { reducer, ACTIONS } = await import('../src/ui/state/reducer.js');
     const { makeInitialState } = await import('../src/ui/state/initialState.js');
     const { pullInputs } = await import('../src/ui/state/pullInputs.js');
@@ -197,8 +194,8 @@ describe('a turbo bolted onto a factory engine can be tuned by following the adv
     let st = reducer(makeInitialState({ blank: true }), { type: ACTIONS.APPLY_PRESET, preset: S.applyPreset(S.presetById('vq35hr')) });
     // On the breakpoints sized to the engine, the TUNE layout switch's 16 × 16: a factory
     // engine starts on the game's 8 × 6 grid, whose 150 and 200 kPa rows its factory
-    // calibration already fills, so the extended, untuned boost rows this guards only exist
-    // on the sized grid.
+    // calibration already fills, so the extended, untuned boost rows this guards only exist on
+    // the sized grid.
     st = reducer(st, /** @type {any} */ (layoutSwitch(st, 'engine')));
     const set = (field, value) => { st = reducer(st, { type: ACTIONS.SET_BUILD_FIELD, field, value }); };
     set('turboOn', true); set('boostCurve', st.build.boostCurve.map(() => 7)); set('injIdx', 3); set('ecuInjectorCc', 650);

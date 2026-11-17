@@ -1,13 +1,6 @@
 /**
- * A small pixel-art 3D stage inside a component: the Build app's engine and the shop
- * behind the laptop both use one.
- *
- * `setup(stage)` builds the scene once and returns what to do each frame. An `update` that
- * returns `false` has nothing new to show, and the frame is not drawn: a picture behind a
- * page costs nothing while it sits still. The stage sizes
- * itself to the canvas's parent as that changes. Where there is no WebGL (an old browser,
- * a test runner) the hook reports `failed` and the component draws its fallback instead:
- * nothing in the app depends on the picture.
+ * A small pixel-art 3D stage inside a component: the Build app's engine and the shop behind
+ * the laptop both use one.
  */
 
 import { hasHardwareGl, read3d, write3d } from './render3d.js';
@@ -16,10 +9,9 @@ import { useEffect, useRef, useState } from 'react';
 import { createStage } from '../world/stage.js';
 import { createGovernor } from './stageGovernor.js';
 
-// Versioned: a phone that stepped down while the shop was still drawn, unseen, behind its
-// apps (every frame, under a full-screen app) kept the lowest resolution for two weeks, and
-// the shop came back blurry. That cost is gone (ShopBackdrop `covered`), so every device
-// starts again from full resolution.
+// Versioned: a phone that stepped down while the shop was still drawn, unseen, behind its apps
+// (every frame, under a full-screen app) kept the lowest resolution for two weeks, and the
+// shop came back blurry.
 const RUNG_KEY = 'ecu-lab-stage-rung-2';
 /** A remembered rung is trusted for this long (ms): a phone changes, an update changes the scene. */
 const RUNG_TTL_MS = 14 * 24 * 3600 * 1000;
@@ -69,9 +61,6 @@ export function useStage(setup, opts = {}) {
       return undefined;
     }
     // Whatever stops it drawing from here is the same answer for this visit: the flat shop.
-    // A lost context is often passing (a phone that put the tab in the background, a driver
-    // reset), so it does not stay off; a shader that would not compile will fail again, so
-    // the 3D stays off until the player turns it back on.
     const giveUp = () => setFailed(true);
     const shaderFailed = () => { write3d('off'); setFailed(true); };
     canvas.addEventListener('webglcontextlost', giveUp);

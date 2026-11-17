@@ -1,11 +1,6 @@
 /**
- * The units the player reads numbers in: the US shop's (hp, lb-ft, psi, inches, mph) or
- * metric (kW, N·m, bar, mm, km/h), switched in the settings menu and kept per browser.
- *
- * The simulation stays in its own units throughout; only what is shown converts, here, in
- * one place, so a number reads the same on every screen. Factors are the exact ones:
- * 1 mechanical hp = 745.699872 W, 1 lbf·ft = 1.3558179483 N·m, 1 psi = 6.894757293 kPa,
- * 1 in = 25.4 mm, 1 mile = 1.609344 km, 1 lb = 0.45359237 kg.
+ * The units the player reads numbers in: the US shop's (hp, lb-ft, psi, inches, mph) or metric
+ * (kW, N·m, bar, mm, km/h), switched in the settings menu and kept per browser.
  */
 
 import { useSyncExternalStore } from 'react';

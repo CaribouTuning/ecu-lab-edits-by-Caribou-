@@ -278,10 +278,6 @@ export function deriveEngine(cfg) {
   const springRate = cfg.springRate ?? 50;
   // Overlap is shared between the two lobes, each bringing half of its duration to TDC; the
   // more aggressive lobe is the one whose valve floats first.
-  // A cam card's lobe separation moves the lobes apart or together: overlap at the checking
-  // lift is (intake + exhaust duration) / 2 - 2 * LSA, so each degree tighter than the
-  // separation the lobes otherwise sit at (the intake centreline, both mirrored about TDC)
-  // adds two of overlap.
   const impliedLsa = 180 + COEFF.IVC_BASE_ABDC + (camDuration - COEFF.IVC_CAM_REF_DURATION) * COEFF.IVC_PER_CAM_DEG - camDuration / 2;
   const overlapDeg = Math.max(0, camOverlapDeg((camDuration + exhaustCamDuration) / 2) + (cfg.lsaDeg != null ? 2 * (impliedLsa - cfg.lsaDeg) : 0));
   const floatRpm = valveFloatRpm(springRate, Math.max(camDuration, exhaustCamDuration));

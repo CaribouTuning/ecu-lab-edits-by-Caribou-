@@ -1,11 +1,4 @@
-/**
- * The stage: the WebGL renderer, the sky and light, and the camera.
- *
- * The scene is drawn into a small canvas and scaled up with nearest-neighbour filtering,
- * so every pixel on screen is a big, crisp, square pixel: pixel art with real depth. How
- * big is a setting (CHUNKY, NORMAL, FINE); the default aims for about 280 rows however
- * tall the screen is, so a phone held sideways and a 4K monitor see the same picture.
- */
+/** The stage: the WebGL renderer, the sky and light, and the camera. */
 
 import { world as W } from '../tokens.js';
 
@@ -66,10 +59,6 @@ export function createStage(canvas, opts = {}) {
   // The picture is drawn into a small target first, then a full-screen pass puts a one-pixel
   // dark line wherever the depth jumps or folds: the outline every model of a pixel-art game
   // has, on everything at once, without a line mesh per box.
-  // The shop (`real`) keeps its light in half floats, smoothed edges and all, so the film
-  // response is applied once, after the lines: a lit room with an engineer's drawing over it.
-  // Half floats need a GPU that can draw into them (EXT_color_buffer_float or _half_float);
-  // one that cannot would leave the target incomplete and the shop black, so it gets 8 bits.
   const halfFloat = renderer.extensions.has('EXT_color_buffer_float') || renderer.extensions.has('EXT_color_buffer_half_float');
   const target = new THREE.WebGLRenderTarget(8, 8, opts.real
     ? { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: true, type: halfFloat ? THREE.HalfFloatType : THREE.UnsignedByteType, samples: 4 }
@@ -106,12 +95,8 @@ export function createStage(canvas, opts = {}) {
       float invZ(vec2 uv){ float d = texture2D(tDepth, uv).x; return (far - d * (far - near)) / (near * far); }
       #ifdef AO
       uniform float projScale;
-      // Ambient occlusion from the depth alone: light that cannot reach into a corner, under
-      // a car, where a stand's foot meets the floor. Each pair of samples either side of the
-      // pixel predicts, from one, where the other would be if the surface were flat (inverse
-      // depth is linear across a plane); a sample nearer than that is something in the way.
-      // A plane at any slope is left alone, and an occluder far in front (a cart against the
-      // back wall) is not counted, so nothing grows a halo.
+      // Ambient occlusion from the depth alone: light that cannot reach into a corner, under a
+      // car, where a stand's foot meets the floor.
       float ao(vec2 uv, float w){
         float z0 = 1.0 / w;
         const float R = 0.32;

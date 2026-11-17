@@ -75,10 +75,7 @@ const ASSUMED_LABEL = {
  */
 
 /**
- * What a short-block change does to the calibration, said as it is. A factory engine keeps
- * its factory tables: the change shows on the next pull, to be tuned from there. An engine of
- * the player's own gets the safe base map for the block as built, until its tables hold
- * the player's own work; boost, nitrous and a fuel change stay the player's to tune.
+ * What a short-block change does to the calibration, said as it is.
  * @param {{own: boolean, dirty: boolean, onBaseMap: () => void}} props
  * @returns {React.ReactElement}
  */
@@ -141,10 +138,9 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
   // A factory engine put on an empty bench replaced nothing: "replaced your tune" was untrue.
   const fromEmpty = top?.before?.build?.engineReady === false;
 
-  // An engine of the player's own has no factory calibration to keep: while its tables are
-  // as generated, a block or head change carries the safe base map for the engine as it now
-  // is (ownEngineBaseMap), so it still starts and a first pull is safe. Tables the player has
-  // worked on are theirs and stay; the note below offers the base map instead.
+  // An engine of the player's own has no factory calibration to keep: while its tables are as
+  // generated, a block or head change carries the safe base map for the engine as it now is
+  // (ownEngineBaseMap), so it still starts and a first pull is safe.
   const own = isOwnEngine(build) && session.mode !== 'career';
   const setCfg = (patch) => dispatch({ type: ACTIONS.SET_ENGINE_CONFIG_PATCH, patch });
   // The base map follows once a change settles: generating one runs the engine's gas
@@ -222,16 +218,12 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
   const setHead = (patch) => setCfg({ ...patch, runnerMm: engineConfig.runnerMm ?? Math.round(hd.runnerMm) });
   // A short-block change keeps the intake manifold too, on a factory engine: boring or
   // stroking a block does not change the runners bolted to its heads, and retuning them on
-  // every step cost about 0.4 s a step. An engine of the player's own is still being
-  // specified, so its runner is still the one tuned to it.
+  // every step cost about 0.4 s a step.
   const setBlock = (patch) => setCfg(own || engineConfig.runnerMm ? patch : { ...patch, runnerMm: Math.round(hd.runnerMm) });
   const intakeValveMm = engineConfig.intakeValveMm ?? Math.round(TYPICAL_INTAKE_VALVE_SHARE[engineConfig.valvesPerCyl ?? 4] * engineConfig.bore * 2) / 2;
 
-  // The base engine, the short block, the heads and cam: one section on a phone's
-  // accordion, three of the engine stand's parts (`part`).
-  // On the build bench your own engine is entered through Change engine (BuildBench.jsx),
-  // so the form here would be a second way to the same thing; the factory picker stays,
-  // for its prompt before it overwrites tuned tables.
+  // The base engine, the short block, the heads and cam: one section on a phone's accordion,
+  // three of the engine stand's parts (`part`).
   const bench = useContext(BuildBenchMode);
   const baseParts = (
     <>

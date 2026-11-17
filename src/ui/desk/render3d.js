@@ -1,9 +1,4 @@
-/**
- * Whether the 3D shop is drawn at all. A player can turn it off (the shop becomes the flat
- * list of places), and it turns itself off for good on a machine that could not draw it:
- * a shader that would not compile. No WebGL, a software renderer (hardware acceleration off)
- * or a lost context show the flat shop for that visit. Kept in this browser only; a private window just asks again.
- */
+/** Whether the 3D shop is drawn at all. */
 
 const KEY = 'ecu-lab:3d';
 
@@ -31,8 +26,7 @@ const SOFTWARE_RENDERER = /swiftshader|llvmpipe|softpipe|software|basic render d
 /**
  * Whether this machine draws WebGL in hardware: asked once, of a scratch canvas, with
  * `failIfMajorPerformanceCaveat`, which a software renderer (hardware acceleration off, a
- * blocklisted GPU) should refuse, and by the renderer's own name where the browser gives it. Every 3D view checks it before building a scene: drawn in
- * software, even the small engine views held the page for seconds at a time.
+ * blocklisted GPU) should refuse, and by the renderer's own name where the browser gives it.
  * @returns {boolean}
  */
 export function hasHardwareGl() {

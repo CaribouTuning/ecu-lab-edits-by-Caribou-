@@ -231,11 +231,7 @@ export function createEngineAudio(ctx) {
   graph.exhaustGain.connect(master);
   graph.exhaust.out.connect(graph.exhaustGain);
 
-  // AFTERFIRE: charge lighting in the manifold, an overrun burble's pops. Each is a crack
-  // of broadband noise with a fast edge and a short ring, over a low thump, played one-shot
-  // from the shared noise buffer and sent past the master so the engine's own compression
-  // does not swallow it. Scheduled by `firePops` from the share of the charge that is
-  // burning in the exhaust (point.js `afterfire`).
+  // Afterfire: charge lighting in the manifold, an overrun burble's pops.
   const popBus = ctx.createGain(); popBus.gain.value = 1; popBus.connect(outGain);
 
   return Object.assign(graph, {
@@ -398,10 +394,7 @@ export function updateEngineAudio(a, frame) {
 }
 
 /**
- * Schedules the pops for the next parameter frame. A burble does not pop on every event:
- * charge lighting in the manifold catches irregularly, so the rate rises with the share
- * burning there and with engine speed, and each pop lands at a random point in the frame.
- * Loudness follows the share as well; an open exhaust lets more of it out.
+ * Schedules the pops for the next parameter frame.
  * @param {object} a the graph
  * @param {number} afterfire share of each charge burning in the exhaust, 0..1
  * @param {number} rpm

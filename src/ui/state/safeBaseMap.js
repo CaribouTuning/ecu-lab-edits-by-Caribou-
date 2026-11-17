@@ -2,21 +2,6 @@
  * SANDBOX's "Load a safe base map": what a tuner loads on a freshly built engine and proves on
  * the dyno before the first power pull, in the order a tuner works (HP Academy, Practical
  * Standalone Tuning step 7 and webinar 129, "Steady state vs ramp run"):
- *
- *   1. Fuel first, from low load up: the mixture matters more than the timing, so the VE table
- *      is corrected from part-throttle runs (40 %, then 70 %) before any full-throttle run.
- *   2. Full throttle with the spark a few degrees short (the start-up map's START_UP_RETARD_DEG),
- *      the VE corrected from that log, and wherever it knocks the knock retard plus a margin
- *      out of the cells it ran.
- *   3. A turbo is proven at its wastegate spring pressure first, then the boost is raised in
- *      steps to the target, fuel and knock checked at each ("there's no need to steady state
- *      tune a turbocharged engine at very high boost levels").
- *   4. Nitrous only once the engine is proven dry.
- *
- * Rich is safe and is left alone; nothing here touches the parts: where a part is the limit
- * (injectors out of duty, valves floating, a turbo too small), the map is as safe as a map can
- * be and says which part it is. The pulls are the dyno's sweeps at a fixed throttle, the
- * game's stand-in for steady-state cells. It is a start, not a tune: the log and TUNE lead on.
  */
 
 import {
@@ -148,10 +133,8 @@ const SAFE_RICHEN_STEP_AFR = 0.6;
 /** The richest a safe base map goes: λ 0.76, past where more fuel still cools (HP Academy's 0.78-0.80 under high boost, with margin). */
 const SAFE_RICHEST_LAMBDA = 0.76;
 /**
- * The retard a point's knock control took for knock the engine had: what it pulled less what it
- * pulled for valvetrain noise the sensor mistook for knock (`knockFalse`). False knock is fixed
- * at the knock threshold (the log's false-knock entry), never with timing: counting it once
- * pulled a cammed VQ's spark to the floor.
+ * The retard a point's knock control took for knock the engine had: what it pulled less what
+ * it pulled for valvetrain noise the sensor mistook for knock (`knockFalse`).
  */
 const realKnock = (q) => Math.max(0, (q.knockPull ?? 0) - (q.knockFalse ?? 0));
 /** Knock retard a point must show before the check treats it as knock, degrees. */

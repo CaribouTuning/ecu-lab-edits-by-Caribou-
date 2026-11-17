@@ -1,9 +1,6 @@
 /*
- * The Jobs app (CareerOffice): the shop's figures in a strip, a segmented control for its
- * five pages, and each job or purchase a grouped card, as an iOS or macOS app lays out a
- * list. It sits in the laptop's window or fills the phone, on their greys (Desk.module.css
- * remaps the neutral tokens there). Colour is for meaning only: green paid or passed, amber
- * blocked or partial, red unsafe, blue the thing to do.
+ * The Jobs app (CareerOffice): the shop's figures in a strip, a segmented control for its five
+ * pages, and each job or purchase a grouped card, as an iOS or macOS app lays out a list.
  */
 
 .officeScreen {

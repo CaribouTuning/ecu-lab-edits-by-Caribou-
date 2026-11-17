@@ -1,8 +1,6 @@
 /**
- * The career's story (src/ui/career/story.js): a line of chapters Pops sends by email,
- * each closed by a goal the game already has. What matters: it moves on only when a goal
- * is really met, it never moves on twice for one change, it ends, and every lesson says
- * where it comes from.
+ * The career's story (src/ui/career/story.js): a line of chapters Pops sends by email, each
+ * closed by a goal the game already has.
  */
 
 import { describe, expect, it } from 'vitest';

@@ -418,13 +418,10 @@ export function simulateSweep({
    * the order a tuner checks: the injectors at their limit, the pump, the injector flow the
    * ECU is set for, then the air estimate (the VE table), which a log corrects.
    */
-  // WHERE THE GRID IS THE LIMIT. Correct VE from logs fits each cell to the samples around
-  // it; once it has, every cell near a miss reads within half the mixture tolerance of right,
-  // and what is left is the engine's VE bending between breakpoints faster than the straight
-  // line the ECU reads between them. A cam's sharp peak on the 8 × 6 grid does it: moving a
-  // cell only moves the miss to the speed beside it. The log says so, rather than sending the
-  // player back to a correction with nothing left to write. kPa (or throttle) VE axes only,
-  // the ones the log's samples sort onto.
+  // Where the grid is the limit. Correct VE from logs fits each cell to the samples around it;
+  // once it has, every cell near a miss reads within half the mixture tolerance of right, and
+  // what is left is the engine's VE bending between breakpoints faster than the straight line
+  // the ECU reads between them.
   const veAxes = layout?.ve ?? { rpm: RPM, load: LOAD, loadUnit: 'kPa' };
   const veFit = veAxes.loadUnit === 'kPa' ? veCorrections(veSamplesFromPull(points), veAxes) : null;
   const gridBound = (p) => {
@@ -438,8 +435,6 @@ export function simulateSweep({
   // Cells the pull crossed too briefly for Correct VE from logs to trust (a boost rise climbs
   // through a row in one or two speeds): it leaves them as they are, so the log must not send
   // the player back to it for them.
-  // Named one by one: the cells with data are Correct VE from logs' to fix, and a hand edit to
-  // them too fought it (a speed between two columns moved both, the speeds on them each one).
   const thinCells = (p) => {
     if (!veFit) return [];
     const cells = cellsInForce(p.rpm, p.ecuLoad ?? p.sensedMap ?? p.map, veAxes).filter((c) => c.w >= IN_FORCE_WEIGHT);
@@ -489,11 +484,9 @@ export function simulateSweep({
     const leanContrib = Math.max(0, peak.afr - peak.bestAfr) * 2.5;
     const causes = [];
     if (boosted) causes.push(`boost (up to ${Math.max(...run.map((p) => p.boostPsi)).toFixed(1)} psi here) eating into your margin`);
-    // WHICH MIXTURE IS WRONG. The table can ask for the wrong mixture (the target), or the
+    // Which mixture is wrong. The table can ask for the wrong mixture (the target), or the
     // engine can miss what the table asks for (delivery: the ECU's air estimate, the
-    // injectors, the pump). The two have different fixes on different pages, and naming
-    // the target when the delivery was off sent the player to a table TUNE's own advisor
-    // had already passed. The target is judged by the advisor's own tolerance.
+    // injectors, the pump).
     const deliveryLean = peak.afr - peak.afrCommanded;
     const targetLean = peak.afrCommanded - peak.bestAfr;
     const byDelivery = leanContrib >= 1.5 && deliveryLean > 0.3;
@@ -531,34 +524,14 @@ export function simulateSweep({
     });
   });
 
-  // SPARK LEFT ON THE TABLE. The other half of knock: timing well short of what the engine
-  // could carry here, measured against the same target the advisor and the factory tables
-  // use (MBT, or the knock limit less the advisor's safety margin, whichever is lower). A
-  // tune can be spotless and still be lazy: a turbo V6 with its boost rows pulled to 4°
-  // ran knock-free, lost 34 hp of its 274, and this log said nothing while the score read
-  // 100. A tuner reads a low timing number under boost as power not made, so the log does.
-  //
-  // The power it cost comes from this model's own spark response: torque falls with the
-  // square of the distance from MBT (5°, 10° and 20° of retard cost 1.0, 3.3 and 12.9 %,
-  // scripts/validate-physics.js), so a point's loss is the difference between the two.
-  // Points the ECU retarded itself (knock control, a protection) and the idle columns are
-  // left out: there the low number is the controller's, not the table's.
+  // Spark left on the table. The other half of knock: timing well short of what the engine
+  // could carry here, measured against the same target the advisor and the factory tables use
+  // (MBT, or the knock limit less the advisor's safety margin, whichever is lower).
   const SPARK_LOSS_PER_DEG2 = 0.00033;
   const sparkTarget = (p) => Math.min(p.mbtIdeal, p.threshold - KNOCK_SAFETY_DEG);
   const sparkShort = (p) => sparkTarget(p) - (p.commandedTiming ?? p.timing);
   // At full throttle only: that is where a tuner chases power, and where the factory tables
-  // are written to the target. At part throttle a stock table is conservative on purpose (a
-  // cruise cell trades a degree for margin), and the log must not call a stock car lazy.
-  // Nor while nitrous sprays: there the low number is the retard while spraying, one figure
-  // across the window set by where it knocks worst, and the base table this entry would send
-  // the player to is not what ran (advisors.js `offSpray`).
-  //
-  // And only as far as the table's cells can follow. A cell is read by every speed and load
-  // either side of it, so it can carry no more advance than the one with least room; across
-  // a knock limit that climbs steeply between breakpoints, every point can sit 3° short while
-  // no cell has 3° to give. That is the advisor's own rule (`judgeAgainstPull`), and the log
-  // keeps to it: what it calls short is what the cells can still take, so a player sent to the
-  // advisor finds the cells listed there. Within that, the grid is as far as it goes.
+  // are written to the target.
   const sparkAxes = layout?.timing ?? { rpm: RPM, load: LOAD, loadUnit: 'kPa' };
   const cellsOf = (p) => cellsInForce(p.rpm, loadFor(/** @type {any} */ (sparkAxes), { mapKpa: p.map, airmassG: p.airCharge }), sparkAxes)
     .filter((c) => c.w >= IN_FORCE_WEIGHT);
@@ -651,11 +624,9 @@ export function simulateSweep({
     });
   });
 
-  // MISSED THE TARGET. The engine not getting the mixture its AFR table asks for, at full
+  // Missed the target. The engine not getting the mixture its AFR table asks for, at full
   // load, by more than a wideband's and a tuner's tolerance: the table is not the fault, the
-  // fuelling is (the air estimate, the injectors, the pump). Not dangerous in itself until
-  // it is lean enough for the event above, but every other entry in the log reads against
-  // a mixture the player did not ask for, so it goes first.
+  // fuelling is (the air estimate, the injectors, the pump).
   for (const lean of [true, false]) {
     groupRuns(points, (p) => p.map >= 85 && !spraying(p) && !p.leanRisk && !p.richRisk && !p.valveRisk
       && missesTarget(p) && (lean ? p.afr > p.afrCommanded : p.afr < p.afrCommanded)).forEach((run) => {
@@ -692,9 +663,8 @@ export function simulateSweep({
   });
 
   // Rich enough to harm the engine, or, while the nitrous sprays, richer than a wet kit's
-  // working mixture: about 11.5:1 is where the spray is held (the EGT entry says so), so
-  // past 11:1 (λ 0.75) the spray's own fuel is the player's to take out on TUNE → NITROUS.
-  // Not where the EGT protection added the fuel: that richness is the protection's, on purpose.
+  // working mixture: about 11.5:1 is where the spray is held (the EGT entry says so), so past
+  // 11:1 (λ 0.75) the spray's own fuel is the player's to take out on TUNE → NITROUS.
   const sprayRich = (p) => spraying(p) && p.lambda < SPRAY_RICHEST_LAMBDA && !(p.protect ?? []).includes('egt');
   groupRuns(points, (p) => p.richRisk || sprayRich(p)).forEach((run) => {
     const peak = run.reduce((a, b) => (b.lambda < a.lambda ? b : a));
@@ -739,14 +709,7 @@ export function simulateSweep({
     });
   });
 
-  // BACKPRESSURE: a turbine too small for the engine's exhaust. Everything that leaves the
-  // cylinders has to pass the turbine, and the pressure it takes to push it through climbs
-  // with the flow. Once the exhaust side sits well above the intake, every cylinder pumps
-  // against it and, through overlap, refills with its own exhaust: the engine breathes worse
-  // than it did with no turbo at all. Logged as itself, so a turbo that makes LESS power than
-  // the engine made without it says why. Judged at full throttle only: part throttle, the
-  // manifold sits below the charge pressure ahead of the throttle plate, so exhaust over
-  // manifold pressure reads the throttle's restriction, not the turbine's size.
+  // Backpressure: a turbine too small for the engine's exhaust.
   if (turboOn && loadKpa >= 95) {
     groupRuns(points, (p) => p.rpm >= 3000 && p.emp != null && p.map > 0
       && p.emp / p.map >= BACKPRESSURE_RATIO_LIMIT).forEach((run) => {
@@ -785,11 +748,7 @@ export function simulateSweep({
     });
   }
 
-  // Manifold pressure past the top of the tables. A real ECU does not extrapolate: past its
-  // last load breakpoint it reads that row, so boost on an NA calibration is fuelled and
-  // timed off the full-throttle naturally aspirated row. Nothing has been filled in for the
-  // boost; the tuner extends the axis and writes those rows. Load-in-kPa axes only: an
-  // air-per-cylinder axis is sized by the ECU's own air estimate, not by boost.
+  // Manifold pressure past the top of the tables.
   const kpaAxes = [layout?.ve, layout?.timing, layout?.afr].filter((a) => a && a.loadUnit === 'kPa');
   const topKpa = layout ? (kpaAxes.length ? Math.min(...kpaAxes.map((a) => a.load[0])) : Infinity) : LOAD[0];
   // Above atmospheric only: a naturally aspirated engine at full throttle reaches the
@@ -917,11 +876,9 @@ export function simulateSweep({
 
   if (ecu) {
     events.push(...ecuSweepEvents(points, { cal: ecu.cal, hw: ecuHw, hardCut, endRpm, intercooled: !!mods?.intercooler }));
-    // ONE CAUSE, ONE FIX. Where this log already names a sensor or injector scaling error, that
-    // error IS the lean the protection caught: the airflow or the fuel the ECU computes is off
-    // by it everywhere. Asked as well to raise the VE cells for the same lean, a player did
-    // both, corrected it twice, and spent the next pulls taking the excess back out (an EA888
-    // with bolt-ons took twenty). Scaling first, then a pull to see what is left.
+    // One cause, one fix. Where this log already names a sensor or injector scaling error,
+    // that error IS the lean the protection caught: the airflow or the fuel the ECU computes
+    // is off by it everywhere.
     const scaling = events.find((e) => e.type === 'maf' || e.type === 'injscale');
     if (scaling) {
       for (const e of events) {

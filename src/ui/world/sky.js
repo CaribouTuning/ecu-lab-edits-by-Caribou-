@@ -1,14 +1,4 @@
-/**
- * The sky and the far horizon, for driving.
- *
- * Walking, the camera looks down on the street and the sky is the flat colour behind it.
- * From behind the wheel you look along the road to the horizon, so the stage shows more:
- * a sky dome painted in a few hard bands of colour (pixel art does not do smooth gradients),
- * blocky clouds by day and stars at night, and two rings of hills, the farther one paler in
- * the haze. All of it rides with the camera, so it is always at the horizon however far
- * you drive, and none of it writes depth, so the town draws over it and the outline pass
- * leaves it alone.
- */
+/** The sky and the far horizon, for driving. */
 
 import { world as W } from '../tokens.js';
 

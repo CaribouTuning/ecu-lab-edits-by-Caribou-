@@ -99,17 +99,12 @@ export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm, intercooled =
   });
 
   // A boost cut hides its own cause: the pull logs the engine after boost came out, where the
-  // mixture is fine, so Correct VE from logs never sees the cells that ran lean. The trip
-  // says how lean, and the boost it was asking for says where.
-  // What the boost controller was asked for before a protection cut it (`boostSteps`: the
-  // point's own `boostTarget` is after the cut).
+  // mixture is fine, so Correct VE from logs never sees the cells that ran lean.
   const step = (p, re) => (p.boostSteps ?? []).find((x) => re.test(x.label))?.value;
   const request = (p) => step(p, /^Throttle request/) ?? step(p, /^Base target/) ?? p.boostTarget ?? 0;
   // Where it ran lean is the pressure it tripped at (`leanTripKpa`), which while the turbo
   // spools is below the boost asked for: naming the boost asked for sent the player to rows
-  // the engine never reached, one band a pull (a B58 on E85 took 13 pulls). Speeds that
-  // tripped at about the same pressure are one band; the rows to raise run from the lowest
-  // trip to the boost asked for, so the cells are right once the boost stays in as well.
+  // the engine never reached, one band a pull (a B58 on E85 took 13 pulls).
   const boostCutLean = (run, tripLambda) => {
     if (cal.protect.leanAction !== 'boost-cut') return null;
     const cut = run.filter((p) => request(p) - (p.boostPsi ?? 0) > 1);
@@ -258,9 +253,7 @@ export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm, intercooled =
   });
 
   // A knock cut hides its own cause, as a lean cut does: the pull logs the engine at the boost
-  // left after the cut, often clean, so no knock entry stands above this one to follow. The
-  // retard that tripped it says how far past the limit the cells were, and the boost it was
-  // asking for says which rows.
+  // left after the cut, often clean, so no knock entry stands above this one to follow.
   const hiddenKnock = (run) => {
     const cut = run.filter((p) => (p.knockTripDeg ?? 0) > 0 && request(p) - (p.boostPsi ?? 0) > 1);
     if (!cut.length) return null;

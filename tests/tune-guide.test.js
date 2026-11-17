@@ -1,9 +1,7 @@
 /**
- * The guided base map, followed literally (components/TuneStart.jsx "Build it with the guide"):
- * a player who does each step as it reads, in order, ends with an engine the pull log and the
- * advisor agree is safe: no knock and no lean. A turbo VQ35DE once could not: the guide never
- * named the MAF scaling the log asked for, and its spark targets came from check pulls run on
- * the wrong injector scaling (rich enough to hide the knock).
+ * The guided base map, followed literally (components/TuneStart.jsx "Build it with the
+ * guide"): a player who does each step as it reads, in order, ends with an engine the pull log
+ * and the advisor agree is safe: no knock and no lean.
  */
 
 import { describe, expect, it } from 'vitest';

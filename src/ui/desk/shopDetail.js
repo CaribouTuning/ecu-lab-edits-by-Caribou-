@@ -1,16 +1,6 @@
 /**
- * Everything that makes the shop look worked in: what a real tuning shop has on its walls
- * and floor, around the dyno, the lift and the engine stand that the scene puts there.
- *
- * Oil stains on the sealed floor, safety lines round the bays and a drain; a
- * painted band along the walls; a pegboard of tools over a workbench and a vice; rolling
- * tool chests; racking of parts and boxes; tyres, wheels and oil drums; a floor jack,
- * axle stands and a creeper by the lift; an engine hoist; an air compressor and its hose
- * reel; a fire extinguisher, a clock, posters and high windows; strip lights in the
- * ceiling. Kept off the clickable things and out of the camera's way to them.
- *
- * Built from the same boxes and cylinders as the rest of the world, in the world palette,
- * so the sketch pass inks it the same way.
+ * Everything that makes the shop look worked in: what a real tuning shop has on its walls and
+ * floor, around the dyno, the lift and the engine stand that the scene puts there.
  */
 
 import { world as W } from '../tokens.js';
@@ -159,11 +149,7 @@ function windowPane(w, h) {
 
 /**
  * One of the building's steel portal frames: an I-section column up each side wall and a
- * rafter across under the roof, haunched where they meet. The frames are what give a
- * shop its rhythm; the walls are only cladding between them.
- *
- * The rafter is returned on its own: it spans the room under the roof, so it goes with the
- * ceiling when the view looks down through it (a phone held upright).
+ * rafter across under the roof, haunched where they meet.
  * @returns {{frame: THREE.Group, rafter: THREE.Group}}
  */
 function portalFrame() {
@@ -194,13 +180,9 @@ function wheel() {
 }
 
 /**
- * Dress the shop. The room is 16 × 14 m (x −8…8, z −7…7); the back wall is at z −7 with
- * the door at x −1.65…4.85; the dyno is at (−4.6, −1.6), the lift at (4.6, −1.6), the
- * build bench at (−2.0, 0.6) and run stand at (1.05, 1.6), each with its computer to its
- * right, and the desk at (0, 5.2).
+ * Dress the shop.
  * @param {THREE.Group} root
  * @param {THREE.Group} overhead what spans the room under the roof (the frames' rafters),
- *   kept apart so it can be hidden with the ceiling
  */
 export function dressShop(root, overhead) {
   const add = (o, x, y, z, ry = 0) => { o.position.set(x, y, z); o.rotation.y = ry; root.add(o); return o; };

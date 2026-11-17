@@ -36,10 +36,8 @@ export function chargeTempK(boostPsi, intercooler, env, isenEff = null) {
   const baroKpa = env?.baroKpa ?? BARO_KPA;
   if (boostPsi <= 0) return ambientK;
   const pressureRatio = (baroKpa + boostPsi * PSI_TO_KPA) / baroKpa;
-  // Isentropic compression, degraded by the compressor's efficiency (Watson & Janota;
-  // Heywood eq. 6.33). A turbo passes its map's efficiency at the point it is running, so
-  // off the island the charge runs hotter; a supercharger passes its own, which is how a
-  // Roots blower heats the charge more than a twin-screw at equal boost.
+  // Isentropic compression, degraded by the compressor's efficiency (Watson & Janota; Heywood
+  // eq.
   const tCompressed = isenEff == null
     ? ambientK * Math.pow(pressureRatio, GAMMA_EXP / COMP_ISEN_EFF)
     : ambientK * (1 + (Math.pow(pressureRatio, GAMMA_EXP) - 1) / isenEff);
@@ -289,16 +287,9 @@ export function productsPerKgCharge(phi, fuel) {
 }
 
 /**
- * Molar expansion: moles of burned products over moles of the unburned charge (air and
- * fuel vapour) they came from, per kg of charge. Burning C8H15-like fuel turns fewer,
- * heavier molecules into more, lighter ones (CO2 and water from fuel and O2; rich, CO and
- * H2 in place of some of them), so at the same temperature the products push harder than
- * the charge did. Heywood 1988, section 4.2 (the molar expansion ratio): about 1.05 for a
- * stoichiometric gasoline mixture, rising on the rich side. It is one of the reasons a real
- * engine makes its best power a little rich (section 7.2.2, power against equivalence ratio).
- *
+ * Molar expansion: moles of burned products over moles of the unburned charge (air and fuel
+ * vapour) they came from, per kg of charge.
  * @param {{CO2: number, CO: number, H2O: number, H2: number, O2: number, N2: number, phi?: number, stoich?: number}} pr
- *   productsPerKgCharge's result
  * @returns {number} products' moles over the charge's, about 1.04-1.12
  */
 export function molarExpansion(pr) {

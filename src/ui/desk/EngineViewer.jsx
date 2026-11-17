@@ -63,8 +63,7 @@ export function EngineViewer({ spec, rpm = 0, label = 'The engine as built', cap
         }
         // Fitted to the box as it is now, wide or tall: far enough back that the block's
         // height fits the vertical view and its turning length (the turntable swings it
-        // through its diagonal) fits the horizontal one. A narrow box on a phone used to
-        // crop the engine to a slice of its middle.
+        // through its diagonal) fits the horizontal one.
         if (frame && cam.aspect !== aspect) {
           aspect = cam.aspect;
           const vHalf = (34 / 2) * (Math.PI / 180);

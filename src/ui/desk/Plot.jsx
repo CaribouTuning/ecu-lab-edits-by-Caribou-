@@ -1,10 +1,6 @@
 /**
  * An engineering plot: a titled figure with numbered axes, their quantities and units,
- * gridlines at the ticks and a legend that names every trace. Every trace on the Physics
- * page draws inside one, so none is a line with nothing to read it against.
- *
- * The plot hands its scales to its children (`x`, `y`, and the plot box), and they draw
- * the traces in the SVG's own units.
+ * gridlines at the ticks and a legend that names every trace.
  */
 
 import React, { useLayoutEffect, useRef, useState } from 'react';

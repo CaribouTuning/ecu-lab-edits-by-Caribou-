@@ -1,19 +1,7 @@
 /**
  * The engine's condition on the Physics page: the damage model (sim/damage.js, every number
- * sourced or marked a calibration in docs/damage-model.md), drawn in the combustion
- * cutaway's parts and palette.
- *
- * Each of the three parts the model tracks is drawn as worn as it is, and beside it, what the
- * wear is doing to the engine through the physics (never a power deduction):
- *   pistons and rings  blow-by: a share of the charge escapes past the rings before it burns,
- *                      growing with the ring gap to 1% at the end of their life;
- *   bearings           the clearance opens, the oil flows away through it (Poiseuille, the
- *                      cube of the clearance), and the pump makes less pressure at hot idle;
- *   exhaust valves     a burnt valve leaks its cylinder's charge back into the port, and below
- *                      a quarter of its life the cylinder stops firing.
- * Under each, what running at the page's speed and throttle costs that part, and why: real
- * knock the ECU pulled, knock it could not hear, a lean or rich mixture under load, peak
- * pressure past what the parts carry. Every figure is the model's own at that point.
+ * sourced or marked a calibration in docs/damage-model.md), drawn in the combustion cutaway's
+ * parts and palette.
  */
 
 import React from 'react';

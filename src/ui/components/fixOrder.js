@@ -55,14 +55,7 @@ export function inFixOrder(events) {
 
 /**
  * What can cause what, among the pull log's own entries: for each kind of entry, the kinds
- * that, logged over the same RPM, explain it. A protection is caused by the condition it
- * protects against; knock by fuelling or timing written for less charge than it got; a
- * lean or rich mixture by the ECU being told the wrong thing about its parts.
- *
- * One cause shows up as several symptoms (hot, lean boost cells knock, knock control cuts
- * boost, lean protection steps in), and each symptom's own advice read on its own told the
- * player to fix something different. Grouped, the cause is read once with its fix, and the
- * symptoms under it are what that fix also clears.
+ * that, logged over the same RPM, explain it.
  * @type {Record<string, string[]>}
  */
 const CAUSED_BY = {
@@ -87,11 +80,7 @@ const overlaps = (a, b) => a.rpmStart == null || b.rpmStart == null
 
 /**
  * A pull's entries grouped by cause, in working order: each group is a root entry and the
- * entries it explains. An entry goes under the first cause, in fix order, that is logged
- * over the same RPM, and follows that cause up to its root, so a chain (lean boost cells,
- * the knock they cause, the boost cut that knock causes) is one group. Every entry appears
- * once.
- *
+ * entries it explains.
  * @template E
  * @param {(E & {type: string, impact?: number, rpmStart?: number, rpmEnd?: number})[]} events
  * @returns {{root: E & {type: string}, effects: (E & {type: string})[]}[]}

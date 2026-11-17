@@ -3,15 +3,9 @@
  * The SANDBOX matrix: every factory engine changed each way a player changes one (bolt-ons, a
  * cam, compression, a turbo, more boost, a supercharger, nitrous, E85, the rev limit), then
  * tuned by the guided player (tests/guidedPlayer.js), who acts only on what the game says.
- *
- * DONE means nothing left in the log to act on and nothing listed on TUNE; `pulls` counts the
- * dyno pulls it took, the last one clean (aim for 2-4). Run it after any
- * change to the pull log's text or the advisor: a build that stays OPEN is a dead end a
- * player would meet. It takes a few minutes per shard.
- *
- *   node scripts/sandbox-matrix.js [shard/of] [filter]
- *   node scripts/sandbox-matrix.js 0/3          # a third of it
- *   node scripts/sandbox-matrix.js 0/1 "ls1 cam" # one build
+ * node scripts/sandbox-matrix.js [shard/of] [filter]
+ * node scripts/sandbox-matrix.js 0/3          # a third of it
+ * node scripts/sandbox-matrix.js 0/1 "ls1 cam" # one build
  */
 const R = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const S = await import(R + '/src/sim/index.js');

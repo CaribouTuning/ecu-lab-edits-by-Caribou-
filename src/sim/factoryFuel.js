@@ -1,36 +1,6 @@
 /**
- * The factory fuel strategy: what each engine's own calibration asks the mixture to be,
- * at every speed and load. `factoryCalibration` (presets.js) writes the fuel table from it.
- *
- * WHAT REAL CALIBRATIONS DO
- * Every production ECU in the catalogue runs closed loop at stoichiometric (lambda 1)
- * wherever the catalyst has to work: idle, cruise and light acceleration. Enrichment comes
- * in progressively as load rises, not as a step: Nissan's fuel target table is laid out on
- * the base fuel schedule (load) against rpm, and any cell other than 14.7 is open loop
- * (UpRev Nissan Tuning Guide, Rev 8, Feb 2022, p. 9); GM's power enrichment is enabled by
- * throttle and MAP and then commands an equivalence ratio that varies with rpm (HP Tuners
- * VCM Editor help, GM > Engine > Fuel Control > Power Enrich). Near the top of the rev
- * range the target goes richer again, to hold exhaust and catalyst temperature down
- * (component protection), which is why stock engines are usually richer at redline than
- * at peak torque.
- *
- * How rich depends on the engine. Port-injected naturally aspirated engines run about
- * lambda 0.85 at full throttle. Modern direct-injection turbo engines built for emissions
- * (B58, EA888 gen 3) hold lambda 1 through most of a full-throttle pull and only richen
- * near redline. The older twin-turbo N54 runs well rich under boost.
- *
- * HOW SURE THESE ARE
- * Factory calibrations are not published. The figures below come from what can be cited:
- * tuners' documentation of the tables, and logs of stock cars posted by tuners and owners.
- * Each engine's `sources` says which, and `confidence` says how firm they are:
- *   'validated' read out of stock calibrations themselves, through definitions each image's
- *              own identifier confirmed (the GM engines: ECU Lab Pro's calibration benchmark)
- *   'logged'   stock-car logs from more than one source agree on the shape and the numbers
- *   'reported' the shape is documented, the numbers are owners' and tuners' reports
- *   'family'   no engine-specific figure was found; it follows its maker's documented
- *              strategy and its siblings' numbers
- * A stock calibration file read from the car (UpRev, HP Tuners, MHD, EcuTek) is the only
- * better source. If one becomes available, it replaces the figures here.
+ * The factory fuel strategy: what each engine's own calibration asks the mixture to be, at
+ * every speed and load.
  */
 
 import { interp1 } from './math.js';
@@ -204,12 +174,6 @@ export function fuelStrategyFor(id, turbo) {
 
 /**
  * The lambda the factory calibration asks for at a speed and manifold pressure.
- *
- * Naturally aspirated: lambda 1 up to `enrichFromKpa`, blending to the full-load target by
- * `enrichFullKpa`. Turbo: lambda 1 off boost, blending to the full-load target as boost
- * rises over `enrichFullKpa` kPa above barometric, so a part-boost cell is not fuelled as if
- * it were the top of a pull.
- *
  * @param {FuelStrategy} s
  * @param {number} rpm
  * @param {number} kpa manifold pressure, absolute

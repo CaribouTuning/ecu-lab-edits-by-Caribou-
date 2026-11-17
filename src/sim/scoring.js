@@ -278,9 +278,6 @@ export function computeEngineerScore({
   }
   // Only a pipe too small for the power costs anything in the physics (its pressure drop at
   // high flow); an oversized one gains little and loses nothing, so it is not marked.
-  // Graded by what the pipe costs in the physics when that is known (exhaustPowerCost):
-  // more than 5% of full power is a pipe too small for the engine, which no factory exhaust
-  // in the catalogue is. Without it, the shop rule against the pipe size.
   if (exhaustPowerCost != null ? exhaustPowerCost > 0.05 : exhaustDiaError < -0.3) {
     score -= 8; deductions.push(exhaustPowerCost != null
       ? `-8 Exhaust pipe too small for the power: its back-pressure costs about ${Math.round(exhaustPowerCost * 100)}% at the top end`

@@ -2,27 +2,6 @@
  * The parts the Physics page's three breathing cutaways share (IntakeCutaway.jsx,
  * HeaderCutaway.jsx, ExhaustSystemCutaway.jsx): the crank clock, the model's readers, paths
  * and flow streaks, the bank of cylinders, the valves and the port pressure chart.
- *
- * The engine's breathing on the Physics page, as three live cutaways drawn the way the
- * combustion cutaway is (EngineCutaway.jsx: its parts, its colours, its labels on leaders):
- *
- *   - IntakeCutaway: the air filter, the throttle body's butterfly, the plenum and a runner
- *     to each cylinder of a bank, down through the ports past the valves into the bores;
- *   - HeaderCutaway: the same bank from the exhaust side, its exhaust valves, ports and the
- *     primary tubes merging in the collector;
- *   - ExhaustSystemCutaway: the collector's outlet, the oxygen sensors, the catalytic
- *     converter's substrate, the muffler's chambers and the tailpipe, with the pressure along
- *     the pipe drawn under it.
- *
- * Every number and colour is the model's (`gasExchangeTrace`, breathing.js) at the speed and
- * throttle the page is set to: each port's pressure (the wave arriving plus the one leaving),
- * each valve's flow and open area, the waves' speed in each pipe, the back-pressure of each
- * part of the exhaust. A pipe is lighter where its wave is high and darker in its suction; the
- * gas in it streams at the rate the model flows it. Cylinders other than number 1 run the same
- * trace at their place in the firing order.
- *
- * Each runs only while it is on screen and the tab is showing, and holds still when the system
- * asks for less motion (the crank-angle slider still moves it).
  */
 
 import React, { useEffect, useState } from 'react';
@@ -137,10 +116,7 @@ export const pointAt = (pts, u) => {
 
 /**
  * Flow streaks along a path: each a short line from where its gas was to where it is, so the
- * direction is drawn rather than inferred. Dots stepped between a path's samples read as
- * running backwards (a wagon wheel) once a frame's step neared half their spacing, as it did
- * on a phone. `t` (wrapping) is how far the gas has moved; `tail` the streak's length, as a
- * share of the path; a negative flow draws its tail ahead (gas going back).
+ * direction is drawn rather than inferred.
  */
 export const streaks = (pts, t, count, tail = 0.05, back = false) => Array.from({ length: count }, (_, i) => {
   const u = ((((i / count) + t) % 1) + 1) % 1;
@@ -292,9 +268,8 @@ export function bankGeometry({ derived, n, W, deckY, bottomY, margin = 34 }) {
 
 /**
  * Each cylinder of the bank, cut away end on and running at its own place in the firing order,
- * as the per-cylinder row of a cutaway poster draws them: the piston on the engine's own slider
- * crank, both valves at their lift, the charge by stroke, the spark. Drawn apart from the
- * manifold so no tube ever crosses a bore.
+ * as the per-cylinder row of a cutaway poster draws them: the piston on the engine's own
+ * slider crank, both valves at their lift, the charge by stroke, the spark.
  */
 export function CylinderStrip({ bank, d, R, derived, W, y0, sparkD, burnedAt, label }) {
   const n = bank.length; const margin = 26;

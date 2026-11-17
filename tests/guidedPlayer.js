@@ -1,12 +1,4 @@
-/**
- * A guided player: tunes using ONLY what the game shows. Each round it pulls, reads the pull
- * log and does what its entries say (the values they name, on the pages they name), then what
- * TUNE's advisor lists cell by cell, and for a hunting idle what LIVE says. It stops at a pass,
- * or when nothing it is told to do changes anything.
- *
- * The tests hold the game to it (tests/guided-workflow.test.js): if a job or a SANDBOX build
- * cannot be finished this way, the log or the advisor is not leading the player to the fix.
- */
+/** A guided player: tunes using ONLY what the game shows. */
 
 import * as S from '../src/sim/index.js';
 import { customerCar } from '../src/ui/career/cars.js';
@@ -122,8 +114,6 @@ export function round(st) {
   if (did.some((d) => /lean protection/.test(d))) return { st, did, cannot };
   // The log's order: where it says Correct VE from logs can do it, that first (when it would
   // change something); the hand edits it names are for the cells the log cannot reach.
-  // Correct VE from logs reads the last pull with the LIVE log, which covers the other loads:
-  // the pulls at each throttle stand in for both, fitted together.
   const loadPulls = loads().map((l) => (l === 100 ? p : pull(st, l)));
   const viaLogs = loadPulls.some((r) => r.events.some((e) => ['missedmix', 'rich', 'lean'].includes(e.type)
     && /or use Correct VE from logs there/.test(String(e.fix ?? ''))));
@@ -134,8 +124,6 @@ export function round(st) {
   }
   // A column past the redline: the log says by how much to move it by hand, and in which rows,
   // on whichever throttle's pull met it.
-  // One pull at a time, as Correct VE from logs reads one: pulls at different throttles can
-  // ask for opposite edits to the same cell, and doing both undid each other every round.
   const handText = /column is past the \d+ RPM redline|too briefly to trust/;
   const handPulls = [loads().map((l) => (l === 100 ? p : pull(st, l))).find((r) => r.events.some((e) => handText.test(String(e.fix ?? '')))) ?? p];
   for (const e of handPulls.flatMap((r) => r.events)) {

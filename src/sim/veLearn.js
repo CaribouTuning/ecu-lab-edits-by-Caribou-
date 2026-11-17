@@ -62,11 +62,7 @@ const sample = (parts) => ({ ...parts, ratio: parts.lambdaRatio * parts.trim * p
 
 /**
  * Whether a protection changed the fuel the ECU meant to give, so the mixture no longer reads
- * the air estimate: EGT enrichment adds fuel, and a starved rail delivers less. The others
- * (lean, knock, duty, overboost) cut boost or throttle and leave the fuelling as calculated,
- * and the point's sensed pressure is what it ran at: still a true sample of the VE there.
- * Leaving them out once made a lean the lean protection caught uncorrectable: every lean
- * point was protected, so Correct VE from logs never saw one.
+ * the air estimate: EGT enrichment adds fuel, and a starved rail delivers less.
  * @param {string[]|undefined} protect
  */
 const fuelledByProtection = (protect) => (protect ?? []).some((k) => k === 'egt' || k === 'fuelpressure' || k === 'nitrous lean');
@@ -143,21 +139,8 @@ function bracket(axis, v) {
 const FIT_HOLD = 0.25;
 
 /**
- * THE CELLS SOLVED TOGETHER, NOT ONE AT A TIME. The ECU reads every sample through up to four
- * cells blended, so what one cell must change by depends on what its neighbours change by. A
- * per-cell average of the samples near it (what a tuning tool's histogram shows) does not see
- * that: a cell between a rich neighbour and a lean one was handed the mean of both errors,
- * and Correct VE from logs had to be applied, logged and applied again, three to five times
- * on a factory turbo engine with E85. Least squares finds the factors that make each sample's
- * blend right at once: minimise over the cells' factors m
- *
- *     Σ_samples (Σ_cells w · m − ratio)²  +  FIT_HOLD · Σ_cells weight · (m − mean)²
- *
- * where a cell with no fit keeps factor 1 and `mean` is the cell's per-cell average, which
- * holds a cell the data barely touches near what its own samples say. Each sample's ratio is
- * read as the factor on the blend, which assumes the neighbouring cells hold similar VE: true
- * within a table's few percent between neighbours, and what the per-cell average assumes too.
- *
+ * The cells solved together, not one at a time. The ECU reads every sample through up to four
+ * cells blended, so what one cell must change by depends on what its neighbours change by.
  * @param {VeSample[]} samples
  * @param {number[]} rows @param {number[]} cols
  * @param {(VeCell|null)[][]} cell the per-cell averages; null where the data is too thin

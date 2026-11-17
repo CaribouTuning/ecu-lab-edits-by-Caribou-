@@ -1,12 +1,6 @@
 /**
- * A car: eleven body shapes, wheel styles, paint, stripes, wings, and an engine bay that
- * shows what is actually fitted. Faces +z, sits on y = 0.
- *
- * The same builder draws a customer's hatchback on the lift with its bonnet up and the
- * cars waiting in the shop's bays. Anything that is
- * a REAL hardware choice (a turbo, an intercooler, a supercharger, the cylinder layout,
- * a bigger exhaust) is drawn from the build, so opening the bonnet is a way to read the
- * car the way a tuner would.
+ * A car: eleven body shapes, wheel styles, paint, stripes, wings, and an engine bay that shows
+ * what is actually fitted.
  */
 
 import { world as W } from '../../tokens.js';

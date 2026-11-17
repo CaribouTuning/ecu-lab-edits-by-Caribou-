@@ -1,11 +1,6 @@
 /**
- * A bolt-on part on the engine stand's parts list: what it is, whether it is on the
- * engine, and the one thing to do with it, fit it or take it off. The whole row is the
- * button, as a part on a parts board is the thing you reach for.
- *
- * `data-installed` says which way it is, for the tests and the stylesheet alike; the
- * catalogue's own label and blurb (MOD_INFO) are what it says, so the list cannot fork
- * from the parts it is a view onto.
+ * A bolt-on part on the engine stand's parts list: what it is, whether it is on the engine,
+ * and the one thing to do with it, fit it or take it off.
  */
 
 import React from 'react';

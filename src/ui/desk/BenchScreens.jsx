@@ -1,9 +1,7 @@
 /**
- * What the shop's bench computers show besides the app's own screens: the engine's speed as
- * a digital bar graph with the throttle and the other live channels under it, the physics
- * worked from what the sensors read right now, and the pull's VE against RPM.
- *
- * Pictures of numbers the simulation already made: nothing here models anything.
+ * What the shop's bench computers show besides the app's own screens: the engine's speed as a
+ * digital bar graph with the throttle and the other live channels under it, the physics worked
+ * from what the sensors read right now, and the pull's VE against RPM.
  */
 
 import React from 'react';
