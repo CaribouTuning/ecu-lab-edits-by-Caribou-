@@ -147,12 +147,13 @@ describe('the guide is this build\'s, not a generic one', () => {
     const step = nextStep(/** @type {any} */ ({ mode: 'sandbox', attention: [], guide: { n: 1, of: g.length, title: 'Boost target', go: 'build:induction', checkable: true } }));
     expect(step).toMatchObject({ go: 'build', label: 'Build bench' });
   }, 300_000);
-  it('reads the mixture on the fuel in the tank: E85 burns completely at about 9.8, not 14.7', () => {
+  it('keeps the mixture on the table\'s own petrol scale on E85: cruise stays at 14.7 (lambda 1), not 9.8', () => {
     const st = set(preset('vq35de-revup'), 'octaneIdx', S.FUEL_CHOICES.findIndex((f) => f.label === 'E85'));
     expect(buildChanges(st.build)).toContain('E85');
     const mix = steps(st).g.find((x) => x.id === 'mixture').text;
-    expect(mix).toMatch(/on E85 about 9\.8 parts air/);
-    expect(mix).not.toMatch(/14\.7/);
+    expect(mix).toMatch(/Leave the cruise cells at 14\.7/);
+    expect(mix).toMatch(/burns completely at about 9\.8 parts air/);
+    expect(mix).not.toMatch(/cells at 9\.8/);
   }, 300_000);
   it('adds the nitrous last, with the retard and fuel the base map was checked with', () => {
     const st = set(preset('vq35de-revup'), 'nitrous', { kit: 'wet', shotHp: 75, heater: true, bottleLb: 10 });

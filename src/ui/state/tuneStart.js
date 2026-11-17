@@ -205,7 +205,11 @@ export function guidedSteps({ build, tune, target, samples, advice = null }) {
   const factoryCc = INJECTOR_OPTS[build.factoryInjIdx ?? preset?.parts?.injectorIdx ?? build.injIdx]?.cc;
   const injStep = fittedCc != null && (fittedCc !== factoryCc || build.ecuInjectorCc !== fittedCc);
   const fuel = tankFuel(build);
-  const stoich = fuel.stoich ?? 14.7;
+  // The FUEL table is written on petrol's scale whatever is in the tank, as many tuning
+  // suites show it: 14.7 is lambda 1.00, and the computer converts it with the fuel's own
+  // stoichiometric ratio when it works out the fuel (sim/point.js lambdaCommanded).
+  const stoich = 14.7;
+  const fuelStoich = fuel.stoich ?? 14.7;
   const noCooler = boosted && !build.mods?.intercooler;
   // Nitrous: the spray's own retard and fuel, as the base map was checked with them.
   const wantRetard = build.nitrous ? getCal(target.ecu, 'nitrous.retardDeg') : null;
@@ -234,7 +238,7 @@ export function guidedSteps({ build, tune, target, samples, advice = null }) {
     {
       id: 'mixture', title: 'Choose the fuel mixture', short: 'Fuel mixture', go: 'fuel',
       text: (() => {
-        const what = `Open FUEL. This table is the mixture the computer aims for, as an air-fuel ratio (AFR): on ${fuelName(fuel)} about ${stoich.toFixed(1)} parts air to 1 of fuel burns completely, and a lower number is richer (more fuel).`;
+        const what = `Open FUEL. This table is the mixture the computer aims for, as an air-fuel ratio (AFR) on petrol's scale: 14.7 is the mixture that burns completely (lambda 1.00), and a lower number is richer (more fuel).${Math.abs(fuelStoich - 14.7) > 0.5 ? ` That holds on ${fuelName(fuel)} too: it burns completely at about ${fuelStoich.toFixed(1)} parts air to 1 of fuel, and the computer converts the table to that itself, so 14.7 still means lambda 1.00 and 12.5 still means lambda 0.85.` : ''}`;
         const wants = [naAfr && naAfr < stoich * 0.95 ? `full throttle about ${naAfr.toFixed(1)}` : null, boosted && boostAfr ? `full boost about ${boostAfr.toFixed(1)}` : null].filter(Boolean).join(' and ');
         const why = boosted ? `Boost packs more air into each cylinder, so it gets hotter: the extra fuel cools it and holds knock off, so${noCooler ? ' with no intercooler (hotter air still)' : ''} the boost rows run richer than full throttle without boost.` : 'Under load the extra fuel cools the cylinder and protects the engine.';
         const done = full.length > 0 && full.every((q) => mine('afr', q) <= theirs('afr', q) + GUIDE_TOLERANCE.afr) && !leanCells.length;
