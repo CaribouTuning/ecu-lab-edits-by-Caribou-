@@ -38,8 +38,8 @@
   border-radius: 12px;
   background: var(--panel2);
   box-shadow: 0 30px 80px rgba(var(--shadow-rgb), 0.55), 0 0 0 0.5px rgba(var(--shadow-rgb), 0.8);
-  animation: rise 0.35s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
+.window[data-enter] { animation: rise 0.35s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
 @keyframes rise { from { opacity: 0; transform: translateY(8px) scale(0.99); } }
 @media (prefers-reduced-motion: reduce) { .window { animation: none; } }
 

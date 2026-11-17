@@ -211,7 +211,12 @@ function useSettled(value, jump = '') {
  *  bench and the engine stand are out in the shop. */
 const CAREER_APPS = ['tune', 'jobs', 'messages', 'learn', 'physics'];
 
-export function EcuLabApp() {
+/**
+ * @param {{startWith?: 'career'|'sandbox'|'tutorial'|null, startShown?: boolean}} [props] a way in
+ *   tapped on the start screen main.jsx showed while the app was loading, and whether that
+ *   screen was already up (this one then takes its place without entering again)
+ */
+export function EcuLabApp({ startWith = null, startShown = false } = {}) {
   // Navigation lives in the URL, not in state: see src/ui/routing.js.
   const [route, navigate] = useRoute();
   const appView = route.view;
@@ -548,6 +553,25 @@ export function EcuLabApp() {
   const toggleBuildSection = makeToggleSection('build');
   const goTutorial = () => navigate({ view: 'tutorial', tab: null, section: null });
   const goMenu = () => navigate({ view: 'start', tab: null, section: null });
+  // The start screen's ways in. CAREER opens the shop, which loads the save (see the effect over
+  // `appView`). SANDBOX comes back exactly as it was left: ENTER_SANDBOX puts the shop's car back
+  // on its lift and SANDBOX's own car back on the bench, then into the shop, stood looking at it.
+  const startCareer = () => navigate({ view: 'shop', tab: null, section: null });
+  const startSandbox = () => {
+    dispatch({ type: ACTIONS.ENTER_SANDBOX });
+    navigate({ view: 'bay', tab: null, section: null });
+  };
+  // A way in tapped while the app was loading, taken once it is up.
+  const heldStart = useRef(startWith);
+  useEffect(() => {
+    const w = heldStart.current;
+    heldStart.current = null;
+    if (w === 'career') startCareer();
+    else if (w === 'sandbox') startSandbox();
+    else if (w === 'tutorial') goTutorial();
+    // Once, on mount: the tap was made before the app existed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /**
    * CAREER: the car goes back to its owner. It is graded on the simulator exactly as it
@@ -1343,16 +1367,10 @@ export function EcuLabApp() {
   if (appView === 'start') {
     return (
       <StartScreen
-        // CAREER opens the shop, which loads the save (see the effect over `appView`).
-        onCareer={() => navigate({ view: 'shop', tab: null, section: null })}
-        // SANDBOX comes back exactly as it was left: ENTER_SANDBOX puts the shop's car
-        // back on its lift and SANDBOX's own car back on the bench.
-        onStart={() => {
-          dispatch({ type: ACTIONS.ENTER_SANDBOX });
-          // Into the shop, stood looking at it: the stations and the laptop are there to pick.
-          navigate({ view: 'bay', tab: null, section: null });
-        }}
+        onCareer={startCareer}
+        onStart={startSandbox}
         onTutorial={goTutorial}
+        enter={!startShown}
         version={BUILD_VERSION}
       />
     );
@@ -1874,13 +1892,13 @@ export function EcuLabApp() {
  * `blankStart` is the real app's first launch: SANDBOX opens with no engine chosen. Tests and
  * the tutorial's demo starts from the Nissan VQ35DE Rev-Up as BUILD loads it.
  *
- * @param {{blankStart?: boolean}} props
+ * @param {{blankStart?: boolean, startWith?: 'career'|'sandbox'|'tutorial'|null, startShown?: boolean}} props
  * @returns {React.ReactElement}
  */
-export default function EcuLab({ blankStart = false }) {
+export default function EcuLab({ blankStart = false, startWith = null, startShown = false }) {
   return (
     <StoreProvider blank={blankStart}>
-      <EcuLabApp />
+      <EcuLabApp startWith={startWith} startShown={startShown} />
     </StoreProvider>
   );
 }

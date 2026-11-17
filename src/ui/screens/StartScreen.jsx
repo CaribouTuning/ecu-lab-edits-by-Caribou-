@@ -46,13 +46,14 @@ function Badge() {
  * @param {() => void} props.onStart open the sandbox
  * @param {() => void} props.onTutorial
  * @param {string} props.version
+ * @param {boolean} [props.enter] rise into view (false: it replaces one already showing)
  * @returns {React.ReactElement}
  */
-export function StartScreen({ onCareer, onStart, onTutorial, version }) {
+export function StartScreen({ onCareer, onStart, onTutorial, version, enter = true }) {
   const handlers = { career: onCareer, sandbox: onStart, tutorial: onTutorial };
   return (
     <div className={styles.screen} data-plain>
-      <main className={styles.window} aria-labelledby="start-title">
+      <main className={styles.window} data-enter={enter ? 'true' : undefined} aria-labelledby="start-title">
         <section className={styles.identity}>
           <Badge />
           <h1 id="start-title" className={styles.title}>ECU Lab</h1>

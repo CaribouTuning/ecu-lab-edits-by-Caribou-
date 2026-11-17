@@ -312,7 +312,8 @@ function pixelTexture(w, h, draw) {
   const small = document.createElement('canvas');
   small.width = w;
   small.height = h;
-  const g = small.getContext('2d');
+  // Read back once below: a canvas in memory, not on the GPU, where a read waits on the GPU.
+  const g = small.getContext('2d', { willReadFrequently: true });
   if (g) g.imageSmoothingEnabled = false;
   if (g) draw(g);
   const c = document.createElement('canvas');
