@@ -8,6 +8,7 @@
 import { describe, expect, it } from 'vitest';
 
 import * as S from '../src/sim/index.js';
+import { ENGINE_PRESETS } from '../src/sim/presets.js';
 import { makeInitialState } from '../src/ui/state/initialState.js';
 import { ACTIONS, reducer } from '../src/ui/state/reducer.js';
 import { boostSteps, safeBaseMap } from '../src/ui/state/safeBaseMap.js';
@@ -26,6 +27,14 @@ describe('when the start is offered', () => {
     const built = boltOns(stock);
     expect(offersTuneStart({ mode: 'sandbox', build: built.build })).toBe(true);
     expect(offersTuneStart({ mode: 'career', build: built.build })).toBe(false);
+  });
+
+  it('is never offered for any stock engine: its factory calibration fits it, so the next step is to run it', () => {
+    // From SANDBOX's blank start, as a player picks one on BUILD.
+    for (const p of ENGINE_PRESETS) {
+      const s = reducer(makeInitialState({ blank: true }), { type: ACTIONS.APPLY_PRESET, preset: S.applyPreset(p) });
+      expect(offersTuneStart({ mode: 'sandbox', build: s.build }), p.id).toBe(false);
+    }
   });
 
   it('asks again when the build changes', () => {
