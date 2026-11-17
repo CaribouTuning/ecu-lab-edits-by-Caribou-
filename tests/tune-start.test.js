@@ -154,6 +154,21 @@ describe('the guide is this build\'s, not a generic one', () => {
   }, 300_000);
 });
 
+describe('the safe base map holds one margin under the knock limit', () => {
+  it('runs a turbo VQ35DE at 6 psi near 6° under it everywhere, not 16° under at 1500 RPM', () => {
+    let st = preset('vq35de-revup');
+    st = set(set(st, 'turboOn', true), 'boostCurve', st.build.boostCurve.map((b, i) => (i >= 2 ? 6 : b)));
+    st = set(st, 'injIdx', S.INJECTOR_OPTS.findIndex((o) => o.cc === 550));
+    const m = safeBaseMap(st);
+    expect(m.clean).toBe(true);
+    const p = pull(reducer(st, m.action));
+    const gaps = p.points.filter((q) => q.map >= 85).map((q) => q.threshold - q.timing);
+    expect(Math.min(...gaps)).toBeGreaterThanOrEqual(5);
+    expect(Math.max(...gaps)).toBeLessThan(10);
+    expect(m.steps.some((x) => /Spark evened to 6° under the knock limit/.test(x))).toBe(true);
+  }, 300_000);
+});
+
 describe('the safe base map follows a tuner\'s order of work', () => {
   it('fuels from low load up before any full-throttle run', () => {
     const m = safeBaseMap(boltOns(preset('vq35de-revup')));
