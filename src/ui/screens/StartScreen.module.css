@@ -1,86 +1,8 @@
-.screen {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--app-h, 100dvh);
-  padding: var(--sp-xxl);
-  position: relative;
-  overflow: hidden;
-  background: var(--bg);
-  color: var(--ink);
-  font-family: var(--sans);
-  text-align: center;
-}
-
-.glow {
-  position: absolute;
-  top: -15%;
-  left: 50%;
-  width: 420px;
-  height: 420px;
-  transform: translateX(-50%);
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(var(--acc-rgb), 0.10) 0%, transparent 70%);
-  pointer-events: none;
-}
-
-.inner { position: relative; display: flex; flex-direction: column; align-items: center; }
-
-.dial { margin-bottom: 22px; }
-
-.eyebrow {
-  margin-bottom: 7px;
-  font-size: var(--fs-xs);
-  font-weight: 800;
-  letter-spacing: 0.28em;
-  color: var(--acc-ink);
-}
-
-/* 25px/34px (below, at the breakpoint) are not on the font-size scale: this is
-   the app's one hero headline, sized as its own editorial choice rather than
-   a repeating text role. Forcing it onto the ramp would be renaming a
-   one-off, not systematising a repeated value. */
-.title {
-  max-width: 22ch;
-  margin-bottom: 15px;
-  font-size: 25px;
-  font-weight: 800;
-  letter-spacing: 0.01em;
-  text-transform: uppercase;
-}
-
-.blurb {
-  max-width: 42ch;
-  margin-bottom: 34px;
-  font-size: var(--fs-base);
-  line-height: 1.65;
-  color: var(--ink2);
-}
-
-.actions { display: flex; flex-direction: column; gap: 14px; width: 100%; max-width: 300px; }
-
-.way { display: flex; flex-direction: column; gap: 6px; }
-
-/* Each way in says what it is for. Three unlabelled buttons make a newcomer guess
-   which one is the game, and the answer is not obvious from "SANDBOX". */
-.caption { font-size: var(--fs-xs); line-height: 1.4; color: var(--ink2); }
-
-.version { margin-top: 18px; font-family: var(--mono); font-size: var(--fs-xs); color: var(--ink2); }
-
-/* From the small-tablet breakpoint up there is room to sit the two actions side by
-   side, which is also where a full-width button starts looking wrong.
-   560px is the project's one breakpoint — see the note beside the scale in
-   tokens.css. Kept in sync by hand with TutorialScreen.module.css. */
-@media (min-width: 560px) {
-  .title { font-size: 34px; }
-  .actions { flex-direction: row; max-width: none; justify-content: center; align-items: flex-start; }
-  .way { width: 250px; }
-}
-
 /*
- * The title screen keeps DNiev/ecu-lab main's look: its palette is pinned here, so the
- * shop's graphite theme does not reach it. These are main's token values (tokens.css --start-*).
+ * The title screen as a Mac app's welcome window: identity on the left, the ways in as a
+ * list on the right, one window on a plain dark desktop. On a phone the panes stack and
+ * the list is an inset group. Its own palette (tokens.css --start-*), remapped here, so
+ * the shop's theme does not reach it.
  */
 .screen {
   --bg: var(--start-bg);
@@ -95,34 +17,110 @@
   --acc-ink: var(--start-acc-ink);
   --acc-on: var(--start-acc-on);
   --acc-rgb: var(--start-acc-rgb);
-  --r-md: 9px;
-}
 
-/* main's Button (primitives/Button.module.css on main), lg and block. */
-.btn {
   display: flex;
-  width: 100%;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  min-width: 0;
-  padding: var(--sp-lg) 22px;
-  border: 1px solid transparent;
-  border-radius: var(--r-md);
+  min-height: var(--app-h, 100dvh);
+  padding: 24px;
+  background: var(--bg);
+  color: var(--ink);
   font-family: var(--sans);
-  font-size: var(--fs-base);
-  font-weight: 800;
-  letter-spacing: 0.05em;
-  cursor: pointer;
-  transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+  -webkit-font-smoothing: antialiased;
 }
-.btn:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
-.primary { background: var(--acc); color: var(--acc-on); }
-.primary:hover { background: var(--acc-ink); }
-.ghost { background: transparent; border-color: var(--line); color: var(--ink2); }
-.ghost:hover { border-color: var(--line-hi); color: var(--ink); }
-.quiet { background: transparent; border-color: transparent; color: var(--ink2); }
-.quiet:hover { color: var(--ink); }
 
-/* main's ground round the edges too: an iPhone's safe areas and the rubber-band. */
-:global(html):has(.screen), :global(body):has(.screen) { background: var(--start-bg); }
+/* One window: a hairline edge, the soft long shadow a Mac window casts, nothing glowing. */
+.window {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  width: min(820px, 100%);
+  min-height: 440px;
+  overflow: hidden;
+  border: 1px solid var(--line-hi);
+  border-radius: 12px;
+  background: var(--panel2);
+  box-shadow: 0 30px 80px rgba(var(--shadow-rgb), 0.55), 0 0 0 0.5px rgba(var(--shadow-rgb), 0.8);
+  animation: rise 0.35s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@keyframes rise { from { opacity: 0; transform: translateY(8px) scale(0.99); } }
+@media (prefers-reduced-motion: reduce) { .window { animation: none; } }
+
+/* The identity pane: badge, name, a line of what it is, the version at the foot. */
+.identity {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 28px 24px;
+  border-right: 1px solid var(--line);
+  background: var(--bg);
+  text-align: center;
+}
+.badge { width: 112px; height: auto; margin-bottom: 20px; filter: drop-shadow(0 6px 14px rgba(var(--shadow-rgb), 0.6)); }
+.title { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+.subtitle { margin: 6px 0 0; font-size: var(--fs-sm); color: var(--ink2); }
+.blurb { margin: 22px 0 0; font-size: var(--fs-sm); line-height: 1.55; color: var(--ink2); }
+.version { margin-top: auto; padding-top: 24px; font-size: var(--fs-xs); color: var(--ink3); font-variant-numeric: tabular-nums; }
+
+/* The ways in: a list, each row an icon, a name and its line, a chevron. */
+.ways { display: flex; flex-direction: column; justify-content: center; padding: 28px; }
+.waysTitle { margin: 0 0 10px 14px; font-size: var(--fs-sm); font-weight: 600; color: var(--ink2); }
+.list { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.way {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 64px;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+.way:hover { background: var(--panel3); }
+.way:active { background: var(--line-hi); }
+.way:focus-visible { outline: 2px solid var(--acc); outline-offset: 0; }
+.wayIcon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: var(--panel3);
+  color: var(--ink2);
+}
+/* The first way in is the one to take: its icon carries the accent, nothing else does. */
+.way[data-primary='true'] .wayIcon { background: var(--acc); color: var(--acc-on); }
+.wayBody { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.wayName { font-size: var(--fs-md); font-weight: 600; }
+.wayCaption { font-size: var(--fs-sm); line-height: 1.4; color: var(--ink2); }
+.wayChev { flex: none; color: var(--ink3); transition: transform 0.12s ease, color 0.12s ease; }
+.way:hover .wayChev { color: var(--ink2); transform: translateX(2px); }
+
+/* A phone: the panes stack, the list an inset group with hairlines between its rows. */
+@media (max-width: 640px) {
+  .screen { align-items: stretch; padding: 0; }
+  .window {
+    grid-template-columns: 1fr;
+    min-height: var(--app-h, 100dvh);
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: var(--bg);
+  }
+  .identity { justify-content: flex-end; padding: 56px 24px 12px; border-right: 0; }
+  .badge { width: 96px; margin-bottom: 16px; }
+  .blurb { max-width: 36ch; margin-top: 14px; }
+  .version { order: 9; margin-top: 0; padding-top: 10px; }
+  .waysTitle { margin-left: 4px; }
+  .ways { justify-content: flex-start; padding: 16px 16px 32px; }
+  .list { gap: 0; overflow: hidden; border-radius: 12px; background: var(--panel2); }
+  .list > li + li .way { box-shadow: inset 0 0.5px 0 var(--line-hi); border-radius: 0; }
+  .way { border-radius: 0; }
+}

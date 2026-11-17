@@ -338,7 +338,7 @@ describe('the palette in the app', () => {
     window.history.back();
     // jsdom dispatches the hashchange from a queued task, and the start screen renders the
     // whole app back down. Under a loaded full run that takes longer than waitFor's 1 s.
-    await waitFor(() => expect(screen.getByRole('button', { name: 'SANDBOX' })).toBeTruthy(), { timeout: 10000 });
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Sandbox/ })).toBeTruthy(), { timeout: 10000 });
 
     enterSandbox();
     expect(isOpen()).toBe(false);
@@ -470,7 +470,7 @@ describe('the palette in the app', () => {
 
   it('does nothing on Cmd-K from the tutorial view', () => {
     render(<EcuLab />);
-    fireEvent.click(screen.getByRole('button', { name: 'TUTORIAL' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Tutorial/ }));
     cmdK();
     expect(isOpen()).toBe(false);
   });

@@ -49,7 +49,6 @@ import { PageTabs } from './components/PageTabs.jsx';
 import { ThrottleLoadContext } from './components/TuningGrid.jsx';
 import { useUnits } from './units.js';
 import { StartScreen } from './screens/StartScreen.jsx';
-import { DialMark } from './components/DialMark.jsx';
 import { TutorialScreen } from './screens/TutorialScreen.jsx';
 import { warm } from './sim/warm.js';
 import { StoreProvider, useBuild, useCareer, useHistory, useSandboxStash, useSession, useTune } from './state/StoreProvider.jsx';
@@ -1368,7 +1367,6 @@ export function EcuLabApp() {
         }}
         onTutorial={goTutorial}
         version={BUILD_VERSION}
-        dial={<DialMark size={92} pct={0.62} />}
       />
     );
   }
