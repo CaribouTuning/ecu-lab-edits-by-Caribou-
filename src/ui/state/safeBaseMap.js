@@ -5,7 +5,7 @@
  */
 
 import {
-  BARO_KPA, INJECTOR_OPTS, PSI_TO_KPA, ecuHardwareOf, getCal, setCal, SPARK_MIN_DEG, applyVeCorrections, calibrationAdvice, intakeCamAt, layoutById, loadFor, simulateSweep, veCorrections, veSamplesFromPull,
+  BARO_KPA, INJECTOR_OPTS, PSI_TO_KPA, START_UP_RETARD_DEG, ecuHardwareOf, getCal, setCal, SPARK_MIN_DEG, applyVeCorrections, calibrationAdvice, intakeCamAt, layoutById, loadFor, simulateSweep, veCorrections, veSamplesFromPull,
 } from '../../sim/index.js';
 
 import { baseMapAction } from './baseMap.js';
@@ -46,6 +46,87 @@ function cellsAround(axes, rpm, load) {
   const out = [];
   for (const ri of side(axes.load, load)) for (const ci of side(axes.rpm, rpm)) out.push([ri, ci]);
   return out;
+}
+
+/**
+ * How far under the knock limit a safe base map's full-throttle spark sits: the start-up map's
+ * own shortfall and a tuner's margin. A cell further under than this is brought up to it.
+ */
+export const SAFE_SPARK_GAP_DEG = START_UP_RETARD_DEG + SAFE_KNOCK_MARGIN_DEG;
+
+/** The cells an ECU blends at a point, with each one's share (a straight-line blend each way). */
+function weightsAround(axes, rpm, load) {
+  const side = (xs, x) => {
+    const order = xs.map((v, i) => [v, i]).sort((a, b) => a[0] - b[0]);
+    if (x <= order[0][0]) return [[order[0][1], 1]];
+    if (x >= order[order.length - 1][0]) return [[order[order.length - 1][1], 1]];
+    const k = order.findIndex(([v]) => v >= x);
+    const [v1, i1] = order[k - 1]; const [v2, i2] = order[k];
+    const f = v2 === v1 ? 0 : (x - v1) / (v2 - v1);
+    return [[i1, 1 - f], [i2, f]];
+  };
+  const out = [];
+  for (const [ri, wr] of side(axes.load, load)) for (const [ci, wc] of side(axes.rpm, rpm)) if (wr * wc > 0) out.push([ri, ci, wr * wc]);
+  return out;
+}
+
+/**
+ * The full-throttle spark evened to one margin under the knock limit, as a tuner's base map
+ * holds: cells closer than SAFE_SPARK_GAP_DEG (where the check took a knock out with only its own
+ * margin) brought down to it, and cells far further under brought up to it, never past
+ * best-power timing. A start-up map generated on the game's coarse grid has to be safe between
+ * its breakpoints at boost the turbo does not yet make there, so its low-speed full-load cells
+ * came out as much as 16° short (a turbo VQ35DE ran -4° at 1500 RPM with no boost yet). A cell is
+ * lowered by the most any point it is blended into needs; raised, most room first, by no more
+ * than keeps every point it is blended into within its own room, its share counted.
+ * @returns {{timing: number[][], moved: number, lowered: number}|null}
+ */
+function evenedSpark(st, p) {
+  const axes = layoutById(st.tune.layout).timing;
+  /** @type {{slack: number, cells: number[][]}[]} */
+  const pts = [];
+  for (const q of p.points) {
+    if ((q.nitrousLbMin ?? 0) > 0 || !Number.isFinite(q.threshold) || !Number.isFinite(q.timing)) continue;
+    const slack = Math.min(q.threshold - SAFE_SPARK_GAP_DEG, Number.isFinite(q.mbtIdeal) ? q.mbtIdeal : Infinity) - q.timing;
+    pts.push({ slack, cells: weightsAround(axes, q.rpm, loadFor(axes, { mapKpa: q.map, airmassG: q.airCharge ?? 0 })) });
+  }
+  if (!pts.length) return null;
+  const timing = st.tune.timing.map((r) => [...r]);
+  const share = (q, ri, ci) => q.cells.find(([r, c]) => r === ri && c === ci)?.[2] ?? 0;
+  // Down first: a point short of its margin takes the whole shortfall out of each cell it reads.
+  const drop = new Map();
+  for (const q of pts) {
+    if (q.slack >= -0.25) continue;
+    for (const [ri, ci] of q.cells) { const k = `${ri}:${ci}`; drop.set(k, Math.max(drop.get(k) ?? 0, Math.ceil(-q.slack * 2) / 2)); }
+  }
+  let lowered = 0;
+  for (const [k, d] of drop) {
+    const [ri, ci] = k.split(':').map(Number);
+    const v = Math.max(SPARK_MIN_DEG, timing[ri][ci] - d);
+    lowered = Math.max(lowered, timing[ri][ci] - v);
+    timing[ri][ci] = Number(v.toFixed(1));
+  }
+  // The room each point has now, the cells it reads lowered.
+  const used = pts.map((q) => -q.cells.reduce((a, [ri, ci, w]) => a + w * (st.tune.timing[ri][ci] - timing[ri][ci]), 0));
+  // Up: what each cell would like is the room at the point it weighs most in.
+  const want = new Map();
+  for (const q of pts) for (const [ri, ci, w] of q.cells) {
+    const k = `${ri}:${ci}`;
+    const cur = want.get(k);
+    if (!cur || w > cur.w) want.set(k, { ri, ci, w, slack: q.slack });
+  }
+  let moved = 0;
+  for (const { ri, ci, slack } of [...want.values()].sort((a, b) => b.slack - a.slack)) {
+    if (slack < 1 || drop.has(`${ri}:${ci}`)) continue;
+    let up = slack;
+    pts.forEach((q, i) => { const w = share(q, ri, ci); if (w > 0) up = Math.min(up, (q.slack - used[i]) / w); });
+    up = Math.floor(up * 2) / 2;
+    if (up < 1) continue;
+    pts.forEach((q, i) => { used[i] += share(q, ri, ci) * up; });
+    timing[ri][ci] = Number((timing[ri][ci] + up).toFixed(1));
+    moved = Math.max(moved, up);
+  }
+  return moved > 0 || lowered > 0 ? { timing, moved, lowered } : null;
 }
 
 /** The highest boost the build asks for, as manifold pressure, kPa. */
@@ -276,6 +357,24 @@ export function safeBaseMap(state) {
     // boost here and says why; better fuel or less boost is the build's, not the map's.
     steps.push(`${where}: ${what ? `${what}, and ` : ''}it still ${p.points.some((q) => realKnock(q) > KNOCK_SEEN_DEG) ? 'knocks with the spark as low as the map can take it' : 'runs lean where the map has nothing left to add'}. ${psi != null ? (cleanAt != null ? `Boost raised no further: the highest step it ran clean was ${cleanAt} psi.` : 'Boost raised no further.') : ''}`.trim());
     break;
+  }
+
+  // 3b. The spark evened up where the map sat far under the knock limit, then proven again at
+  // full and part throttle; a check that is not clean leaves the map as it was.
+  const last = stages[stages.length - 1];
+  if (p && isClean(p) && (last == null || cleanAt === last)) {
+    const up = evenedSpark(run(st, { psi: last }), p);
+    if (up) {
+      const tried = { ...st, tune: { ...st.tune, timing: up.timing } };
+      const full = pullOf(run(tried, { psi: last }));
+      const part = pullOf(run(tried, { psi: last }), 70);
+      pulls += 2;
+      if (isClean(full) && isClean(part)) {
+        st = tried;
+        p = full;
+        steps.push(`Spark evened to ${SAFE_SPARK_GAP_DEG}° under the knock limit at full throttle${up.lowered > 0 ? `: up to ${up.lowered.toFixed(1)}° out where a cell sat closer than that` : ''}${up.moved > 0 ? `${up.lowered > 0 ? ', and' : ':'} up to ${up.moved.toFixed(1)}° added where one sat further under` : ''}; then checked at full and 70% throttle, still clean.`);
+      }
+    }
   }
 
   // 4. Nitrous, once the engine is proven dry.
