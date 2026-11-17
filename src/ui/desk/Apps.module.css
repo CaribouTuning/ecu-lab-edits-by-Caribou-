@@ -301,6 +301,8 @@ svg:has(:global(#cut-hatch)) .cutBlock, svg:has(:global(#cut-hatch)) .cutHead, s
    its parts and their sheets need the room a monitor in the scene does not have. */
 .buildPage { max-width: 1180px; padding: 12px 16px 16px; box-sizing: border-box; }
 @media (max-width: 559px) { .buildPage { padding: 0; } }
+/* Wide, the bench fills the screen under the HUD (BuildBench's wide layout). */
+@media (min-width: 1100px) { .buildPage { max-width: none; height: 100%; padding: 0; } }
 
 /* The dyno's Data page: the datalog, then the tables the pull read. */
 .dataTables { display: flex; flex-direction: column; gap: var(--sp-lg); padding-top: var(--sp-lg); }

@@ -497,3 +497,5 @@
 .hudStatus [data-tour^='strip-'] > span:first-child { font-size: 10px; letter-spacing: 0.04em; color: var(--ink2); }
 .hudStatus [data-tour^='strip-'] > span:last-child { font-size: 15px; font-weight: 650; color: var(--ink); }
 .hudStatus [data-tour='strip-health'] > span:nth-child(2):not(:last-child) { display: none; }
+/* The run light's slot holds its place in the strip; the HUD has the lamp on the stand's screen. */
+.hudStatus > * > * > div > span:empty { display: none; }

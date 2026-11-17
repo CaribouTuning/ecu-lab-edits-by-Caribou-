@@ -62,20 +62,27 @@ export function partSummaries(build, derived, preset, U = unitsFor('imperial')) 
   };
 }
 
-/** @returns {boolean} the screen is taller than wide, where the stand is out of view */
-function useTall() {
-  const q = '(max-aspect-ratio: 9/10)';
+/**
+ * @param {string} q a media query
+ * @returns {boolean} it matches now
+ */
+function useMedia(q) {
   const read = () => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia(q).matches;
-  const [tall, setTall] = useState(read);
+  const [matches, setMatches] = useState(read);
   useEffect(() => {
     if (typeof window.matchMedia !== 'function') return undefined;
     const mq = window.matchMedia(q);
-    const on = () => setTall(mq.matches);
+    const on = () => setMatches(mq.matches);
     mq.addEventListener?.('change', on);
     return () => mq.removeEventListener?.('change', on);
-  }, []);
-  return tall;
+  }, [q]);
+  return matches;
 }
+
+/** @returns {boolean} the screen is taller than wide, where the stand is out of view */
+const useTall = () => useMedia('(max-aspect-ratio: 9/10)');
+/** @returns {boolean} room for the engine between the parts and the sheet, as a car builder lays it out */
+const useWide = () => useMedia('(min-width: 1100px)');
 
 /**
  * @param {object} props
@@ -109,6 +116,7 @@ export function BuildBench({ part, onPart, preset, onStock, onRun, derived, rpm 
   const sums = useMemo(() => partSummaries(build, derived, preset, U), [build, derived, preset, U]);
   const open = BENCH_PARTS.find((p) => p.id === part) ?? BENCH_PARTS[0];
   const tall = useTall();
+  const wide = useWide() && full;
   const spec = useMemo(() => engineSpecOf(build, derived), [build, derived]);
   const changed = useMemo(() => changedParts(build, preset), [build, preset]);
   const cfg = build.engineConfig;
@@ -117,10 +125,10 @@ export function BuildBench({ part, onPart, preset, onStock, onRun, derived, rpm 
   const origin = !preset ? 'own' : changed.size ? 'modified' : 'stock';
   const changedNames = BENCH_PARTS.filter((p) => changed.has(p.id)).map((p) => p.label);
   return (
-    <div className={styles.wrap} data-full={full ? 'true' : undefined}>
+    <div className={styles.wrap} data-full={full ? 'true' : undefined} data-wide={wide ? 'true' : undefined}>
     <div className={styles.bench}>
       <nav className={styles.parts} aria-label="Engine parts" data-open={railOpen ? 'true' : undefined}>
-        {full && <EngineViewer spec={spec} rpm={rpm} label={`The engine on the stand: ${sums.engine}`} caption={build.engineReady ? caption : null} />}
+        {full && !wide && <EngineViewer spec={spec} rpm={rpm} label={`The engine on the stand: ${sums.engine}`} caption={build.engineReady ? caption : null} />}
         {/* Narrow only (BuildBench.module.css): the step you are on, and where you are in the seven. */}
         <button type="button" className={styles.rail} aria-label="Choose a part" aria-expanded={railOpen} onClick={() => setRailOpen((o) => !o)}>
           <span className={styles.railStep}>{BENCH_PARTS.indexOf(open) + 1}<span className={styles.railOf}>/{BENCH_PARTS.length}</span></span>
@@ -143,6 +151,22 @@ export function BuildBench({ part, onPart, preset, onStock, onRun, derived, rpm 
           </button>
         ))}
       </nav>
+      {wide && (
+        // The engine in the middle of the bench, its figures under it, the parts and the sheet
+        // docked either side: what you change, seen changing.
+        <div className={styles.stage}>
+          <EngineViewer spec={spec} rpm={rpm} label={`The engine on the stand: ${sums.engine}`} />
+          {build.engineReady && (
+            <dl className={styles.plate} aria-label="The engine's figures">
+              <div><dt>Displacement</dt><dd>{derived.displacementL.toFixed(2)}<small> L</small></dd></div>
+              <div><dt>Layout</dt><dd>{cfg.configuration}</dd></div>
+              <div><dt>Bore × stroke</dt><dd>{cfg.bore.toFixed(1)} × {cfg.stroke.toFixed(1)}<small> mm</small></dd></div>
+              <div><dt>Compression</dt><dd>{cfg.compression.toFixed(1)}<small>:1</small></dd></div>
+              <div><dt>Redline</dt><dd>{derived.redline.toLocaleString('en-US')}<small> rpm</small></dd></div>
+            </dl>
+          )}
+        </div>
+      )}
       <section className={styles.sheet} aria-label={open.label}>
         {tall && !full && (
           <EngineViewer spec={spec} rpm={rpm} label={`The engine on the stand: ${sums.engine}`} caption={build.engineReady ? caption : null} />
