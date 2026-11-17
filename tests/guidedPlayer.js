@@ -102,6 +102,24 @@ export function round(st) {
       if (next !== st.build.injIdx) { st = setBuild(st, { injIdx: next, ecuInjectorCc: S.INJECTOR_OPTS[next].cc }); did.push(`injectors up to ${S.INJECTOR_OPTS[next].cc}cc`); } else cannot.push(e.type);
     }
   }
+  // Lean protection that took the boost out comes before Correct VE from logs, as its entry
+  // says: the logs cannot see the cells it hid until the boost stays in. The log names the
+  // rows, the range and the share.
+  for (const e of p.events) {
+    // "the rows around K kPa" (the two bracketing K) or "the rows from A to B kPa" (every row
+    // from the one at or below A to the one at or above B).
+    const m = /raise the VE cells in the rows (?:around (\d+)|from (\d+) to (\d+)) kPa across (\d+)(?:–(\d+))? RPM by about (\d+)%/.exec(String(e.fix ?? ''));
+    if (e.type !== 'leanprot' || !m) continue;
+    const ax = S.layoutById(st.tune.layout).ve;
+    const a = Number(m[1] ?? m[2]); const b = Number(m[1] ?? m[3]);
+    const lo = Number(m[4]); const hi = Number(m[5] ?? m[4]); const f = 1 + Number(m[6]) / 100;
+    const bottom = Math.max(...ax.load.filter((l) => l <= a), Math.min(...ax.load));
+    const top = Math.min(...ax.load.filter((l) => l >= b), Math.max(...ax.load));
+    const ve = st.tune.ve.map((r) => [...r]);
+    ax.load.forEach((l, ri) => { if (l < bottom || l > top) return; ax.rpm.forEach((r, ci) => { if (r >= lo - 500 && r <= hi + 500) ve[ri][ci] = Number((ve[ri][ci] * f).toFixed(1)); }); });
+    st = { ...st, tune: { ...st.tune, ve } }; did.push(`VE +${m[6]}% ${a === b ? `around ${a}` : `${a}-${b}`} kPa ${lo}-${hi} (lean protection)`);
+  }
+  if (did.some((d) => /lean protection/.test(d))) return { st, did, cannot };
   // The log's order: where it says Correct VE from logs can do it, that first (when it would
   // change something); the hand edits it names are for the cells the log cannot reach.
   // Correct VE from logs reads the last pull with the LIVE log, which covers the other loads:
@@ -164,17 +182,6 @@ export function round(st) {
     const timing = st.tune.timing.map((r) => [...r]);
     ax.load.forEach((l, ri) => { if (l !== below && l !== above) return; ax.rpm.forEach((r, ci) => { if (r >= lo - 500 && r <= hi + 500) timing[ri][ci] = Math.max(S.SPARK_MIN_DEG, timing[ri][ci] - deg); }); });
     st = { ...st, tune: { ...st.tune, timing } }; did.push(`spark -${deg}° around ${kpa} kPa ${lo}-${hi} (knock protection)`);
-  }
-  // Lean protection that took the boost out: the log names the rows, the range and the share.
-  for (const e of p.events) {
-    const m = /raise the VE cells in the rows around (\d+) kPa across (\d+)(?:–(\d+))? RPM by about (\d+)%/.exec(String(e.fix ?? ''));
-    if (e.type !== 'leanprot' || !m) continue;
-    const ax = S.layoutById(st.tune.layout).ve;
-    const kpa = Number(m[1]); const lo = Number(m[2]); const hi = Number(m[3] ?? m[2]); const f = 1 + Number(m[4]) / 100;
-    const below = Math.max(...ax.load.filter((l) => l <= kpa)); const above = Math.min(...ax.load.filter((l) => l >= kpa));
-    const ve = st.tune.ve.map((r) => [...r]);
-    ax.load.forEach((l, ri) => { if (l !== below && l !== above) return; ax.rpm.forEach((r, ci) => { if (r >= lo - 500 && r <= hi + 500) ve[ri][ci] = Number((ve[ri][ci] * f).toFixed(1)); }); });
-    st = { ...st, tune: { ...st.tune, ve } }; did.push(`VE +${m[4]}% around ${kpa} kPa ${lo}-${hi} (lean protection)`);
   }
   if (did.length) return { st, did, cannot };
   // VE from logs wherever the engine missed its table, at every throttle the player can pull.

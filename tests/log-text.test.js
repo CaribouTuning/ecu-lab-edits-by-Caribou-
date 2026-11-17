@@ -35,6 +35,17 @@ describe('protection entries name a fix the player can make', () => {
     expect(e.fix).toMatch(/rows around 183 kPa across 2000–2200 RPM by about 3%/);
   });
 
+  it('names the rows from where a spooling turbo tripped up to the boost it asked for', () => {
+    const steps = [{ label: 'Base target (BUILD curve)', value: 12 }, { label: 'Throttle request (98%)', value: 11.8 }];
+    // It tripped at 150-160 kPa on its way to the 183 kPa it asked for: the rows it ran lean in.
+    const pts = [2000, 2100, 2200].map((rpm, i) => pt(rpm, {
+      protect: ['lean'], leanTripLambda: 1.03, leanTripKpa: 150 + i * 5, sensedLambda: 1.0, lambda: 1.0, afrCommanded: 14.7, boostPsi: 0, boostTarget: 0, boostSteps: steps,
+    }));
+    const e = run(pts).find((x) => x.type === 'leanprot');
+    expect(e.fix).toMatch(/tripped at λ 1\.03 at 150 kPa, asking for about 183 kPa/);
+    expect(e.fix).toMatch(/rows from 150 to 183 kPa across 2000–2200 RPM by about 3%/);
+  });
+
   it('quotes the exhaust temperature that tripped the enrichment, not the cooler one after it', () => {
     const pts = [4000, 4100].map((rpm) => pt(rpm, { protect: ['egt'], egt: 720, egtTripC: 985 }));
     expect(run(pts).find((e) => e.type === 'egtprot').msg).toMatch(/EGT 985 °C against a 950 °C limit/);

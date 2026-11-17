@@ -527,6 +527,9 @@ export function ecuSteadyPoint({ cal, hw, cond, tables, rpm, loadKpa, traceCycle
   // AFTER the protection acted — boost out, so richer — and reporting that reading made
   // the log say "λ 0.96, leaner than the λ 1.02 limit".
   let leanTripLambda = 0;
+  // The manifold pressure the ECU read when that lean tripped it: while the turbo spools it
+  // trips below the boost asked for, and the cells to raise are the ones it ran there.
+  let leanTripKpa = 0;
   // The exhaust temperature that tripped the EGT enrichment: the logged point is after it
   // acted, cooler than the limit it crossed (as `leanTripLambda` is for the lean protection).
   let egtTripC = 0;
@@ -584,6 +587,7 @@ export function ecuSteadyPoint({ cal, hw, cond, tables, rpm, loadKpa, traceCycle
     }
     if (P.leanEnabled && sensedLambda > P.leanLambda && resolved.sensed.mapKpa > P.leanMinKpa && mod.cutFrac < 1) {
       protect.add('lean');
+      if (sensedLambda > leanTripLambda) leanTripKpa = resolved.sensed.mapKpa;
       leanTripLambda = Math.max(leanTripLambda, sensedLambda);
       changed = applyAction(P.leanAction, mod, P.boostCutPsi, hw.turboOn) || changed;
     }
@@ -645,7 +649,7 @@ export function ecuSteadyPoint({ cal, hw, cond, tables, rpm, loadKpa, traceCycle
     ecuStoich: Number(resolved.sensed.ecuFuel.stoich.toFixed(2)),
     torqueLimitNm: Math.round(Math.min(read1(cal.torque.limitByGear, gear), read1(cal.torque.limitByRpm, rpm))),
     protect: [...protect],
-    ...(leanTripLambda > 0 ? { leanTripLambda: Number(leanTripLambda.toFixed(3)) } : {}),
+    ...(leanTripLambda > 0 ? { leanTripLambda: Number(leanTripLambda.toFixed(3)), ...(leanTripKpa > 0 ? { leanTripKpa: Math.round(leanTripKpa) } : {}) } : {}),
     ...(egtTripC > 0 ? { egtTripC: Math.round(egtTripC) } : {}),
     ...(knockTripDeg > 0 ? { knockTripDeg: Number(knockTripDeg.toFixed(1)) } : {}),
     breakdown: { ...resolved.breakdown, boost: solved.steps },

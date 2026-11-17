@@ -16,6 +16,9 @@ import { LINEAR_SCALES } from './sensors.js';
  * How big a departure has to be before the pull log reports it — below these it is too
  * small to change a tuning decision, and reporting it would bury the entries that do.
  */
+/** A lean trip this far below the boost asked for names the rows from it up, not only the top, kPa. */
+const LEAN_ROWS_SPAN_KPA = 8;
+
 const REPORT = Object.freeze({
   /** Timing pulled for noise the sensor mistook for knock, degrees. */
   FALSE_KNOCK_DEG: 0.5,
@@ -102,14 +105,22 @@ export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm, intercooled =
   // point's own `boostTarget` is after the cut).
   const step = (p, re) => (p.boostSteps ?? []).find((x) => re.test(x.label))?.value;
   const request = (p) => step(p, /^Throttle request/) ?? step(p, /^Base target/) ?? p.boostTarget ?? 0;
+  // Where it ran lean is the pressure it tripped at (`leanTripKpa`), which while the turbo
+  // spools is below the boost asked for: naming the boost asked for sent the player to rows
+  // the engine never reached, one band a pull (a B58 on E85 took 13 pulls). Speeds that
+  // tripped at about the same pressure are one band; the rows to raise run from the lowest
+  // trip to the boost asked for, so the cells are right once the boost stays in as well.
   const boostCutLean = (run, tripLambda) => {
     if (cal.protect.leanAction !== 'boost-cut') return null;
     const cut = run.filter((p) => request(p) - (p.boostPsi ?? 0) > 1);
     if (!cut.length) return null;
     const asked = Math.round(BARO_KPA + Math.max(...cut.map(request)) * PSI_TO_KPA);
+    const trips = cut.map((p) => p.leanTripKpa).filter((k) => k > 0);
+    const from = trips.length ? Math.round(Math.min(...trips)) : asked;
     const wanted = (cut[0].afrCommanded ?? GASOLINE_STOICH) / GASOLINE_STOICH;
     const pct = Math.max(1, Math.round((tripLambda / wanted - 1) * 100));
-    return `The protection took the boost out, so this pull logged the engine where the mixture is fine, and Correct VE from logs cannot see the cells that ran lean. It tripped at λ ${tripLambda.toFixed(2)} asking for about ${asked} kPa: on TUNE → AIRFLOW raise the VE cells in the rows around ${asked} kPa across ${label(cut)} by about ${pct}%, then pull again. Once the boost stays in, Correct VE from logs finishes the job.`;
+    const rows = from < asked - LEAN_ROWS_SPAN_KPA ? `the rows from ${from} to ${asked} kPa` : `the rows around ${asked} kPa`;
+    return `The protection took the boost out, so this pull logged the engine where the mixture is fine, and Correct VE from logs cannot see the cells that ran lean. It tripped at λ ${tripLambda.toFixed(2)} at ${from} kPa, asking for about ${asked} kPa: on TUNE → AIRFLOW raise the VE cells in ${rows} across ${label(cut)} by about ${pct}%, then pull again. Once the boost stays in, Correct VE from logs finishes the job.`;
   };
   groupRuns(points, (p) => has(p, 'lean')).forEach((run) => {
     // The reading that TRIPPED it: the logged point is after the protection acted, and

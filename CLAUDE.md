@@ -176,7 +176,10 @@ remaining risk is the same Node major with a different libm, which is what step 
   one does, and the log and TUNE lead from there. Generated from the physics at 150-200 kPa,
   the "stock" table once ran a turbo within tenths of the knock limit untuned. A protection
   that cuts boost hides its cause (lean or knock): the log names the cells at the boost it
-  asked for (`boostCutLean`, `hiddenKnock` in ecuEvents.js, from `leanTripLambda`/`knockTripDeg`).
+  asked for (`boostCutLean`, `hiddenKnock` in ecuEvents.js, from `leanTripLambda`/`knockTripDeg`);
+  a lean that trips while the turbo spools names the rows from where it tripped (`leanTripKpa`)
+  up to that boost, and the player raises those before Correct VE from logs, as the entry says
+  (naming only the boost asked for cost a B58 on E85 13 pulls; now 5).
   TUNE judges a cell the pull used by the margin the pull measured, to MBT (`judgeAgainstPull`).
 - **SANDBOX starts a built engine's tune three ways** (`components/TuneStart.jsx`, offered by
   `offersTuneStart` for an engine of the player's own or a factory one with parts changed, and
