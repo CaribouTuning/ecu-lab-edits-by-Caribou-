@@ -58,7 +58,7 @@ import { ROUTES } from './routing.js';
 import { useRoute } from './useRoute.js';
 import { ACTIONS } from './state/reducer.js';
 import { buildName, offersBaseMap, originPreset } from './state/baseMap.js';
-import { offersTuneStart } from './state/tuneStart.js';
+import { buildSignature as tuneStartSignature, offersTuneStart, useTuneStartChoice } from './state/tuneStart.js';
 import { safeBaseMap } from './state/safeBaseMap.js';
 import { TuneStart } from './components/TuneStart.jsx';
 import { redoLabel, undoLabel } from './state/history.js';
@@ -287,6 +287,10 @@ export function EcuLabApp() {
   const inCareer = mode === 'career' && career != null;
   // SANDBOX opens with no engine: the engine screens ask for one (EngineStart) until it is chosen.
   const engineMissing = !inCareer && build.engineReady === false;
+  // SANDBOX: a new build whose way into the tune is not chosen yet (TuneStart). Hidden in tests, as the card is.
+  const tuneStartChoice = useTuneStartChoice(tuneStartSignature(build));
+  const tuneStartOpen = offersTuneStart({ mode: session.mode, build }) && tuneStartChoice == null
+    && /** @type {any} */ (import.meta).env?.MODE !== 'test';
   // A failed engine (src/sim/damage.js): it neither pulls nor starts until it is rebuilt.
   const blown = failedPart(health);
   // An engine-building job opens BUILD: the customer pays for parts. Every other job's
@@ -1794,13 +1798,14 @@ export function EcuLabApp() {
     buildJob: buildOpen,
     failed: blown ? FAILURE_MODES[blown].title.toLowerCase() : null,
     running,
+    startTune: tuneStartOpen,
   });
   // Already where the step happens: it is only said, with nothing to press.
   const stepHere = appView === 'app' && (
     step.go === 'build' ? tab === 'build'
       : step.go === 'live' ? tab === 'live'
         : step.go === 'dyno' || step.go === 'ticket' ? tab === 'dyno'
-          : step.go.startsWith('tune:') ? tab === 'tune' && tuneView === step.go.slice(5) : false
+          : step.go.startsWith('tune:') ? tab === 'tune' && (step.id === 'start-tune' || tuneView === step.go.slice(5)) : false
   ) || (step.go === 'messages' && appView === 'messages') || (step.go === 'board' && appView === 'shop');
   const goStep = () => {
     const g = step.go;

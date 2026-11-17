@@ -13,9 +13,9 @@ import * as S from '../../src/sim/index.js';
 import { TuneStart } from '../../src/ui/components/TuneStart.jsx';
 import { StoreProvider, useTune } from '../../src/ui/state/StoreProvider.jsx';
 import { ACTIONS, reducer } from '../../src/ui/state/reducer.js';
-import { TUNE_START_KEY } from '../../src/ui/state/tuneStart.js';
+import { clearTuneStart } from '../../src/ui/state/tuneStart.js';
 
-afterEach(() => { cleanup(); try { localStorage.removeItem(TUNE_START_KEY); } catch { /* none */ } });
+afterEach(() => { cleanup(); clearTuneStart(); });
 
 /** A VQ35DE with bolt-ons: a factory engine with its parts changed. */
 const builtVq = (s) => {
@@ -31,9 +31,11 @@ describe('TuneStart', () => {
     render(<StoreProvider init={builtVq}><TuneStart force onGo={() => {}} /></StoreProvider>);
     expect(screen.getByRole('heading', { name: 'Start the tune' })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Load a safe base map/ })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /Build the base map with a guide/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Build it with the guide/ })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Tune from the advice/ }));
     expect(screen.queryByTestId('tune-start')).toBeNull();
+    // Still there for later, on one line.
+    expect(screen.getByTestId('tune-start-again')).toBeTruthy();
   });
 
   it('loads the safe base map and says how it ran', async () => {
@@ -48,7 +50,7 @@ describe('TuneStart', () => {
   it('opens the guide on its steps, each with a way to its page', async () => {
     const went = [];
     render(<StoreProvider init={builtVq}><TuneStart force onGo={(id) => went.push(id)} /></StoreProvider>);
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Build the base map with a guide/ })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Build it with the guide/ })); });
     await waitFor(() => expect(screen.getByTestId('tune-start-guide')).toBeTruthy(), { timeout: 60_000 });
     expect(screen.getByText('Start the spark safe')).toBeTruthy();
     fireEvent.click(screen.getAllByRole('button', { name: 'Open' })[0]);

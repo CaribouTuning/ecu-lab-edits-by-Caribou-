@@ -10,6 +10,8 @@
  * the browser (as the first-run walkthrough is), so a new build asks again.
  */
 
+import { useSyncExternalStore } from 'react';
+
 import { INJECTOR_OPTS, layoutById, loadFor, readTable } from '../../sim/index.js';
 
 import { isOwnEngine, offersBaseMap } from './baseMap.js';
@@ -38,13 +40,40 @@ export function offersTuneStart({ mode, build }) {
   return mode !== 'career' && build.engineReady !== false && (isOwnEngine(build) || offersBaseMap(build));
 }
 
+/** @type {Set<() => void>} */
+const listeners = new Set();
+/** @type {{sig: string, choice: string}|null|undefined} undefined: not read yet */
+let cached;
+
 /** Read the kept choice; null when none, or the browser keeps nothing. */
 export function readTuneStart() {
-  try { const v = JSON.parse(localStorage.getItem(TUNE_START_KEY) ?? 'null'); return v && typeof v.sig === 'string' ? v : null; } catch { return null; }
+  if (cached !== undefined) return cached;
+  try { const v = JSON.parse(globalThis.localStorage?.getItem(TUNE_START_KEY) ?? 'null'); cached = v && typeof v.sig === 'string' ? v : null; } catch { cached = null; }
+  return cached;
 }
-/** Keep the choice for this build. @param {string} sig @param {'base'|'guided'|'advice'} choice */
+/** Keep the choice for this build, and tell every screen showing it. @param {string} sig @param {'base'|'guided'|'advice'} choice */
 export function writeTuneStart(sig, choice) {
-  try { localStorage.setItem(TUNE_START_KEY, JSON.stringify({ sig, choice })); } catch { /* private mode: asked again next time */ }
+  cached = { sig, choice };
+  try { globalThis.localStorage?.setItem(TUNE_START_KEY, JSON.stringify(cached)); } catch { /* private mode: asked again next time */ }
+  for (const l of listeners) l();
+}
+/** Forget the kept choice (tests). */
+export function clearTuneStart() {
+  cached = null;
+  try { globalThis.localStorage?.removeItem(TUNE_START_KEY); } catch { /* none */ }
+  for (const l of listeners) l();
+}
+const subscribe = (/** @type {() => void} */ l) => { listeners.add(l); return () => { listeners.delete(l); }; };
+
+/**
+ * The way chosen to start this build's tune, or null while it is still to choose. TUNE's card
+ * and the Next bar read the same, so they never disagree.
+ * @param {string} sig the build's signature
+ * @returns {'base'|'guided'|'advice'|null}
+ */
+export function useTuneStartChoice(sig) {
+  const kept = useSyncExternalStore(subscribe, readTuneStart, readTuneStart);
+  return kept?.sig === sig ? /** @type {any} */ (kept.choice) : null;
 }
 
 /** How close a cell must come to the target to count, by table. */

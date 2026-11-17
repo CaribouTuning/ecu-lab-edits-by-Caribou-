@@ -12,12 +12,12 @@
  */
 
 import React from 'react';
-import { Check, Circle, Gauge, ListChecks, Wrench } from 'lucide-react';
+import { Check, ChevronRight, Circle, Gauge, ListChecks, Wrench } from 'lucide-react';
 
 import { Button } from '../primitives/Button.jsx';
 import { warm } from '../sim/warm.js';
 import { safeBaseMap } from '../state/safeBaseMap.js';
-import { buildSignature, guidedSteps, offersTuneStart, readTuneStart, writeTuneStart } from '../state/tuneStart.js';
+import { buildSignature, guidedSteps, offersTuneStart, useTuneStartChoice, writeTuneStart } from '../state/tuneStart.js';
 import { useBuild, useSession, useTune } from '../state/StoreProvider.jsx';
 import styles from './TuneStart.module.css';
 
@@ -35,13 +35,12 @@ export function TuneStart({ onGo, force = false }) {
   const [tune] = useTune();
   const [session] = useSession();
   const sig = buildSignature(build);
-  const [kept, setKept] = React.useState(() => readTuneStart());
   const [busy, setBusy] = React.useState(false);
   const [made, setMade] = React.useState(() => MADE.get(sig) ?? null);
   React.useEffect(() => { setMade(MADE.get(sig) ?? null); }, [sig]);
 
   const offered = offersTuneStart({ mode: session.mode, build });
-  const choice = kept?.sig === sig ? kept.choice : null;
+  const choice = useTuneStartChoice(sig);
   const testMode = /** @type {any} */ (import.meta).env?.MODE === 'test';
   const shown = offered && (force || !testMode);
 
@@ -73,7 +72,7 @@ export function TuneStart({ onGo, force = false }) {
   React.useEffect(() => { if (needTargets) make(() => {}); });
 
   if (!shown) return null;
-  const choose = (c) => { writeTuneStart(sig, c); setKept({ sig, choice: c }); };
+  const choose = (c) => writeTuneStart(sig, c);
 
   // A choice made: the base map's result, or the guide's steps, until the player closes them.
   if (choice === 'base' && made) return <BaseMapResult made={made} onClose={() => choose('advice')} />;
@@ -95,31 +94,35 @@ export function TuneStart({ onGo, force = false }) {
     );
   }
 
+  const options = [
+    {
+      id: 'base', Icon: Gauge, name: 'Load a safe base map',
+      text: 'Made for these parts and checked on the dyno: clean, with power left to find.',
+      onPick: () => make((m) => { dispatch(/** @type {any} */ (m.action)); choose('base'); }),
+    },
+    { id: 'guided', Icon: ListChecks, name: 'Build it with the guide', text: 'You type the cells; each step has targets and a check.', onPick: () => choose('guided') },
+    { id: 'advice', Icon: Wrench, name: 'Tune from the advice', text: 'Keep your tables and follow the pull log.', onPick: () => choose('advice') },
+  ];
   return (
     <section className={styles.card} data-testid="tune-start" aria-labelledby="tune-start-title">
-      <h2 id="tune-start-title" className={styles.title}>Start the tune</h2>
-      <p className={styles.lead}>
-        A tuner makes a new engine safe before chasing power: no knock and no lean on the first pull, then the timing and fuel found from the log.
-        How do you want to start?
-      </p>
-      <div className={styles.options}>
-        <button type="button" className={styles.option} disabled={busy}
-          onClick={() => make((m) => { dispatch(/** @type {any} */ (m.action)); choose('base'); })}>
-          <Gauge size={18} aria-hidden="true" className={styles.optionIcon} />
-          <span className={styles.optionName}>Load a safe base map</span>
-          <span className={styles.optionText}>What a tuner would load for these parts, generated from the physics and checked on the dyno until it runs clean, with power left to find. It replaces your tables; Undo brings them back.</span>
-        </button>
-        <button type="button" className={styles.option} disabled={busy} onClick={() => choose('guided')}>
-          <ListChecks size={18} aria-hidden="true" className={styles.optionIcon} />
-          <span className={styles.optionName}>Build the base map with a guide</span>
-          <span className={styles.optionText}>You make it, step by step: injectors, air, mixture, safe spark. Each step gives the targets for a few speeds and ticks off when your tables get there.</span>
-        </button>
-        <button type="button" className={styles.option} disabled={busy} onClick={() => choose('advice')}>
-          <Wrench size={18} aria-hidden="true" className={styles.optionIcon} />
-          <span className={styles.optionName}>Tune from the advice</span>
-          <span className={styles.optionText}>Keep the tables as they are and work from the pull log and TUNE&apos;s advice, as always.</span>
-        </button>
+      <div className={styles.head}>
+        <h2 id="tune-start-title" className={styles.title}>Start the tune</h2>
+        <p className={styles.lead}>Make it safe before chasing power. Undo puts your tables back.</p>
       </div>
+      <ul className={styles.list}>
+        {options.map(({ id, Icon, name, text, onPick }) => (
+          <li key={id}>
+            <button type="button" className={styles.row} disabled={busy} onClick={onPick} data-option={id}>
+              <span className={styles.rowIcon} aria-hidden="true"><Icon size={16} /></span>
+              <span className={styles.rowBody}>
+                <span className={styles.rowName}>{name}</span>
+                <span className={styles.rowText}>{text}</span>
+              </span>
+              <ChevronRight size={16} aria-hidden="true" className={styles.rowChev} />
+            </button>
+          </li>
+        ))}
+      </ul>
       {busy && <p className={styles.note} role="status">Checking a base map for these parts on the dyno…</p>}
     </section>
   );

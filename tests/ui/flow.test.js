@@ -31,6 +31,14 @@ describe('SANDBOX, step by step', () => {
     expect(sandbox({ atDyno: true }).go).toBe('dyno');
   });
 
+  it('asks how to start the tune of a new build before it is started, and the Next bar says what the card offers', () => {
+    const s = sandbox({ startTune: true });
+    expect(s).toMatchObject({ id: 'start-tune', label: 'Start the tune', go: 'tune:airflow' });
+    expect(s.text).toMatch(/safe base map.*guide.*advice/);
+    // Chosen: on to the stand as before.
+    expect(sandbox({ startTune: false }).go).toBe('live');
+  });
+
   it('does not ask to hear an engine again once it has a fresh pull', () => {
     expect(sandbox({ heard: false, pulled: true, fresh: true }).id).toBe('more');
   });

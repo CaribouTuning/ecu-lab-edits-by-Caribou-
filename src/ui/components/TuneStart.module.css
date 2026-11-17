@@ -6,7 +6,7 @@
   flex-direction: column;
   gap: 10px;
   margin: 0 0 12px;
-  padding: 14px 16px;
+  padding: 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--panel);
@@ -20,28 +20,44 @@
 .lead b { color: var(--ink); font-weight: 600; }
 .note { margin: 0; font-size: var(--fs-sm); color: var(--ink2); }
 
-.options { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
-.option {
+.head { display: flex; flex-direction: column; gap: 2px; }
+
+/* The three ways in: one grouped list, rows split by hairlines, as a settings list is. */
+.list { margin: 0; padding: 0; list-style: none; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--panel2); }
+.list > li + li { border-top: 1px solid var(--line); }
+.row {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  min-height: 44px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--panel2);
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
   color: var(--ink);
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
-.option:hover { border-color: var(--acc); }
-.option:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
-.option:disabled { cursor: progress; opacity: 0.6; }
-.optionIcon { color: var(--acc); }
-.optionName { font-size: var(--fs-base); font-weight: 600; }
-.optionText { font-size: var(--fs-sm); line-height: 1.45; color: var(--ink2); }
+.row:hover { background: var(--panel3); }
+.row:focus-visible { outline: 2px solid var(--acc); outline-offset: -2px; }
+.row:disabled { cursor: progress; opacity: 0.6; }
+.rowIcon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--panel3);
+  color: var(--ink2);
+}
+.row[data-option='base'] .rowIcon { background: var(--acc); color: var(--acc-on); }
+.rowBody { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.rowName { font-size: var(--fs-sm); font-weight: 600; }
+.rowText { font-size: var(--fs-xs); line-height: 1.4; color: var(--ink2); }
+.rowChev { flex: none; color: var(--ink2); }
 
 .steps { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
 .step { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
