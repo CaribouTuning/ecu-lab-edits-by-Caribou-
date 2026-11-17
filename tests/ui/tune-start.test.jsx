@@ -56,9 +56,9 @@ describe('TuneStart', () => {
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Build it with the guide/ })); });
     await waitFor(() => expect(screen.getByTestId('tune-start-guide')).toBeTruthy(), { timeout: 60_000 });
     // One line until All steps opens the rest.
-    expect(screen.queryByText('Start the spark safe')).toBeNull();
+    expect(screen.queryByText('Start with safe spark timing')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /All steps/ }));
-    expect(screen.getByText('Start the spark safe')).toBeTruthy();
+    expect(screen.getByText('Start with safe spark timing')).toBeTruthy();
     // The first step opens what still needs doing: the injectors, or (they match) the MAF scaling.
     fireEvent.click(screen.getAllByRole('button', { name: 'Open' })[0]);
     expect(['injectors', 'sensors']).toContain(went[0]);

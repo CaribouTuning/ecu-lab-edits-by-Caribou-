@@ -177,40 +177,40 @@ export function guidedSteps({ build, tune, target, samples, advice = null }) {
   // low load up, and only then full throttle, a turbo at its least boost first.
   return [
     {
-      id: 'injectors', title: 'Set the injector scaling', short: 'Injector scaling', go: 'injectors',
-      text: `On INJECTORS, set ECU Injector Scaling to ${fittedCc}, the ${fittedCc} cc/min injectors on the engine. Every fuel sum the ECU makes starts from it: set wrong, the engine runs rich or lean whatever the tables say, and a rich one hides its knock.`,
+      id: 'injectors', title: 'Tell the computer which injectors are fitted', short: 'Injector size', go: 'injectors',
+      text: `Open INJECTORS and set ECU Injector Scaling to ${fittedCc}. Injectors are the nozzles that spray the fuel, and this engine has ${fittedCc} cc/min ones. The engine's computer (the ECU) works out how long to hold them open from their size: if it thinks they are smaller than they are, every spray is too big and the engine runs rich (too much fuel). That wastes power, and it can hide knock.`,
       done: fittedCc != null && build.ecuInjectorCc === fittedCc,
     },
     ...(mafStep ? [{
-      id: 'maf', title: 'Set the MAF scaling', short: 'MAF scaling', go: 'sensors',
-      text: `On SENSORS, set the MAF scalar to ${mafTarget.toFixed(2)}. The ${build.mods?.intake && build.turboOn ? 'intake and the turbo pipework change' : build.turboOn ? 'turbo pipework changes' : 'intake changes'} how the air passes the meter, so it reads ${Math.round((1 - 1 / mafTarget) * 100)}% low; the scalar corrects what it reads. ${mafTarget.toFixed(2)} is the figure the base map was checked with. On a real car it comes from the intake maker's calibration or from the wideband and fuel trims, and the first pull's trims check it here the same way.`,
+      id: 'maf', title: 'Tell the computer how to read the air meter', short: 'Air meter (MAF)', go: 'sensors',
+      text: `Open SENSORS and set the MAF scalar to ${mafTarget.toFixed(2)}. The MAF is the air meter in the intake: the computer measures the air with it and adds fuel to match. The ${build.mods?.intake && build.turboOn ? 'new intake and the turbo pipework change' : build.turboOn ? 'turbo pipework changes' : 'new intake changes'} how the air flows past it, so it now reads about ${Math.round((1 - 1 / mafTarget) * 100)}% less air than really goes in, and the engine would run lean (too little fuel, the dangerous way). The scalar corrects the reading. ${mafTarget.toFixed(2)} is the figure the game checked on the dyno; on a real car it comes from the intake maker, or from a wideband oxygen sensor and the fuel trims, and your first pull's fuel trims check it the same way.`,
       done: Math.abs((build.mafScalar ?? 1) - mafTarget) <= GUIDE_TOLERANCE.maf,
     }] : []),
     {
-      id: 'mixture', title: 'Set the mixture targets first', short: 'Mixture targets', go: 'fuel',
-      text: `On FUEL, keep cruise at 14.7 and set ${[naAfr && naAfr < RICH_ENOUGH_AFR ? `the full-load rows to about ${naAfr.toFixed(1)} AFR` : null, boosted && boostAfr ? `the boost rows to about ${boostAfr.toFixed(1)} at full boost` : null].filter(Boolean).join(', and ') || 'the full-load rows no leaner than they are'}. The VE is tuned to hit these, so they come before it. Richer is safe for a first pull; leaner is not.${leanCells.length ? ` TUNE's advisor marks ${leanCells.length === 1 ? 'a cell' : `${leanCells.length} cells`} on the table with the figure to type under each, leaner than safe: ${leanCells.slice(0, 3).map((c) => `${sparkAx.load[c.ri] ?? c.map} kPa at ${c.rpm} RPM to ${c.suggested}`).join(', ')}.` : ''}`,
+      id: 'mixture', title: 'Choose the fuel mixture', short: 'Fuel mixture', go: 'fuel',
+      text: `Open FUEL. This table is the mixture the computer aims for, as an air-fuel ratio (AFR): about 14.7 parts air to 1 of fuel burns completely, and a lower number is richer (more fuel). Leave the cruise cells at 14.7${[naAfr && naAfr < RICH_ENOUGH_AFR ? `, make full throttle about ${naAfr.toFixed(1)}` : null, boosted && boostAfr ? `${naAfr && naAfr < RICH_ENOUGH_AFR ? ' and' : ', make'} full boost about ${boostAfr.toFixed(1)}` : null].filter(Boolean).join('') || ', and keep the full-throttle cells no higher than they are'}. Under load the extra fuel cools the cylinder and protects the engine, so richer is the safe side for a first run and leaner is how engines get hurt. This comes before the airflow, because the airflow is tuned to hit these numbers.${leanCells.length ? ` The advisor has marked ${leanCells.length === 1 ? 'a cell' : `${leanCells.length} cells`} on the table that are leaner than safe, with the number to type under each: ${leanCells.slice(0, 3).map((c) => `${sparkAx.load[c.ri] ?? c.map} kPa at ${c.rpm} RPM to ${c.suggested}`).join(', ')}.` : ''}`,
       done: full.length > 0 && full.every((q) => mine('afr', q) <= theirs('afr', q) + GUIDE_TOLERANCE.afr) && !leanCells.length,
     },
     {
-      id: 'spark', title: 'Start the spark safe', short: 'Safe spark', go: 'spark',
+      id: 'spark', title: 'Start with safe spark timing', short: 'Safe timing', go: 'spark',
       text: anchors.length
-        ? `On SPARK, at full load keep the timing no higher than about ${anchors.map((q) => `${Math.round(theirs('timing', q))}° at ${Math.round(q.rpm / 100) * 100} RPM`).join(', ')}, and fill the cells between so the column runs smoothly.${hotCells.length ? ` TUNE's advisor marks ${hotCells.length === 1 ? 'a cell' : `${hotCells.length} cells`} on the table past the knock limit, the figure to type under each: ${hotCells.slice(0, 3).map((c) => `${c.load} kPa at ${c.rpm} RPM to ${Number(c.want.toFixed(1))}°`).join(', ')}${hotCells.length > 3 ? `, and ${hotCells.length - 3} more` : ''}.` : ''} That is a few degrees under what the engine can take; it is found later, on the dyno, a degree or two at a time.`
-        : 'On SPARK, start the full-load timing a few degrees under what you expect the engine to take.',
+        ? `Open SPARK. Each cell is how many degrees before the piston reaches the top the spark fires. More timing makes more power, up to a point; too much causes knock, where the fuel explodes instead of burning smoothly, and knock breaks pistons. At full throttle keep the timing no higher than about ${anchors.map((q) => `${Math.round(theirs('timing', q))}° at ${Math.round(q.rpm / 100) * 100} RPM`).join(', ')}, and blend the cells between so each column rises smoothly.${hotCells.length ? ` The advisor has marked ${hotCells.length === 1 ? 'a cell' : `${hotCells.length} cells`} on the table that are past the knock limit, with the number to type under each: ${hotCells.slice(0, 3).map((c) => `${c.load} kPa at ${c.rpm} RPM to ${Number(c.want.toFixed(1))}°`).join(', ')}${hotCells.length > 3 ? `, and ${hotCells.length - 3} more` : ''}.` : ''} This starts a few degrees under what the engine can take; the rest is found later on the dyno, a degree or two at a time, watching for knock.`
+        : 'Open SPARK and start the full-throttle timing a few degrees under what you expect the engine to take: too much timing causes knock, which breaks pistons.',
       done: full.length > 0 && full.every((q) => mine('timing', q) <= theirs('timing', q) + GUIDE_TOLERANCE.spark) && !hotCells.length,
     },
     {
-      id: 'air', title: 'Fuel it from low load up', short: 'Fuel, low load up', go: 'airflow',
-      text: `On the dyno, pull at 40% throttle, then on AIRFLOW press Correct VE from logs; pull again until it holds. Then the same at 70%.${steps.length ? ` Keep the boost at ${steps[0]} psi meanwhile (TUNE → BOOST, Boost limit by gear: 4th is the dyno's gear).` : ''} The mixture matters more than the timing, and a lean cell at full load is what hurts an engine, so the fuel is right before the throttle goes all the way.`,
+      id: 'air', title: 'Get the fuel right at part throttle', short: 'Part-throttle fuel', go: 'airflow',
+      text: `Now check the fuel against what really happens. On the dyno, run a pull at 40% throttle, then on AIRFLOW press Correct VE from logs. VE (volumetric efficiency) is how full of air each cylinder gets; the computer works out the fuel from it, and the pull's oxygen-sensor log shows where it is off. Repeat until the correction stays small, then do the same at 70% throttle.${steps.length ? ` Keep the boost at ${steps[0]} psi for now: TUNE → BOOST, Boost limit by gear, 4th (the gear the dyno uses).` : ''} Tuners get the fuel right at light load before going to full throttle, because a lean full-throttle run is what damages an engine.`,
       done: airDone,
     },
     {
-      id: 'pull', title: steps.length ? `First full-throttle pull at ${steps[0]} psi` : 'Make the first full-throttle pull', short: 'First full pull', go: 'dyno',
-      text: `One full-throttle pull${steps.length ? `, the boost held at ${steps[0]} psi` : ''}, then work the pull log's entries in its order: what it names about the parts and the fuel first (a lean the protection hid, Correct VE from logs), then knock. Where it names knock, take that timing and a couple of degrees more out of those cells; false knock it names is the knock sensor's threshold, never the timing. Pull again until it shows neither.`,
+      id: 'pull', title: steps.length ? `First full-throttle pull at ${steps[0]} psi` : 'First full-throttle pull', short: 'First full pull', go: 'dyno',
+      text: `Run one full-throttle pull${steps.length ? ` with the boost held at ${steps[0]} psi` : ''}. Then read the pull log from the top and do what it says, in its order: problems with the parts and the fuel first (a lean spot, or Correct VE from logs), then knock. Where it reports knock, take that much timing out of the cells it names, plus a couple of degrees to be safe. If it says false knock, the knock sensor is too sensitive; the timing is fine. Pull again until the log shows no lean and no knock.`,
       done: null,
     },
     ...(steps.length > 1 ? [{
-      id: 'boost', title: 'Raise the boost a step at a time', short: 'Boost in steps', go: 'boost',
-      text: `Raise Boost limit by gear for 4th in steps, ${steps.join(' → ')} psi, with a pull at each and its log worked the same way before the next. Where it will not run clean, stop: better fuel or less boost goes further, not more timing out. Then set the limit back above your ${boostTarget} psi target.`,
+      id: 'boost', title: 'Raise the boost a little at a time', short: 'Boost in steps', go: 'boost',
+      text: `On TUNE → BOOST, raise Boost limit by gear for 4th in steps: ${steps.join(' → ')} psi. At each step run a pull and fix what the log says before going higher. If a step will not run clean, stop there: the answer is better fuel or less boost, not ever less timing. When you are done, set the limit back above your ${boostTarget} psi target.`,
       done: null,
     }] : []),
   ];

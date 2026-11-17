@@ -190,7 +190,7 @@ function Guide({ sig, made, build, tune, advice, page = null, onGo, onClose }) {
       <div className={styles.barRow}>
         <span className={styles.progress} aria-label={`Step ${n} of ${steps.length}, ${done} done`}>{n}/{steps.length}</span>
         <span className={styles.barText}>
-          <b>{now.title}</b>
+          <b>{now.short ?? now.title}</b>
           {here && <span className={styles.barMeta}> · this page</span>}
         </span>
         {!here && <Button size="sm" variant="ghost" onClick={() => onGo(now.go)}>{now.go === 'dyno' ? 'Dyno' : 'Go'}</Button>}
@@ -203,7 +203,7 @@ function Guide({ sig, made, build, tune, advice, page = null, onGo, onClose }) {
       {!open && <p className={styles.barStep}><span className={styles.clamp}>{now.text}</span></p>}
       {open && (
         <div className={styles.barBody}>
-          <p className={styles.lead}>The targets come from a base map the game checked on the dyno for these parts. You type every cell; a step ticks off when the cells the engine runs get there, and TUNE&apos;s advisor agrees.</p>
+          <p className={styles.lead}>How a tuner builds a safe first map for new parts, one step at a time. The numbers come from a map the game checked on the dyno for this engine. You type every cell yourself; a step ticks off when your cells get there and TUNE&apos;s advisor agrees.</p>
           <ol className={styles.steps}>
             {steps.map((s) => (
               <li key={s.id} className={styles.step} data-done={s.done ? 'true' : 'false'} data-now={s === now ? 'true' : 'false'}>
