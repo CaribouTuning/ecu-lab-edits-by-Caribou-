@@ -538,14 +538,22 @@ export function simulateSweep({
   const roomBy = new Map();
   for (const p of points) {
     if (!offSpray(p)) continue;
-    const room = Math.min(p.mbtIdeal - (p.commandedTiming ?? p.timing), p.margin - KNOCK_SAFETY_DEG);
-    for (const { ri, ci } of cellsOf(p)) { const k = `${ri}|${ci}`; roomBy.set(k, Math.min(roomBy.get(k) ?? Infinity, room)); }
+    // To best-power timing measured from the cell's own value, as the advisor caps a cell: a
+    // cell near its MBT blended with a far lower one has no room, whatever the blend is short
+    // (an LS6 with a TVS1900 read 6° short where its 100 kPa cell could take 3°).
+    for (const { ri, ci } of cellsOf(p)) {
+      const cell = timing?.[ri]?.[ci];
+      const room = Math.min(p.mbtIdeal - (Number.isFinite(cell) ? cell : (p.commandedTiming ?? p.timing)), p.margin - KNOCK_SAFETY_DEG);
+      const k = `${ri}|${ci}`; roomBy.set(k, Math.min(roomBy.get(k) ?? Infinity, room));
+    }
   }
   const reachable = (p) => Math.min(sparkShort(p), Math.max(-Infinity, ...cellsOf(p).map(({ ri, ci }) => roomBy.get(`${ri}|${ci}`) ?? -Infinity)));
   const lazy = (p) => loadKpa >= 95 && p.rpm > 1000 && !(p.knockPull > 0) && !(p.protect?.length) && !p.misfire
-    // The advisor rounds a suggestion down to the half degree, and lists a cell past
-    // UNDER_ADVANCED_DEG: half a degree more here, so whatever this calls short, it lists.
-    && offSpray(p) && reachable(p) > UNDER_ADVANCED_DEG + 0.5;
+    // The advisor rounds a suggestion down to the half degree and caps it at the cell's own
+    // best-power timing, at the row's pressure rather than the point's (up to half a degree
+    // lower), and lists a cell past UNDER_ADVANCED_DEG: a degree more here, so whatever this
+    // calls short, it lists (an EA888 on E85 read 3.6° short where every cell had 3.0°).
+    && offSpray(p) && reachable(p) > UNDER_ADVANCED_DEG + 1;
   groupRuns(points, lazy).forEach((run) => {
     if (run.length < 3) return;
     const lostHp = (p) => {
