@@ -186,13 +186,14 @@ function NextStrip({ next, place }) {
  * @param {React.ReactNode} [props.status] the engine's status readouts, for the notifications panel
  * @param {React.ReactNode} [props.footer] the open app's status bar: along the bottom of a
  *   laptop window, at the top of a phone's app
+ * @param {React.ReactNode} [props.hud] the car's readouts for a station's HUD row (a wide screen)
  * @param {Next|null} [props.next] where to go next, from wherever you are (the game's flow,
  *   flow.js): under a shop page's bar, over the shop floor, on the laptop and the phone
  * @param {React.ReactNode} [props.children] the open app's or page's screen
  * @returns {React.ReactElement}
  */
 export function Desk({
-  mode, app, onOpen, onDesktop, onBay, apps = null, career = false, badges = {}, onSearch, onMenu, onTutorial, onRepair, notices = [], engineSpec, rpm = 0, dynoRpm = 0, cars, damage = null, status = null, footer = null, next = null, children,
+  mode, app, onOpen, onDesktop, onBay, apps = null, career = false, badges = {}, onSearch, onMenu, onTutorial, onRepair, notices = [], engineSpec, rpm = 0, dynoRpm = 0, cars, damage = null, status = null, footer = null, next = null, hud = null, children,
 }) {
   const [menu, setMenu] = useState(/** @type {null|'settings'|'notices'} */ (null));
   const units = useUnitSystem();
@@ -397,16 +398,20 @@ export function Desk({
 
       {mode === 'page' && (
         <div className={styles.page} data-scene={scene ?? undefined}>
+          {/* One HUD row over the scene: back, where you are, the objective, the car's
+              readouts, the laptop. A phone stacks the objective under it. */}
           <header className={styles.pageBar}>
             <button type="button" className={styles.back} onClick={onBay} aria-label="Back to the shop">
               <ChevronLeft size={16} aria-hidden="true" /><span>Shop</span>
             </button>
             <span className={styles.pageTitle}>{SHOP_PAGES[/** @type {keyof typeof SHOP_PAGES} */ (app ?? '')] ?? ''}</span>
+            {next && <div className={styles.hudNext}><NextStrip next={next} place="page" /></div>}
+            {hud && <div className={styles.hudStatus}>{hud}</div>}
             <button type="button" className={styles.back} onClick={onDesktop} aria-label={phone ? 'Pick up the phone' : 'Open the laptop'}>
               <span>{phone ? 'Phone' : 'Laptop'}</span>
             </button>
           </header>
-          {next && <NextStrip next={next} place="page" />}
+          {next && <div className={styles.pageNext}><NextStrip next={next} place="page" /></div>}
           <div className={styles.pageBody}><SurfacesContext.Provider value={surfaceCtx}>{children}</SurfacesContext.Provider></div>
         </div>
       )}

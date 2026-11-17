@@ -236,9 +236,10 @@ function fuelLabel(fuel, ethanolPct) {
  * @param {boolean} [props.actions] the icon buttons; SANDBOX's laptop has them on its taskbar instead
  * @param {boolean} [props.bar] drawn as a Mac window's status bar along its bottom: one quiet
  *   line, without the maker's name (the menu bar names the app)
+ * @param {boolean} [props.buildLine] the build's name; a station's HUD shows only the readouts
  * @returns {React.ReactElement}
  */
-export function StatusStrip({ onTutorial, onRepair, onSearch, onMenu, actions = true, bar = false }) {
+export function StatusStrip({ onTutorial, onRepair, onSearch, onMenu, actions = true, bar = false, buildLine = true }) {
   const [build] = useBuild();
   const [session] = useSession();
   const { engineConfig, turboOn, boostCurve, octaneIdx, injIdx } = build;
@@ -288,11 +289,11 @@ export function StatusStrip({ onTutorial, onRepair, onSearch, onMenu, actions = 
             sections stay mounted when collapsed, so any BUILD-tab prose containing
             "oct" (e.g. an octane explainer) would otherwise be an ambiguous match
             for a text-based query. */}
-        <div className={styles.engine} data-testid="build-line">
+        {buildLine && <div className={styles.engine} data-testid="build-line">
           {noEngine
             ? 'No engine chosen yet'
             : `${engineName}, ${induction}${build.nitrous ? ` + ${build.nitrous.shotHp} shot` : ''}, ${fuelLabel(FUEL_CHOICES[octaneIdx], build.ethanolPct)}, ${injectorLabel(injIdx, stockInjectorIdx(build))}`}
-        </div>
+        </div>}
         {/* Grouped so they wrap as one unit — see `.readouts` in AppShell.module.css
             for how the strip fits a phone. */}
         <div className={styles.readouts}>

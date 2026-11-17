@@ -1839,6 +1839,7 @@ export function EcuLabApp() {
         engineSpec={engineSpecOf(build, engineDerived)} rpm={session.live.running ? session.live.rpm : 0} dynoRpm={running ? dynoRpm : 0} cars={shopCars} damage={shopDamage}
         status={<StatusStrip actions={false} />}
         footer={appView !== 'shop' && appView !== 'messages' ? <StatusStrip actions={false} bar /> : null}
+        hud={deskMode === 'page' ? <StatusStrip actions={false} bar buildLine={false} /> : null}
         next={deskNext}
       >
         {inCareer && appView !== 'shop' && appView !== 'messages' && (deskMode === 'app' || deskMode === 'page') && (
