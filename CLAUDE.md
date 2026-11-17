@@ -160,7 +160,10 @@ remaining risk is the same Node major with a different libm, which is what step 
   player follows a knock entry's steps in order (mixture, timing, then boost only where it
   says timing cannot), and a hand edit the log asks for names each cell, never a whole
   region that Correct VE from logs is also fixing (the two fought).
-- **A tune that follows the advice must look like one a tuner would load, in 2-4 pulls.**
+- **A tune that follows the advice must look like one a tuner would load, in 2-4 pulls where the
+  hardware allows it.** Some builds are slow or never clean, and that is the physics, not a bug:
+  injectors or a pump at their limit, a turbo too small, boost past what the fuel's knock limit
+  allows. There the log and the safe base map name the part, and the pull count is not the measure.
   Under boost the mixture target richens 0.1 AFR a psi to λ 0.79 (HP Academy: 0.78-0.80 at
   high boost), and a boosted cell is held to 0.2 AFR of it (`MIX_NOTABLE_BOOST_AFR`). Rows past
   the one bracketing the reach carry no more spark and no leaner mixture than it
