@@ -36,7 +36,8 @@ function followTheGuide(st0) {
   const steps = guidedSteps({ build: st.build, tune: st.tune, target: t, samples: made.samples });
   const ids = steps.map((s) => s.id);
   // 1. The injector scaling, the size the step names; then the MAF scalar where a step names one.
-  st = set(st, 'ecuInjectorCc', Number(/set ECU Injector Scaling to (\d+)/.exec(steps[0].text)[1]));
+  const inj = steps.find((x) => x.id === 'injectors');
+  if (inj) st = set(st, 'ecuInjectorCc', Number(/set ECU Injector Scaling to (\d+)/.exec(inj.text)[1]));
   const maf = steps.find((x) => x.id === 'maf');
   if (maf) st = set(st, 'mafScalar', Number(/set the MAF scalar to (\d+\.\d+)/.exec(maf.text)[1]));
   // 2 and 3. Mixture no leaner than the targets, spark no higher, in the full-load rows: the
@@ -87,7 +88,8 @@ describe('the guided base map, followed literally, leaves an engine the log and 
   it.each(Object.entries(builds))('%s', (_name, make) => {
     const st0 = make();
     const { st, ids, made } = followTheGuide(st0);
-    expect(ids[0]).toBe('injectors');
+    // What the parts need, told to the ECU first: the injectors where they changed, else the air meter.
+    expect(['injectors', 'maf']).toContain(ids[0]);
     if (!made.clean) return; // a build no map can make clean says so on its card instead
     const p = pull(st);
     const bad = p.events.filter((e) => LEAN.includes(e.type)).map((e) => `${e.type}: ${e.msg}`);

@@ -2,9 +2,9 @@
 
 import { useSyncExternalStore } from 'react';
 
-import { BARO_KPA, IDLE_COLUMN_MAX_RPM, INJECTOR_OPTS, OPEN_LOOP_KPA, getCal, layoutById, loadFor, readTable } from '../../sim/index.js';
+import { BARO_KPA, BLOWER_OPTS, IDLE_COLUMN_MAX_RPM, INJECTOR_OPTS, OPEN_LOOP_KPA, getCal, layoutById, loadFor, mafErrorFactor, readTable, tankFuel } from '../../sim/index.js';
 
-import { isOwnEngine, offersBaseMap } from './baseMap.js';
+import { changedParts, isOwnEngine, offersBaseMap, originPreset } from './baseMap.js';
 import { boostSteps } from './safeBaseMap.js';
 
 /** Where the choice is kept: `{ sig, choice }`. */
@@ -109,8 +109,6 @@ export function guideStepNow(steps) {
 
 /** How close a cell must come to the target to count, by table. */
 export const GUIDE_TOLERANCE = Object.freeze({ spark: 1, afr: 0.3, vePct: 6, maf: 0.02 });
-/** A full-load target at or richer than this is worth naming; leaner is the closed-loop side. */
-const RICH_ENOUGH_AFR = 14.0;
 
 /**
  * @typedef {object} GuideStep
@@ -122,9 +120,38 @@ const RICH_ENOUGH_AFR = 14.0;
  * @property {boolean|null} done null where the game cannot check it (the pull itself)
  */
 
+/** The fuel as a player names it: "91 octane", "E85". @param {{label: string}} f */
+const fuelName = (f) => (/^\d+$/.test(f.label) ? `${f.label} octane` : f.label);
+
+/**
+ * What this build is against the engine it started as, in a few words a player reads: the parts
+ * that make a base map different from the factory's.
+ * @param {any} build
+ * @returns {string[]}
+ */
+export function buildChanges(build) {
+  const preset = originPreset(build);
+  if (!preset) return ['your own engine, with a calibration generated for it'];
+  const changed = changedParts(build, preset);
+  const out = [];
+  const peak = Math.max(0, ...(build.boostCurve ?? [0]));
+  if (build.turboOn && !preset.induction?.turboOn) out.push(`${(build.turbineCount ?? 1) > 1 ? 'twin turbos' : 'a turbo'} at ${peak} psi${build.mods?.intercooler ? ' with an intercooler' : ', no intercooler'}`);
+  else if (build.turboOn && changed.has('induction')) out.push(`the turbo changed (${peak} psi${build.mods?.intercooler ? ', intercooled' : ''})`);
+  if (build.blowerId) out.push(`a ${BLOWER_OPTS.find((b) => b.id === build.blowerId)?.label ?? 'supercharger'}${build.mods?.intercooler ? ' with an intercooler' : ''}`);
+  if (build.nitrous) out.push(`a ${build.nitrous.shotHp} hp ${build.nitrous.kit} nitrous shot`);
+  const fitted = INJECTOR_OPTS[build.injIdx]?.cc;
+  const factory = INJECTOR_OPTS[build.factoryInjIdx ?? preset.parts?.injectorIdx]?.cc;
+  if (fitted && factory && fitted !== factory) out.push(`${fitted} cc injectors (factory ${factory})`);
+  if (build.octaneIdx !== preset.parts?.octaneIdx) out.push(fuelName(tankFuel(build)));
+  if (changed.has('block')) out.push((build.engineConfig?.compression ?? 0) > (preset.engine?.compression ?? 0) ? 'higher compression' : 'block changes');
+  if (changed.has('head')) out.push('a different head or cam');
+  if (changed.has('boltons')) out.push(['intake', 'exhaust', 'headers'].filter((k) => build.mods?.[k] && !preset.mods?.[k]).join(', ') || 'exhaust changes');
+  return out;
+}
+
 /**
  * The guided base map's steps for the tables as they stand, against the safe base map's.
- * @param {{build: any, tune: any, target: {ve: number[][], timing: number[][], afr: number[][], layout?: any, mafScalar?: number}, samples: {rpm: number, map: number, airCharge: number}[], advice?: {overAdvanced?: any[], wrongMix?: any[]}|null}} s
+ * @param {{build: any, tune: any, target: {ve: number[][], timing: number[][], afr: number[][], layout?: any, mafScalar?: number, ecu?: any}, samples: {rpm: number, map: number, airCharge: number}[], advice?: {overAdvanced?: any[], wrongMix?: any[]}|null}} s
  * @returns {GuideStep[]}
  */
 export function guidedSteps({ build, tune, target, samples, advice = null }) {
@@ -167,20 +194,33 @@ export function guidedSteps({ build, tune, target, samples, advice = null }) {
   }
   // Mixture cells the advisor calls lean.
   const leanCells = (advice?.wrongMix ?? []).filter((c) => c.suggested < c.current);
-  // The MAF scaling the base map carries for the intake fitted: where the ECU reads the meter.
+  // The MAF scaling the base map carries for the intake fitted: where the ECU reads the meter. A
+  // step only where this build moved it from the factory's, or the player has since.
+  const preset = originPreset(build);
   const mafTarget = target.mafScalar ?? build.mafScalar ?? 1;
-  const mafStep = ['blend', 'maf'].includes(getCal(tune.ecu, 'config.airModel') ?? 'blend') && Math.abs(mafTarget - 1) > GUIDE_TOLERANCE.maf;
+  const factoryMaf = preset ? 1 / mafErrorFactor(preset.mods ?? {}, !!preset.induction?.turboOn) : 1;
+  const mafStep = ['blend', 'maf'].includes(getCal(tune.ecu, 'config.airModel') ?? 'blend')
+    && (Math.abs(mafTarget - factoryMaf) > GUIDE_TOLERANCE.maf || Math.abs((build.mafScalar ?? 1) - mafTarget) > GUIDE_TOLERANCE.maf);
+  // The injectors: a step where they were changed, or the ECU is not told the ones fitted.
+  const factoryCc = INJECTOR_OPTS[build.factoryInjIdx ?? preset?.parts?.injectorIdx ?? build.injIdx]?.cc;
+  const injStep = fittedCc != null && (fittedCc !== factoryCc || build.ecuInjectorCc !== fittedCc);
+  const fuel = tankFuel(build);
+  const stoich = fuel.stoich ?? 14.7;
+  const noCooler = boosted && !build.mods?.intercooler;
+  // Nitrous: the spray's own retard and fuel, as the base map was checked with them.
+  const wantRetard = build.nitrous ? getCal(target.ecu, 'nitrous.retardDeg') : null;
+  const wantTrim = build.nitrous ? getCal(target.ecu, 'nitrous.fuelTrimPct') : null;
   const boostTarget = build.turboOn ? Math.max(0, ...build.boostCurve) : 0;
   const airDone = pts.length > 0 && pts.every((q) => Math.abs(mine('ve', q) / theirs('ve', q) - 1) * 100 <= GUIDE_TOLERANCE.vePct);
   // The order a tuner works (HP Academy, Practical Standalone Tuning; webinar 129): what the
   // ECU is told about the parts, the targets the fuel is tuned to, safe spark, then fuel from
   // low load up, and only then full throttle, a turbo at its least boost first.
   return [
-    {
+    ...(injStep ? [{
       id: 'injectors', title: 'Tell the computer which injectors are fitted', short: 'Injector size', go: 'injectors',
-      text: `Open INJECTORS and set ECU Injector Scaling to ${fittedCc}. Injectors are the nozzles that spray the fuel, and this engine has ${fittedCc} cc/min ones. The engine's computer (the ECU) works out how long to hold them open from their size: if it thinks they are smaller than they are, every spray is too big and the engine runs rich (too much fuel). That wastes power, and it can hide knock.`,
-      done: fittedCc != null && build.ecuInjectorCc === fittedCc,
-    },
+      text: `Open INJECTORS and set ECU Injector Scaling to ${fittedCc}. ${factoryCc && factoryCc !== fittedCc ? `You fitted ${fittedCc} cc/min injectors where the factory ones flowed ${factoryCc}: they are the nozzles that spray the fuel, and each now sprays ${Math.round((fittedCc / factoryCc - 1) * 100)}% more in the same time.` : `The engine has ${fittedCc} cc/min injectors (the nozzles that spray the fuel), but the computer is set for ${build.ecuInjectorCc}.`} The engine's computer (the ECU) works out how long to hold them open from their size: told the wrong size, every spray is wrong and the engine runs ${build.ecuInjectorCc != null && build.ecuInjectorCc < fittedCc ? 'rich (too much fuel), which wastes power and can hide knock' : build.ecuInjectorCc != null && build.ecuInjectorCc > fittedCc ? 'lean (too little fuel), the dangerous way' : 'rich or lean whatever the tables say'}.`,
+      done: build.ecuInjectorCc === fittedCc,
+    }] : []),
     ...(mafStep ? [{
       id: 'maf', title: 'Tell the computer how to read the air meter', short: 'Air meter (MAF)', go: 'sensors',
       text: `Open SENSORS and set the MAF scalar to ${mafTarget.toFixed(2)}. The MAF is the air meter in the intake: the computer measures the air with it and adds fuel to match. The ${build.mods?.intake && build.turboOn ? 'new intake and the turbo pipework change' : build.turboOn ? 'turbo pipework changes' : 'new intake changes'} how the air flows past it, so it now reads about ${Math.round((1 - 1 / mafTarget) * 100)}% less air than really goes in, and the engine would run lean (too little fuel, the dangerous way). The scalar corrects the reading. ${mafTarget.toFixed(2)} is the figure the game checked on the dyno; on a real car it comes from the intake maker, or from a wideband oxygen sensor and the fuel trims, and your first pull's fuel trims check it the same way.`,
@@ -188,13 +228,20 @@ export function guidedSteps({ build, tune, target, samples, advice = null }) {
     }] : []),
     {
       id: 'mixture', title: 'Choose the fuel mixture', short: 'Fuel mixture', go: 'fuel',
-      text: `Open FUEL. This table is the mixture the computer aims for, as an air-fuel ratio (AFR): about 14.7 parts air to 1 of fuel burns completely, and a lower number is richer (more fuel). Leave the cruise cells at 14.7${[naAfr && naAfr < RICH_ENOUGH_AFR ? `, make full throttle about ${naAfr.toFixed(1)}` : null, boosted && boostAfr ? `${naAfr && naAfr < RICH_ENOUGH_AFR ? ' and' : ', make'} full boost about ${boostAfr.toFixed(1)}` : null].filter(Boolean).join('') || ', and keep the full-throttle cells no higher than they are'}. Under load the extra fuel cools the cylinder and protects the engine, so richer is the safe side for a first run and leaner is how engines get hurt. This comes before the airflow, because the airflow is tuned to hit these numbers.${leanCells.length ? ` The advisor has marked ${leanCells.length === 1 ? 'a cell' : `${leanCells.length} cells`} on the table that are leaner than safe, with the number to type under each: ${leanCells.slice(0, 3).map((c) => `${sparkAx.load[c.ri] ?? c.map} kPa at ${c.rpm} RPM to ${c.suggested}`).join(', ')}.` : ''}`,
+      text: (() => {
+        const what = `Open FUEL. This table is the mixture the computer aims for, as an air-fuel ratio (AFR): on ${fuelName(fuel)} about ${stoich.toFixed(1)} parts air to 1 of fuel burns completely, and a lower number is richer (more fuel).`;
+        const wants = [naAfr && naAfr < stoich * 0.95 ? `full throttle about ${naAfr.toFixed(1)}` : null, boosted && boostAfr ? `full boost about ${boostAfr.toFixed(1)}` : null].filter(Boolean).join(' and ');
+        const why = boosted ? `Boost packs more air into each cylinder, so it gets hotter: the extra fuel cools it and holds knock off, so${noCooler ? ' with no intercooler (hotter air still)' : ''} the boost rows run richer than full throttle without boost.` : 'Under load the extra fuel cools the cylinder and protects the engine.';
+        const done = full.length > 0 && full.every((q) => mine('afr', q) <= theirs('afr', q) + GUIDE_TOLERANCE.afr) && !leanCells.length;
+        if (done) return `${what} For this build ${wants || 'the full-throttle cells'} is safe, and your table is already there: nothing to change. ${why}`;
+        return `${what} Leave the cruise cells at ${stoich.toFixed(1)}${wants ? ` and make ${wants}` : ', and keep the full-throttle cells no higher than they are'}. ${why} Richer is the safe side for a first run; leaner is how engines get hurt. This comes before the airflow, because the airflow is tuned to hit these numbers.${leanCells.length ? ` The advisor has marked ${leanCells.length === 1 ? 'a cell' : `${leanCells.length} cells`} on the table that are leaner than safe, with the number to type under each: ${leanCells.slice(0, 3).map((c) => `${sparkAx.load[c.ri] ?? c.map} kPa at ${c.rpm} RPM to ${c.suggested}`).join(', ')}.` : ''}`;
+      })(),
       done: full.length > 0 && full.every((q) => mine('afr', q) <= theirs('afr', q) + GUIDE_TOLERANCE.afr) && !leanCells.length,
     },
     {
       id: 'spark', title: 'Start with safe spark timing', short: 'Safe timing', go: 'spark',
       text: anchors.length
-        ? `Open SPARK. Each cell is how many degrees before the piston reaches the top the spark fires. More timing makes more power, up to a point; too much causes knock, where the fuel explodes instead of burning smoothly, and knock breaks pistons. At full throttle keep the timing no higher than about ${anchors.map((q) => `${Math.round(theirs('timing', q))}° at ${Math.round(q.rpm / 100) * 100} RPM`).join(', ')}, and blend the cells between so each column rises smoothly.${hotCells.length ? ` The advisor has marked ${hotCells.length === 1 ? 'a cell' : `${hotCells.length} cells`} on the table that are past the knock limit, with the number to type under each: ${hotCells.slice(0, 3).map((c) => `${c.load} kPa at ${c.rpm} RPM to ${Number(c.want.toFixed(1))}°`).join(', ')}${hotCells.length > 3 ? `, and ${hotCells.length - 3} more` : ''}.` : ''} This starts a few degrees under what the engine can take; the rest is found later on the dyno, a degree or two at a time, watching for knock.`
+        ? `Open SPARK. Each cell is how many degrees before the piston reaches the top the spark fires. More timing makes more power, up to a point; too much causes knock, where the fuel explodes instead of burning smoothly, and knock breaks pistons.${boosted ? ` Boost raises the pressure and heat in the cylinder, so this engine knocks at less timing than it did${noCooler ? ', and with no intercooler the air going in is hotter still' : ''}: the boost rows need less timing than the rows below them.` : ''}${fuel.label === 'E85' ? ' E85 resists knock far better than pump fuel, so it takes more timing than the same engine on gasoline.' : ''} At full throttle keep the timing no higher than about ${anchors.map((q) => `${Math.round(theirs('timing', q))}° at ${Math.round(q.rpm / 100) * 100} RPM`).join(', ')}, and blend the cells between so each column rises smoothly.${hotCells.length ? ` The advisor has marked ${hotCells.length === 1 ? 'a cell' : `${hotCells.length} cells`} on the table that are past the knock limit, with the number to type under each: ${hotCells.slice(0, 3).map((c) => `${c.load} kPa at ${c.rpm} RPM to ${Number(c.want.toFixed(1))}°`).join(', ')}${hotCells.length > 3 ? `, and ${hotCells.length - 3} more` : ''}.` : ''} This starts a few degrees under what the engine can take; the rest is found later on the dyno, a degree or two at a time, watching for knock.`
         : 'Open SPARK and start the full-throttle timing a few degrees under what you expect the engine to take: too much timing causes knock, which breaks pistons.',
       done: full.length > 0 && full.every((q) => mine('timing', q) <= theirs('timing', q) + GUIDE_TOLERANCE.spark) && !hotCells.length,
     },
@@ -205,13 +252,18 @@ export function guidedSteps({ build, tune, target, samples, advice = null }) {
     },
     {
       id: 'pull', title: steps.length ? `First full-throttle pull at ${steps[0]} psi` : 'First full-throttle pull', short: 'First full pull', go: 'dyno',
-      text: `Run one full-throttle pull${steps.length ? ` with the boost held at ${steps[0]} psi` : ''}. Then read the pull log from the top and do what it says, in its order: problems with the parts and the fuel first (a lean spot, or Correct VE from logs), then knock. Where it reports knock, take that much timing out of the cells it names, plus a couple of degrees to be safe. If it says false knock, the knock sensor is too sensitive; the timing is fine. Pull again until the log shows no lean and no knock.`,
+      text: `Run one full-throttle pull${steps.length ? ` with the boost held at ${steps[0]} psi` : ''}.${build.blowerId ? ' A supercharger\'s boost comes from its pulley, not from the computer, so this first pull already runs the full boost: the steps before it matter all the more.' : ''}${build.nitrous ? ' Leave the nitrous off (not armed) for now: it comes last, once the engine runs clean without it.' : ''} Then read the pull log from the top and do what it says, in its order: problems with the parts and the fuel first (a lean spot, or Correct VE from logs), then knock. Where it reports knock, take that much timing out of the cells it names, plus a couple of degrees to be safe. If it says false knock, the knock sensor is too sensitive; the timing is fine. Pull again until the log shows no lean and no knock.`,
       done: null,
     },
     ...(steps.length > 1 ? [{
       id: 'boost', title: 'Raise the boost a little at a time', short: 'Boost in steps', go: 'boost',
       text: `On TUNE → BOOST, raise Boost limit by gear for 4th in steps: ${steps.join(' → ')} psi. At each step run a pull and fix what the log says before going higher. If a step will not run clean, stop there: the answer is better fuel or less boost, not ever less timing. When you are done, set the limit back above your ${boostTarget} psi target.`,
       done: null,
+    }] : []),
+    ...(build.nitrous ? [{
+      id: 'nitrous', title: 'Add the nitrous last', short: 'Nitrous', go: 'nitrous',
+      text: `Only once the engine runs clean without it. Nitrous adds oxygen, so the ${build.nitrous.shotHp} hp shot burns more fuel, faster and hotter: while it sprays the engine needs less timing and ${build.nitrous.kit === 'dry' ? 'the computer must add the fuel for it' : 'its own fuel'}. On TUNE → NITROUS set Retard while spraying to at least ${wantRetard ?? 2}°${wantTrim ? ` and Fuel correction while spraying to ${wantTrim}%` : ''} (what the base map was checked with). Then arm it, make a pull, and work its log the same way.`,
+      done: wantRetard != null ? (getCal(tune.ecu, 'nitrous.retardDeg') ?? 0) >= wantRetard - 0.25 && (getCal(tune.ecu, 'nitrous.fuelTrimPct') ?? 0) >= (wantTrim ?? 0) - 0.5 : null,
     }] : []),
   ];
 }

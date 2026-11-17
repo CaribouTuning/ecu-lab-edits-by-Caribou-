@@ -11,7 +11,7 @@ import * as S from '../src/sim/index.js';
 import { makeInitialState } from '../src/ui/state/initialState.js';
 import { ACTIONS, reducer } from '../src/ui/state/reducer.js';
 import { boostSteps, safeBaseMap } from '../src/ui/state/safeBaseMap.js';
-import { buildSignature, guideStepNow, guidedSteps, offersTuneStart } from '../src/ui/state/tuneStart.js';
+import { buildChanges, buildSignature, guideStepNow, guidedSteps, offersTuneStart } from '../src/ui/state/tuneStart.js';
 import { nextStep } from '../src/ui/flow.js';
 import { pull } from './guidedPlayer.js';
 
@@ -76,7 +76,8 @@ describe('the guided base map', () => {
     const st = boltOns(preset('ls1'));
     const m = safeBaseMap(st);
     const before = guidedSteps({ build: st.build, tune: st.tune, target: m.action, samples: m.samples });
-    expect(before.map((s) => s.id)).toEqual(['injectors', 'maf', 'mixture', 'spark', 'air', 'pull']);
+    // Bolt-ons on the factory injectors: no injector step, the air meter's scaling first.
+    expect(before.map((s) => s.id)).toEqual(['maf', 'mixture', 'spark', 'air', 'pull']);
     expect(before.find((s) => s.id === 'pull').done).toBeNull();
     const loaded = reducer(st, m.action);
     const after = guidedSteps({ build: loaded.build, tune: loaded.tune, target: m.action, samples: m.samples });
@@ -114,6 +115,34 @@ describe('the guide on a turbo VQ35DE on 550 cc injectors (a player found it stu
     const step = nextStep(/** @type {any} */ ({ mode: 'sandbox', attention: [], guide: g }));
     expect(step).toMatchObject({ id: 'guide', go: 'tune:fuel' });
     expect(step.text).toMatch(/step 3 of \d+: Mixture targets/);
+  }, 300_000);
+});
+
+describe('the guide is this build\'s, not a generic one', () => {
+  const steps = (st) => { const m = safeBaseMap(st); return { m, g: guidedSteps({ build: st.build, tune: st.tune, target: m.action, samples: m.samples }) }; };
+  it('names what was changed and says why each step applies', () => {
+    let st = preset('vq35de-revup');
+    st = set(set(st, 'turboOn', true), 'boostCurve', S.RPM.map((r) => (r >= 3500 ? 6 : 0)));
+    st = set(st, 'injIdx', S.INJECTOR_OPTS.findIndex((o) => o.cc === 550));
+    expect(buildChanges(st.build).join(', ')).toMatch(/a turbo at 6 psi, no intercooler, 550 cc injectors \(factory \d+\)/);
+    const { g } = steps(st);
+    expect(g.find((x) => x.id === 'injectors').text).toMatch(/You fitted 550 cc\/min injectors where the factory ones flowed \d+/);
+    expect(g.find((x) => x.id === 'spark').text).toMatch(/no intercooler/);
+    expect(g.map((x) => x.id)).not.toContain('nitrous');
+  }, 300_000);
+  it('reads the mixture on the fuel in the tank: E85 burns completely at about 9.8, not 14.7', () => {
+    const st = set(preset('vq35de-revup'), 'octaneIdx', S.FUEL_CHOICES.findIndex((f) => f.label === 'E85'));
+    expect(buildChanges(st.build)).toContain('E85');
+    const mix = steps(st).g.find((x) => x.id === 'mixture').text;
+    expect(mix).toMatch(/on E85 about 9\.8 parts air/);
+    expect(mix).not.toMatch(/14\.7/);
+  }, 300_000);
+  it('adds the nitrous last, with the retard and fuel the base map was checked with', () => {
+    const st = set(preset('vq35de-revup'), 'nitrous', { kit: 'wet', shotHp: 75, heater: true, bottleLb: 10 });
+    const { g } = steps(st);
+    expect(g[g.length - 1].id).toBe('nitrous');
+    expect(g[g.length - 1].text).toMatch(/Retard while spraying to at least [0-9.]+°/);
+    expect(g.find((x) => x.id === 'pull').text).toMatch(/Leave the nitrous off/);
   }, 300_000);
 });
 

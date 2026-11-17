@@ -6,7 +6,7 @@ import { Check, ChevronDown, ChevronRight, Circle, Gauge, ListChecks, Wrench, X 
 import { Button } from '../primitives/Button.jsx';
 import { warm } from '../sim/warm.js';
 import { safeBaseMap } from '../state/safeBaseMap.js';
-import { buildSignature, guideStepNow, guidedSteps, offersTuneStart, publishGuideStep, useTuneStartChoice, writeTuneStart } from '../state/tuneStart.js';
+import { buildChanges, buildSignature, guideStepNow, guidedSteps, offersTuneStart, publishGuideStep, useTuneStartChoice, writeTuneStart } from '../state/tuneStart.js';
 import { useBuild, useSession, useTune } from '../state/StoreProvider.jsx';
 import styles from './TuneStart.module.css';
 
@@ -179,6 +179,7 @@ function Guide({ sig, made, build, tune, advice, page = null, onGo, onClose }) {
   const [open, setOpen] = React.useState(false);
   const steps = guidedSteps({ build, tune, target: made.action, samples: made.samples, advice: advice?.overAdvanced ? advice : null });
   const done = steps.filter((s) => s.done).length;
+  const changes = buildChanges(build);
   const now = guideStepNow(steps);
   const n = steps.indexOf(now) + 1;
   const here = now.go === page;
@@ -203,7 +204,7 @@ function Guide({ sig, made, build, tune, advice, page = null, onGo, onClose }) {
       {!open && <p className={styles.barStep}><span className={styles.clamp}>{now.text}</span></p>}
       {open && (
         <div className={styles.barBody}>
-          <p className={styles.lead}>How a tuner builds a safe first map for new parts, one step at a time. The numbers come from a map the game checked on the dyno for this engine. You type every cell yourself; a step ticks off when your cells get there and TUNE&apos;s advisor agrees.</p>
+          <p className={styles.lead}><b>This build: {changes.join(', ')}.</b> The steps below are what those parts need before the engine is pulled hard, in the order a tuner does them. The numbers come from a map the game checked on the dyno for this engine. You type every cell yourself; a step ticks off when your cells get there and TUNE&apos;s advisor agrees.</p>
           <ol className={styles.steps}>
             {steps.map((s) => (
               <li key={s.id} className={styles.step} data-done={s.done ? 'true' : 'false'} data-now={s === now ? 'true' : 'false'}>
