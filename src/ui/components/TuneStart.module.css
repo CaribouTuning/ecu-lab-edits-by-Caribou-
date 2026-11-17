@@ -80,3 +80,39 @@
 /* The safe base map's work, in the order it was done: the workflow, to read and copy. */
 .workLog { margin: 0; padding-left: 20px; font-size: var(--fs-sm); line-height: 1.5; color: var(--ink2); }
 .workLog li + li { margin-top: 2px; }
+
+/* The guide and the base map's result once chosen: one line over the page, its detail on tap. */
+.bar {
+  margin: 0 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--ink);
+}
+.bar[data-tone='ok'] { box-shadow: inset 3px 0 0 var(--ok); }
+.bar[data-tone='warn'] { box-shadow: inset 3px 0 0 var(--warn); }
+.barRow { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 4px 6px 4px 12px; }
+.barText { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); }
+.barText b { font-weight: 600; }
+.barMeta { color: var(--ink2); font-variant-numeric: tabular-nums; }
+.dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+.bar[data-tone='warn'] .dot { background: var(--warn); }
+.progress {
+  flex: none; min-width: 34px; padding: 2px 6px; border-radius: 999px;
+  background: var(--panel3); color: var(--ink); font-size: var(--fs-xs); font-weight: 600;
+  font-variant-numeric: tabular-nums; text-align: center;
+}
+.barToggle, .barClose {
+  flex: none; display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 8px;
+  border: 0; border-radius: 6px; background: transparent; color: var(--ink2);
+  font: inherit; font-size: var(--fs-xs); cursor: pointer;
+}
+.barToggle:hover, .barClose:hover { background: var(--panel3); color: var(--ink); }
+.barToggle:focus-visible, .barClose:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
+.chev { transition: transform 0.15s ease; }
+.chev[data-open='true'] { transform: rotate(180deg); }
+.barStep { margin: 0; padding: 0 12px 10px; font-size: var(--fs-xs); line-height: 1.5; color: var(--ink2); }
+/* Clamped inside the padded paragraph, so the cut falls on a line, not through one. */
+.clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.barBody { display: flex; flex-direction: column; gap: 10px; padding: 0 12px 12px; border-top: 1px solid var(--line); padding-top: 10px; }
+.step[data-now='true'] .stepName { color: var(--acc); }

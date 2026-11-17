@@ -12,7 +12,7 @@
  */
 
 import React from 'react';
-import { Check, ChevronRight, Circle, Gauge, ListChecks, Wrench } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Circle, Gauge, ListChecks, Wrench, X } from 'lucide-react';
 
 import { Button } from '../primitives/Button.jsx';
 import { warm } from '../sim/warm.js';
@@ -29,9 +29,10 @@ const MADE = new Map();
  * @param {(page: string) => void} props.onGo open a TUNE page by id, or `dyno`
  * @param {boolean} [props.force] show it whatever the browser kept (tests)
  * @param {any} [props.advice] TUNE's advisor on the tables as they stand: the guide names its cells
+ * @param {string|null} [props.page] the TUNE page open: the guide's line shows that page's step
  * @returns {React.ReactElement|null}
  */
-export function TuneStart({ onGo, force = false, advice = null }) {
+export function TuneStart({ onGo, force = false, advice = null, page = null }) {
   const [build, dispatch] = useBuild();
   const [tune] = useTune();
   const [session] = useSession();
@@ -79,9 +80,9 @@ export function TuneStart({ onGo, force = false, advice = null }) {
   if (choice === 'base' && made) return <BaseMapResult made={made} onClose={() => choose('advice')} />;
   if (choice === 'guided') {
     if (!made) {
-      return <section className={styles.card} aria-busy="true"><p className={styles.lead}>Working out the targets: checking a base map for these parts on the dyno…</p></section>;
+      return <section className={styles.bar} aria-busy="true"><div className={styles.barRow}><span className={styles.barText}>Working out the targets: checking a base map for these parts on the dyno…</span></div></section>;
     }
-    return <Guide made={made} build={build} tune={tune} advice={advice} onGo={onGo} onClose={() => choose('advice')} />;
+    return <Guide made={made} build={build} tune={tune} advice={advice} page={page} onGo={onGo} onClose={() => choose('advice')} />;
   }
   // Chosen: one line, so the safe map or the guide is still there for later.
   if (choice) {
@@ -142,51 +143,91 @@ function Entries({ items, title }) {
   );
 }
 
-/** @param {{made: import('../state/safeBaseMap.js').SafeBaseMap, onClose: () => void}} props */
+/**
+ * The safe base map's result as one line: how it ran, with the work and the parts behind
+ * Details, so the table below it is still in sight.
+ * @param {{made: import('../state/safeBaseMap.js').SafeBaseMap, onClose: () => void}} props
+ */
 function BaseMapResult({ made, onClose }) {
+  const [open, setOpen] = React.useState(!made.clean);
   return (
-    <section className={styles.card} data-testid="tune-start-result" data-tone={made.clean ? 'ok' : 'warn'}>
-      <h2 className={styles.title}>{made.clean ? 'Safe base map loaded' : 'Base map loaded: not safe to lean on yet'}</h2>
-      <p className={styles.lead}>
-        {made.clean
-          ? <>Proven on the dyno in {made.pulls} pulls, as a tuner does it, and it ran with no knock and no lean at <b>{made.peakHp} whp</b>. The timing sits under what the engine can take: the log and TUNE show where the rest is.</>
-          : <>As safe as a map can make it, at <b>{made.peakHp} whp</b>, but at what the build asks for it still {made.left.some((e) => /knock/.test(e.type)) ? 'knocks' : 'runs lean'}{made.parts.length ? ': a part is the limit' : ''}. Change what is listed before pulling hard.</>}
-      </p>
-      <ol className={styles.workLog} aria-label="What was done, in order">
-        {made.steps.map((t, i) => <li key={i}>{t}</li>)}
-      </ol>
-      <Entries title="Still in the log" items={made.left} />
-      <Entries title="Parts that limit this build" items={made.parts} />
-      <div className={styles.actions}><Button size="sm" variant="ghost" onClick={onClose}>Close</Button></div>
+    <section className={styles.bar} data-testid="tune-start-result" data-tone={made.clean ? 'ok' : 'warn'} aria-label="Safe base map">
+      <div className={styles.barRow}>
+        <span className={styles.dot} aria-hidden="true" />
+        <span className={styles.barText}>
+          <b>{made.clean ? 'Safe base map loaded' : 'Base map loaded: not safe yet'}</b>
+          <span className={styles.barMeta}> · {made.peakHp} whp · {made.pulls} pulls{made.clean ? '' : ` · ${made.parts.length ? 'a part is the limit' : 'see why'}`}</span>
+        </span>
+        <button type="button" className={styles.barToggle} aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+          Details <ChevronDown size={14} aria-hidden="true" className={styles.chev} data-open={open ? 'true' : 'false'} />
+        </button>
+        <button type="button" className={styles.barClose} aria-label="Close" onClick={onClose}><X size={14} aria-hidden="true" /></button>
+      </div>
+      {open && (
+        <div className={styles.barBody}>
+          <p className={styles.lead}>
+            {made.clean
+              ? <>Proven on the dyno as a tuner does it, with no knock and no lean. The timing sits under what the engine can take: the log and TUNE show where the rest is.</>
+              : <>As safe as a map can make it, but at what the build asks for it still {made.left.some((e) => /knock/.test(e.type)) ? 'knocks' : 'runs lean'}. Change what is listed before pulling hard.</>}
+          </p>
+          <ol className={styles.workLog} aria-label="What was done, in order">
+            {made.steps.map((t, i) => <li key={i}>{t}</li>)}
+          </ol>
+          <Entries title="Still in the log" items={made.left} />
+          <Entries title="Parts that limit this build" items={made.parts} />
+        </div>
+      )}
     </section>
   );
 }
 
 /**
- * @param {{made: import('../state/safeBaseMap.js').SafeBaseMap, build: any, tune: any, advice: any, onGo: (page: string) => void, onClose: () => void}} props
+ * The guide as one line: progress, and the step that matters on this page (the page's own
+ * step where it has one not done, else the next one to do), with a way to its page. Every
+ * step opens on All steps, so the table below stays in sight.
+ * @param {{made: import('../state/safeBaseMap.js').SafeBaseMap, build: any, tune: any, advice: any, page?: string|null, onGo: (page: string) => void, onClose: () => void}} props
  */
-function Guide({ made, build, tune, advice, onGo, onClose }) {
+function Guide({ made, build, tune, advice, page = null, onGo, onClose }) {
+  const [open, setOpen] = React.useState(false);
   const steps = guidedSteps({ build, tune, target: made.action, samples: made.samples, advice: advice?.overAdvanced ? advice : null });
   const done = steps.filter((s) => s.done).length;
   const checkable = steps.filter((s) => s.done !== null).length;
+  const now = steps.find((s) => s.go === page && s.done === false) ?? steps.find((s) => s.done === false) ?? steps.find((s) => s.done === null) ?? steps[steps.length - 1];
+  const here = now.go === page;
   return (
-    <section className={styles.card} data-testid="tune-start-guide">
-      <h2 className={styles.title}>Build the base map: {done} of {checkable} done</h2>
-      <p className={styles.lead}>The targets come from a base map the game checked on the dyno for these parts. You type every cell; each step ticks off when the cells the engine runs get there.</p>
-      <ol className={styles.steps}>
-        {steps.map((s) => (
-          <li key={s.id} className={styles.step} data-done={s.done ? 'true' : 'false'}>
-            {s.done ? <Check size={16} aria-label="Done" className={styles.stepMark} /> : <Circle size={16} aria-label={s.done === null ? 'To do' : 'Not yet'} className={styles.stepMark} />}
-            <div className={styles.stepBody}>
-              <div className={styles.stepName}>{s.title}</div>
-              <div className={styles.stepText}>{s.text}</div>
-            </div>
-            <Button size="sm" variant="ghost" onClick={() => onGo(s.go)}>{s.go === 'dyno' ? 'Open the dyno' : 'Open'}</Button>
-          </li>
-        ))}
-      </ol>
-      <Entries title="Parts that limit this build" items={made.parts} />
-      <div className={styles.actions}><Button size="sm" variant="ghost" onClick={onClose}>Close the guide</Button></div>
+    <section className={styles.bar} data-testid="tune-start-guide" aria-label="Base map guide">
+      <div className={styles.barRow}>
+        <span className={styles.progress} aria-label={`${done} of ${checkable} steps done`}>{done}/{checkable}</span>
+        <span className={styles.barText}>
+          <b>{now.short ?? now.title}</b>
+          {here && <span className={styles.barMeta}> · here</span>}
+        </span>
+        {!here && <Button size="sm" variant="ghost" onClick={() => onGo(now.go)}>{now.go === 'dyno' ? 'Dyno' : 'Go'}</Button>}
+        <button type="button" className={styles.barToggle} aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+          {open ? 'Hide' : 'All steps'} <ChevronDown size={14} aria-hidden="true" className={styles.chev} data-open={open ? 'true' : 'false'} />
+        </button>
+        <button type="button" className={styles.barClose} aria-label="Close the guide" onClick={onClose}><X size={14} aria-hidden="true" /></button>
+      </div>
+      {/* The step that matters now, in full: what to type, on the page it is typed on. */}
+      {!open && <p className={styles.barStep}><span className={styles.clamp}>{now.text}</span></p>}
+      {open && (
+        <div className={styles.barBody}>
+          <p className={styles.lead}>The targets come from a base map the game checked on the dyno for these parts. You type every cell; a step ticks off when the cells the engine runs get there, and TUNE&apos;s advisor agrees.</p>
+          <ol className={styles.steps}>
+            {steps.map((s) => (
+              <li key={s.id} className={styles.step} data-done={s.done ? 'true' : 'false'} data-now={s === now ? 'true' : 'false'}>
+                {s.done ? <Check size={16} aria-label="Done" className={styles.stepMark} /> : <Circle size={16} aria-label={s.done === null ? 'To do' : 'Not yet'} className={styles.stepMark} />}
+                <div className={styles.stepBody}>
+                  <div className={styles.stepName}>{s.title}</div>
+                  <div className={styles.stepText}>{s.text}</div>
+                </div>
+                <Button size="sm" variant="ghost" onClick={() => onGo(s.go)}>{s.go === 'dyno' ? 'Open the dyno' : 'Open'}</Button>
+              </li>
+            ))}
+          </ol>
+          <Entries title="Parts that limit this build" items={made.parts} />
+        </div>
+      )}
     </section>
   );
 }

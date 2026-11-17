@@ -43,7 +43,10 @@ describe('TuneStart', () => {
     const before = seen;
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Load a safe base map/ })); });
     await waitFor(() => expect(screen.getByTestId('tune-start-result')).toBeTruthy(), { timeout: 60_000 });
-    expect(screen.getByRole('heading', { name: 'Safe base map loaded' })).toBeTruthy();
+    expect(screen.getByText('Safe base map loaded')).toBeTruthy();
+    // One line over the page; the work is behind Details.
+    fireEvent.click(screen.getByRole('button', { name: /Details/ }));
+    expect(screen.getByRole('list', { name: 'What was done, in order' })).toBeTruthy();
     expect(seen).not.toEqual(before);
   }, 90_000);
 
@@ -52,6 +55,9 @@ describe('TuneStart', () => {
     render(<StoreProvider init={builtVq}><TuneStart force onGo={(id) => went.push(id)} /></StoreProvider>);
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Build it with the guide/ })); });
     await waitFor(() => expect(screen.getByTestId('tune-start-guide')).toBeTruthy(), { timeout: 60_000 });
+    // One line until All steps opens the rest.
+    expect(screen.queryByText('Start the spark safe')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /All steps/ }));
     expect(screen.getByText('Start the spark safe')).toBeTruthy();
     // The first step opens what still needs doing: the injectors, or (they match) the MAF scaling.
     fireEvent.click(screen.getAllByRole('button', { name: 'Open' })[0]);
