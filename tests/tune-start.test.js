@@ -130,6 +130,14 @@ describe('the guide is this build\'s, not a generic one', () => {
     expect(g.find((x) => x.id === 'spark').text).toMatch(/no intercooler/);
     expect(g.map((x) => x.id)).not.toContain('nitrous');
   }, 300_000);
+  it('opens with the boost target where a turbo is fitted at 0 psi', () => {
+    const st = set(preset('vq35de-revup'), 'turboOn', true);
+    const { g } = steps(st);
+    expect(g[0]).toMatchObject({ id: 'boost-target', go: 'build:induction', done: false });
+    expect(guideStepNow(g).id).toBe('boost-target');
+    const step = nextStep(/** @type {any} */ ({ mode: 'sandbox', attention: [], guide: { n: 1, of: g.length, title: 'Boost target', go: 'build:induction', checkable: true } }));
+    expect(step).toMatchObject({ go: 'build', label: 'Build bench' });
+  }, 300_000);
   it('reads the mixture on the fuel in the tank: E85 burns completely at about 9.8, not 14.7', () => {
     const st = set(preset('vq35de-revup'), 'octaneIdx', S.FUEL_CHOICES.findIndex((f) => f.label === 'E85'));
     expect(buildChanges(st.build)).toContain('E85');

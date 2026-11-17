@@ -1540,7 +1540,7 @@ export function EcuLabApp({ startWith = null, startShown = false } = {}) {
             </nav>
             <div className={deskApps.tuneMain}>
             {/* SANDBOX, an engine just built: how to start (a safe base map, a guide, or the advice). */}
-            {!inCareer && <div style={{ padding: '12px 16px 0' }}><TuneStart advice={calAdvice} page={tuneView} onGo={(id) => (id === 'dyno' ? changeTab('dyno') : goSection('tune', id))} /></div>}
+            {!inCareer && <div style={{ padding: '12px 16px 0' }}><TuneStart advice={calAdvice} page={tuneView} onGo={(id) => (id === 'dyno' ? changeTab('dyno') : id.startsWith('build:') ? goSection('build', id.slice(6)) : goSection('tune', id))} /></div>}
             {tuneOpen && lockedPage && (() => {
               const course = trainingFor(lockedPage);
               return (

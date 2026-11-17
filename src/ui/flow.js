@@ -77,7 +77,7 @@ export function nextStep(f) {
   // Following the guide: its step is the step, until it reaches the pulls the log then leads.
   if (f.guide?.checkable) {
     const g = f.guide;
-    return { id: 'guide', text: `Base map guide, step ${g.n} of ${g.of}: ${g.title}.`, label: g.go === 'dyno' ? 'Dyno' : 'Open it', go: g.go === 'dyno' ? 'dyno' : `tune:${g.go}` };
+    return { id: 'guide', text: `Base map guide, step ${g.n} of ${g.of}: ${g.title}.`, label: g.go === 'dyno' ? 'Dyno' : g.go.startsWith('build') ? 'Build bench' : 'Open it', go: g.go === 'dyno' ? 'dyno' : g.go.startsWith('build') ? 'build' : `tune:${g.go}` };
   }
   if (!f.heard && !f.fresh && !f.atDyno) return { id: 'hear', text: 'Start it on the stand and listen to it.', label: 'Run it', go: 'live' };
   if (!f.fresh) return { id: 'pull', text: !f.pulled ? 'Put it on the dyno and run a pull.' : f.changed === false ? 'Run the pull again to bring its curves and log back up.' : 'It has changed since the last pull. Pull it again to see what that did.', label: 'Dyno', go: 'dyno' };

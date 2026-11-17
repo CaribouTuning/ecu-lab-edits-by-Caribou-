@@ -199,6 +199,10 @@ remaining risk is the same Node major with a different libm, which is what step 
   99 SANDBOX builds 86 run clean, a median 1.9% under the guided player's tune (torque is flat
   near MBT: a realistic margin leaves a few percent, not ten); 7 are lean on maxed injectors or
   pump and 6 knock past what spark can take, and the card says not safe and names the part.
+  The guide is the build's own, never a generic list (`buildChanges`): it names what was changed
+  and lists only what those parts need (injectors where they changed, the air meter where the
+  build moved its scaling, a boost target for a turbo at 0 psi, nitrous last), each step saying why,
+  in plain words with each term explained; the mixture is read on the fuel in the tank (E85 9.8).
   The guide follows the same order, defers to the pull log for the full-throttle steps, and its
   spark and mixture steps read TUNE's advisor (`guidedSteps` `advice`), so they never disagree;
   tests/tune-guide.test.js follows it literally. It holds boost low with TUNE → BOOST's Boost

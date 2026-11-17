@@ -216,6 +216,11 @@ export function guidedSteps({ build, tune, target, samples, advice = null }) {
   // ECU is told about the parts, the targets the fuel is tuned to, safe spark, then fuel from
   // low load up, and only then full throttle, a turbo at its least boost first.
   return [
+    ...(build.turboOn && boostTarget <= 0 ? [{
+      id: 'boost-target', title: 'Give the turbo a boost target', short: 'Boost target', go: 'build:induction',
+      text: 'The turbo is set to make 0 psi of boost, so it only gets in the way of the exhaust: the engine makes less power than it did without it. On BUILD → INDUCTION, set the Boost Target Curve; 6–8 psi is a common first step on pump fuel. A new boost is a new build, so the way into the tune is offered again for it.',
+      done: false,
+    }] : []),
     ...(injStep ? [{
       id: 'injectors', title: 'Tell the computer which injectors are fitted', short: 'Injector size', go: 'injectors',
       text: `Open INJECTORS and set ECU Injector Scaling to ${fittedCc}. ${factoryCc && factoryCc !== fittedCc ? `You fitted ${fittedCc} cc/min injectors where the factory ones flowed ${factoryCc}: they are the nozzles that spray the fuel, and each now sprays ${Math.round((fittedCc / factoryCc - 1) * 100)}% more in the same time.` : `The engine has ${fittedCc} cc/min injectors (the nozzles that spray the fuel), but the computer is set for ${build.ecuInjectorCc}.`} The engine's computer (the ECU) works out how long to hold them open from their size: told the wrong size, every spray is wrong and the engine runs ${build.ecuInjectorCc != null && build.ecuInjectorCc < fittedCc ? 'rich (too much fuel), which wastes power and can hide knock' : build.ecuInjectorCc != null && build.ecuInjectorCc > fittedCc ? 'lean (too little fuel), the dangerous way' : 'rich or lean whatever the tables say'}.`,
@@ -233,7 +238,7 @@ export function guidedSteps({ build, tune, target, samples, advice = null }) {
         const wants = [naAfr && naAfr < stoich * 0.95 ? `full throttle about ${naAfr.toFixed(1)}` : null, boosted && boostAfr ? `full boost about ${boostAfr.toFixed(1)}` : null].filter(Boolean).join(' and ');
         const why = boosted ? `Boost packs more air into each cylinder, so it gets hotter: the extra fuel cools it and holds knock off, so${noCooler ? ' with no intercooler (hotter air still)' : ''} the boost rows run richer than full throttle without boost.` : 'Under load the extra fuel cools the cylinder and protects the engine.';
         const done = full.length > 0 && full.every((q) => mine('afr', q) <= theirs('afr', q) + GUIDE_TOLERANCE.afr) && !leanCells.length;
-        if (done) return `${what} For this build ${wants || 'the full-throttle cells'} is safe, and your table is already there: nothing to change. ${why}`;
+        if (done) return `${what} ${wants ? `This build wants ${wants}` : 'This build wants the full-throttle cells richer than cruise'}, and your table is already there: nothing to change. ${why}`;
         return `${what} Leave the cruise cells at ${stoich.toFixed(1)}${wants ? ` and make ${wants}` : ', and keep the full-throttle cells no higher than they are'}. ${why} Richer is the safe side for a first run; leaner is how engines get hurt. This comes before the airflow, because the airflow is tuned to hit these numbers.${leanCells.length ? ` The advisor has marked ${leanCells.length === 1 ? 'a cell' : `${leanCells.length} cells`} on the table that are leaner than safe, with the number to type under each: ${leanCells.slice(0, 3).map((c) => `${sparkAx.load[c.ri] ?? c.map} kPa at ${c.rpm} RPM to ${c.suggested}`).join(', ')}.` : ''}`;
       })(),
       done: full.length > 0 && full.every((q) => mine('afr', q) <= theirs('afr', q) + GUIDE_TOLERANCE.afr) && !leanCells.length,
