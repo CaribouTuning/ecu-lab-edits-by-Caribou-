@@ -241,10 +241,13 @@ export function veCorrections(samples, axes) {
   const rows = axes?.load ?? LOAD;
   const cols = axes?.rpm ?? RPM;
   const acc = rows.map(() => cols.map(() => ({ weight: 0, samples: 0, ratio: 0, lambdaRatio: 0, trim: 0, maf: 0, rescale: 0 })));
+  /** Cells some sample is blended from at all, however little. */
+  const touched = new Set();
   for (const s of samples) {
     for (const [ri, wr] of bracket(rows, s.mapKpa)) {
       for (const [ci, wc] of bracket(cols, s.rpm)) {
         const w = wr * wc;
+        if (w > 1e-9) touched.add(ri * cols.length + ci);
         if (w < MIN_SHARE) continue;
         const a = acc[ri][ci];
         a.weight += w;
@@ -262,9 +265,10 @@ export function veCorrections(samples, axes) {
     for (const k of keys) out[k] = /** @type {any} */ (a)[k] / a.weight;
     return /** @type {VeCell} */ (out);
   }));
-  // Columns past the fastest a log reached (past the redline) carry on the last logged column's
-  // correction, as a tuner carries the trend on: the ECU blends them into the speeds just below,
-  // so held still they left a miss there that a hand edit and the next correction fought over.
+  // A column past the fastest a log reached (past the redline) that the ECU still blends into the
+  // logged speeds carries on the last logged column's correction, as a tuner carries the trend on:
+  // held still, it left a miss there that a hand edit and the next correction fought over. Cells
+  // no logged point reads at all are left alone: the log says nothing about them.
   const maxRpm = samples.reduce((m, s) => Math.max(m, s.rpm), -Infinity);
   /** @type {Map<number, number>} */
   const tie = new Map();
@@ -272,7 +276,7 @@ export function veCorrections(samples, axes) {
     let last = -1;
     cols.forEach((c, ci) => { if (c <= maxRpm && cell[ri][ci]) last = ci; });
     if (last < 0) return;
-    cols.forEach((c, ci) => { if (ci > last && c > maxRpm && !cell[ri][ci]) tie.set(ri * cols.length + ci, ri * cols.length + last); });
+    cols.forEach((c, ci) => { if (ci > last && c > maxRpm && !cell[ri][ci] && touched.has(ri * cols.length + ci)) tie.set(ri * cols.length + ci, ri * cols.length + last); });
   });
   const fitted = fitRatios(samples, rows, cols, cell, tie);
   for (const [ri, ci, r] of fitted) /** @type {any} */ (cell[ri][ci]).ratio = r;
