@@ -214,13 +214,16 @@ remaining risk is the same Node major with a different libm, which is what step 
   limit by gear (4th is the dyno's), not by editing the build, which would reset the choice.
 - **Advice must settle: type the number shown and the next look asks for nothing more**
   (tests/advice-settles.test.js; the scratchpad audit `followmarks` types every mark on all
-  112 SANDBOX builds). A pull point between breakpoints reads a blend of four cells, so a cell's
-  advice comes from the knock limit the pull met where the cell is in force, never from "this
-  cell plus the blend's margin" (that charged a point's whole knock to each cell in turn and
-  chased one cell 4.5, -2.5, -4). Spark advice is in whole degrees, rounded down. A knocking cell
-  already at its number is done (`atSuggestion`); one no spark can save stays listed
-  (`sparkCannotFix`). The pull log's spark-short entry uses the same rule. Mixture advice is the
-  value that delivers the target at that point, and none where the injectors are maxed.
+  112 SANDBOX builds, then corrects the VE). A pull point between breakpoints reads a blend of
+  four cells. A cell the pull knocked on comes down to the least knock limit of the points it is
+  in force at, in the table's own terms (limit + blend - fired spark + the drop once the
+  fuelling hits the AFR table): never "this cell plus the blend's margin", which charged a point's
+  whole knock to each cell in turn and chased one cell 4.5, -2.5, -4. A clean cell gains timing
+  by main's margin rule (stock tables stay clean), capped under a nitrous spray. Whole degrees,
+  rounded down. A knocking cell at its number is done (`atSuggestion`); one no spark can save
+  stays listed (`sparkCannotFix`). Mixture advice: none where the injectors are maxed. Tried and
+  dropped: flagging a clean cell past its own home limit (it flagged factory boost tables) and an
+  "inside the margin" verdict (it marked cells the pull log called clean).
 - **Tests that play the game do what the app offers.** Correct VE from logs reads the last pull
   only (EcuLab.jsx `veLog`), so `tests/guidedPlayer.js` corrects from one pull at a time, lightest
   throttle first; pooling throttles into one fit split the difference on a boosted engine and
