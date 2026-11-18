@@ -37,7 +37,7 @@ describe('the engine missing its AFR table', () => {
     }
     const knock = pull.events.find((e) => e.type === 'knock');
     if (knock && /less fuel than the table asks for/.test(knock.cause)) {
-      expect(knock.fix).toMatch(/^Fuel first: the AFR table is right/);
+      expect(knock.fix).toMatch(/^Fuel first: the engine is not getting the mixture the AFR table asks for/);
       expect(knock.fix).not.toMatch(/richen the AFR target/);
     }
   });

@@ -225,6 +225,22 @@ const realKnock = (q) => Math.max(0, (q.knockPull ?? 0) - (q.knockFalse ?? 0));
 /** Knock retard a point must show before the check treats it as knock, degrees. */
 const KNOCK_SEEN_DEG = 0.2;
 
+/**
+ * What a pull that is not clean still does, in the words of its log, for the step that stops the
+ * boost there: the first of knock, a lean mixture, exhaust heat the engine computer is fuelling
+ * against, a mixture the fuelling cannot follow, as the log names them.
+ * @param {any} p
+ * @returns {string}
+ */
+function stillUnsafe(p) {
+  const has = (...t) => p.events.some((e) => t.includes(e.type));
+  if (p.points.some((q) => realKnock(q) > KNOCK_SEEN_DEG) || has('knock', 'unheardknock', 'knockprot')) return 'knocks with the spark as low as the map can take it';
+  if (has('lean', 'leanprot')) return 'runs lean where the map has nothing left to add';
+  if (has('egtprot')) return 'runs its exhaust hot enough that the engine computer adds fuel to protect it';
+  if (has('missedmix')) return 'misses the mixture the map asks for, where the fuel system cannot follow it';
+  return 'logs what the map cannot take out';
+}
+
 /** Whether a pull is safe to make again: no knock, and no lean the map could have fixed. */
 const isClean = (p) => !p.points.some((q) => realKnock(q) > KNOCK_SEEN_DEG)
   && !p.events.some((e) => UNSAFE.has(e.type) && !(e.type !== 'knock' && p.points.some((q) => q.fuelLimited)));
@@ -359,7 +375,7 @@ export function safeBaseMap(state) {
     }
     // Still knocking (or lean) with nothing left a map can take out: a tuner stops raising the
     // boost here and says why; better fuel or less boost is the build's, not the map's.
-    steps.push(`${where}: ${what ? `${what}, and ` : ''}it still ${p.points.some((q) => realKnock(q) > KNOCK_SEEN_DEG) ? 'knocks with the spark as low as the map can take it' : 'runs lean where the map has nothing left to add'}. ${psi != null ? (cleanAt != null ? `Boost raised no further: the highest step it ran clean was ${cleanAt} psi.` : 'Boost raised no further.') : ''}`.trim());
+    steps.push(`${where}: ${what ? `${what}, and ` : ''}it still ${stillUnsafe(p)}. ${psi != null ? (cleanAt != null ? `Boost raised no further: the highest step it ran clean was ${cleanAt} psi.` : 'Boost raised no further.') : ''}`.trim());
     break;
   }
 

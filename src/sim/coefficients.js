@@ -306,6 +306,14 @@ export const COEFF = {
   OCTANE_K_REF_PA: 15e5,
   OCTANE_K_MIN: -1.5,
   OCTANE_K_MAX: 1,
+  // K rises with engine speed. Kalghatgi found it so in every engine he measured, from 1500 to
+  // 3500 RPM and on to slightly positive at 6000 (SAE 2005-01-0239 and his review of 37
+  // engines); Mittal and Heywood (SAE 2008-01-2414) found engine speed one of the three things
+  // K depends on most. The modelling convention built on those measurements, K -0.5, 0 and +0.5
+  // at 1000, 3500 and 6000 RPM, is a rise of 0.2 per 1000 RPM, taken here on top of the
+  // temperature placement above, zero at 3500.
+  OCTANE_K_PER_RPM: 0.0002,
+  OCTANE_K_RPM_REF: 3500,
   KNOCK_DE_A: 17.68,
   KNOCK_DE_B: 3.402,
   KNOCK_DE_N: 1.7,

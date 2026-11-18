@@ -56,6 +56,14 @@ export function round(st) {
       // The log says the heat is the shot's own: a tuner steps the jet down.
       st = setBuild(st, { nitrous: { ...st.build.nitrous, shotHp: st.build.nitrous.shotHp - 25 } }); did.push(`shot down to ${st.build.nitrous.shotHp} hp`);
     }
+    else if (e.type === 'torquelimit' && /raise Crank torque limit by RPM on TUNE → TORQUE/.test(fix) && !did.some((x) => x.startsWith('torque limit'))
+      && (st.build.octaneIdx !== S.presetById(st.build.originPresetId ?? st.build.presetId ?? '')?.parts.octaneIdx
+        || JSON.stringify(st.build.boostCurve) !== JSON.stringify(st.build.factoryInduction?.boostCurve ?? st.build.boostCurve))) {
+      // The note is the engine computer's own limit, not a fault: a player who asked for more
+      // than the factory (boost, fuel) raises it, as the note says, a step at a time.
+      const t = S.getCal(st.tune.ecu, 'torque.limitByRpm');
+      st = setCal(st, 'torque.limitByRpm', { ...t, z: t.z.map((v) => Math.round(v * 1.2)) }); did.push('torque limit +20%');
+    }
     else if (e.type === 'falseknock') {
       const t = S.getCal(st.tune.ecu, 'ignition.knockThreshold'); st = setCal(st, 'ignition.knockThreshold', { ...t, z: t.z.map((v) => v * 1.1) }); did.push('knock threshold +10%');
     }

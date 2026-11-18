@@ -773,15 +773,7 @@ export function factoryCalibration(preset, layout = null) {
   // torque limit, trimming boost as BMW's and VW's do: the rated torque, and above the plateau the
   // rated power at each speed. The hardware could make more (docs/realism.md); raising the limit is
   // part of tuning it, as it is on the real cars.
-  if (preset.factory?.torqueCapped) {
-    const tqNm = preset.factory.crankTq * NM_PER_LBFT;
-    const watts = preset.factory.crankHp * HP_TO_W;
-    ecu.torque = {
-      ...ecu.torque,
-      method: 'boost',
-      limitByRpm: { ...ecu.torque.limitByRpm, z: ecu.torque.limitByRpm.x.map((r) => Math.round(Math.min(tqNm, watts / ((2 * Math.PI * r) / 60)))) },
-    };
-  }
+  ecu.torque = factoryTorqueLimit(preset, ecu.torque);
   const veAt = scheduledVeAt(preset.engine, preset.mods, hw, schedule ? ecu.vvt : null);
   const camAt = schedule ? intakeCamAt(preset.engine, ecu.vvt) : null;
 
@@ -1018,6 +1010,27 @@ export function factoryCalibration(preset, layout = null) {
     return factoryCalibration({ ...preset, induction: { ...preset.induction, boost } }, layout);
   }
   return { ve, timing, afr, mafScalar, layout: L, ecu, boost };
+}
+
+/**
+ * The engine computer's torque limit as the factory engine left with it: on one rated as a
+ * torque plateau (`factory.torqueCapped`), the rated torque, and above the plateau the rated
+ * power at each speed, held by trimming boost; otherwise the limit as given. The factory
+ * calibration writes it and TUNE's pages compare against it, so the two are one rule.
+ * @param {{factory?: {torqueCapped?: boolean, crankTq?: number, crankHp?: number}}|null|undefined} preset
+ * @param {any} torque the engine computer's default torque section
+ * @returns {any}
+ */
+export function factoryTorqueLimit(preset, torque) {
+  const f = preset?.factory;
+  if (!f?.torqueCapped || !torque?.limitByRpm || !f.crankTq || !f.crankHp) return torque;
+  const tqNm = f.crankTq * NM_PER_LBFT;
+  const watts = f.crankHp * HP_TO_W;
+  return {
+    ...torque,
+    method: 'boost',
+    limitByRpm: { ...torque.limitByRpm, z: torque.limitByRpm.x.map((r) => Math.round(Math.min(tqNm, watts / ((2 * Math.PI * r) / 60)))) },
+  };
 }
 
 /**

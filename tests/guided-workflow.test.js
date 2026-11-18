@@ -82,10 +82,14 @@ describe('SANDBOX: any engine, changed any way that makes sense, tunes clean and
   // One of each kind of fix the matrix met (scratch matrix: 13 engines × 9 changes): each a
   // dead end once, each finished now by following the log and TUNE.
   const stock = (st) => pull(st).peakHp;
-  it('more boost on a direct-injected turbo four: knock low down that no spark fixes, answered by the boost there', () => {
+  it('more boost on a direct-injected turbo four: the factory torque limit raised as its note says, then tuned clean', () => {
+    // VW's computer holds the GTI to its rated torque by trimming boost (presets.js
+    // factoryTorqueLimit), so asking for 4 psi more makes nothing until the limit goes up, as
+    // on the real car; the log's note says so. (On the knock model anchored to real
+    // calibrations, the spark table answers what knock the extra boost brings.)
     const base = preset('ea888-gti');
     const r = finish(build(base, 'boostCurve', base.build.boostCurve.map((b) => (b > 0 ? b + 4 : b))));
-    expect(r.path.some((s) => s.startsWith('boost -1.5 psi')), r.path.join(' | ')).toBe(true);
+    expect(r.path.some((s) => s.startsWith('torque limit')), r.path.join(' | ')).toBe(true);
     expect(r.left, r.path.join(' | ')).toEqual([]);
     expect(r.hp).toBeGreaterThan(stock(base) * 1.1);
   }, 300_000);

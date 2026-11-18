@@ -202,12 +202,18 @@ describe('the safe base map follows a tuner\'s order of work', () => {
   }, 300_000);
 
   it('stops raising the boost at a step no map can make clean, and says the last clean one', () => {
-    const st0 = preset('b58-m0');
-    const st = set(st0, 'boostCurve', st0.build.boostCurve.map((b) => (b > 0 ? b + 4 : b)));
+    // A 12.5:1 VQ35HR at 12 psi with no intercooler on 87: past 9 psi its charge runs hot enough
+    // that no map holds it clean. (A factory turbo engine is no test of this: its own torque
+    // limit trims the boost back, as a B58's does at +4 psi.)
+    let st = preset('vq35hr');
+    st = reducer(st, { type: ACTIONS.SET_ENGINE_CONFIG_PATCH, patch: { compression: 12.5 } });
+    st = set(set(set(st, 'turboOn', true), 'compressorIdx', 2), 'boostCurve', [0, 4, 12, 12, 12, 12, 12, 12]);
+    st = set(set(st, 'octaneIdx', S.FUEL_CHOICES.findIndex((f) => f.label === '87')), 'injIdx', S.INJECTOR_OPTS.length - 1);
     const m = safeBaseMap(st);
     expect(m.clean).toBe(false);
     const last = m.steps[m.steps.length - 1];
-    expect(last).toMatch(/knocks with the spark as low as the map can take it/);
+    expect(last).toMatch(/it still (knocks with the spark as low as the map can take it|runs lean where|runs its exhaust hot enough|misses the mixture)/);
+    expect(m.cleanAt).toBeGreaterThan(0);
     expect(last).toMatch(new RegExp(`highest step it ran clean was ${m.cleanAt} psi`));
   }, 300_000);
 });

@@ -51,6 +51,18 @@ breathing turns on it, so this is not yet evidence against the physics.
   calibration sits at the physics' knock limit, the trucks run knock-free on 87, and an intercooled
   LS1 on 93 gets 18–21° at 7 psi. The game's factory spark is now within about 1° of GM's on the LS6
   below 4000 rpm.
+- **Kalghatgi's K rises with engine speed** (`OCTANE_K_PER_RPM`). The knock limit climbed about 6° per
+  1000 rpm (the LS6 on 91 from 19° at 1600 rpm to 44° at 5600), steeper than real engines: a knock
+  constant fitted to GM at low speed left high speed lenient, and the one fitted to the 6.4 Hemi at high
+  speed (ECU Lab Pro) left low speed cautious. Part of the cause was physical: the model placed K (where a
+  fuel's effective octane sits between its RON and MON) from charge temperature alone, where Kalghatgi
+  found it rising with speed in every engine he measured (SAE 2005-01-0239; slightly positive at
+  6000 rpm), and Mittal and Heywood found speed one of the three things K depends on most (SAE
+  2008-01-2414). Added at 0.2 per 1000 rpm, zero at 3500, the modelling convention built on those
+  measurements (K −0.5, 0 and +0.5 at 1000, 3500 and 6000 rpm). The GM fit holds at `KNOCK_TAU_SCALE`
+  2.5 (the LS6's limit 1.1° above GM's most advanced cell), the slope falls by about a third (LS6 38.5°
+  at 5600 rpm, B58 24° at 6400 where it was 28°), and the boosted LS1 reads 18°, 20.5° and 24° at
+  7 psi (3200, 4000, 4800 rpm) and 17.6° at 10 psi.
 - **87 AKI regular** is offered, and the LM7, LQ4 and LR4 run on it, as GM calibrated them.
 - **Engine-computer torque caps** on the factory turbo engines (N54, B58, EA888), at the rated torque
   or the rated power's torque, whichever is less: the flat plateaus BMW and VW enforce. The pull log
@@ -104,6 +116,16 @@ breathing turns on it, so this is not yet evidence against the physics.
 - **GM truck torque**: with GM's own spark and the bench head flow, the LM7 reads 9% over its torque
   rating, the LQ4 5% and the LR4 15%, peaking 600–800 rpm before the published 4000. Stock LM7 trucks
   measured 253–295 lb-ft at the wheels; no stock LR4 curve was found (tests/presets.test.js, `KNOWN_GAPS`).
+- **High-rpm knock limit.** Still above what tuners report: LS tuners on 93 say past about 26–28° at
+  full throttle only knocks ([LS1Tech](https://ls1tech.com/forums/dynamometer-results-comparisons/282225-how-much-timing-you-seeing-wot-tuned.html)),
+  where the LS6's limit on 91 reads 38.5° at 5600 rpm; a stock B58 logs about 17.5° at 6500 rpm and
+  10.5 psi ([Bimmerpost B58 log thread](https://f30.bimmerpost.com/forums/showthread/1648722/b58-log-review-thread)),
+  where the B58's limit reads 24°. Neither is a measured knock limit (a tuner stops at best power, BMW's
+  stock timing carries its own margin), and the measured knock-limit-against-speed curves are in paywalled
+  papers. Best-power timing (about 30–31° up top) caps what a table can usefully hold, so the leniency
+  mostly cannot reach a tune.
+- **LR4 on 87**: the physics puts its knock limit up to 5° under GM's most advanced LR4 cell, where the LM7,
+  the same engine with 9 mm more stroke, has 3.5° in hand.
 - **Low-speed part load.** At 1000–2000 rpm and mid load, GM runs 3–5° under the game's spark on every
   LS family, more toward idle. Whether that is emissions and drivability strategy (retard for NOx, tip-in
   feel) or the physics' best-power timing running early at low speed, the data cannot say; nothing was

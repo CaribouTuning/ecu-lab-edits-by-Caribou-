@@ -25,7 +25,7 @@ import {
   GAME_LAYOUT, kpaForLoad, layoutById, loadForKpa, needsAirmass, readEcuTable, sameAxes, truthReader,
 } from './layouts.js';
 import {
-  IDLE_COLUMN_MAX_RPM, interpolationRoomDeg, OPEN_LOOP_KPA, REACHABLE_SLACK_KPA, SPARK_MAX_DEG, SPARK_MIN_DEG,
+  IDLE_COLUMN_MAX_RPM, INTERP_SAMPLE_FRACTIONS, interpolationRoomDeg, OPEN_LOOP_KPA, REACHABLE_SLACK_KPA, SPARK_MAX_DEG, SPARK_MIN_DEG,
 } from './tables.js';
 
 /**
@@ -608,7 +608,7 @@ export function calibrationAdvice({
         Math.floor(Math.min(knockCeiling, mbt) + 1e-9), SPARK_MIN_DEG, SPARK_MAX_DEG,
       );
       spark.push({
-        ri, ci, rpm, map: Number(rowKpa.toFixed(1)), load: rowLoad, bracketOnly, current: timing[ri][ci], suggested: safeTiming,
+        ri, ci, rpm, map: Number(rowKpa.toFixed(1)), gradeKpa, load: rowLoad, bracketOnly, current: timing[ri][ci], suggested: safeTiming,
         delta: Number((safeTiming - timing[ri][ci]).toFixed(1)), knocking: pt.knock,
         mbt: Number(mbt.toFixed(1)), knockCeiling: Number(knockCeiling.toFixed(1)),
         // Which ceiling bound the suggestion. Useful on its own, but it says nothing
@@ -752,6 +752,49 @@ export function calibrationAdvice({
       }
     }
   });
+
+  // AND BETWEEN ITS COLUMNS. The ECU blends the two speed columns either side too, and the
+  // knock limit is not a straight line in speed either: at low speed and high boost it bends
+  // under the line between two columns' limits (a 10.3:1 V6 at 22 psi on 91, read past its
+  // 200 kPa row: -4.6 deg at 1500 RPM, 1.8 at 2500, -3 at 1900, where the blend gave -2.6).
+  // With a pull, its own points between the columns judge it (judgeAgainstPull); without
+  // one, the blend of the two suggestions is held under the limit at three speeds across the
+  // gap, at the pressure each cell is graded at (past the top row, the boost the engine reaches
+  // there, which that row carries), the excess out of the cell carrying more. Only
+  // the full-load rows, where knock is, and not the idle columns.
+  if (!pull) {
+    T.load.forEach((_, ri) => {
+      for (let ci = 1; ci < T.rpm.length; ci += 1) {
+        const L = byCell.get(`${ri}|${ci - 1}`); const Rc = byCell.get(`${ri}|${ci}`);
+        if (!L || !Rc || (L.unbounded && Rc.unbounded)) continue;
+        if (L.rpm <= IDLE_COLUMN_MAX_RPM || L.map < OPEN_LOOP_KPA || Rc.map < OPEN_LOOP_KPA) continue;
+        for (const [key, vOf] of /** @type {const} */ ([['suggested', (c) => c.suggested], ['knockCeiling', (c) => c.current]])) {
+          for (const f of INTERP_SAMPLE_FRACTIONS) {
+            const room = ceilingAt(L.rpm + f * (Rc.rpm - L.rpm), L.gradeKpa + f * (Rc.gradeKpa - L.gradeKpa)) - KNOCK_SAFETY_DEG;
+            const vL = vOf(L); const vR = vOf(Rc);
+            if ((1 - f) * vL + f * vR <= room + 1e-9) continue;
+            // The excess out of the cell carrying more, as far as the table's least spark.
+            const hi = vR >= vL ? Rc : L; const w = hi === Rc ? f : 1 - f; const other = hi === Rc ? vL : vR;
+            const cap = (room - (1 - w) * other) / w;
+            if (key === 'suggested') {
+              hi.suggested = clamp(Math.floor(cap + 1e-9), SPARK_MIN_DEG, SPARK_MAX_DEG);
+              hi.delta = Number((hi.suggested - hi.current).toFixed(1));
+              hi.interpolationLimited = true;
+              if (cap < SPARK_MIN_DEG) {
+                const lo = hi === Rc ? L : Rc;
+                const capLo = (room - w * SPARK_MIN_DEG) / (1 - w);
+                if (capLo < lo.suggested) { lo.suggested = clamp(Math.floor(capLo + 1e-9), SPARK_MIN_DEG, SPARK_MAX_DEG); lo.delta = Number((lo.suggested - lo.current).toFixed(1)); lo.interpolationLimited = true; }
+              }
+            } else {
+              // Judged against the table as it stands: the cell carrying more is past the limit
+              // the blend allows it.
+              hi.knockCeiling = Math.min(hi.knockCeiling, Number(cap.toFixed(1)));
+            }
+          }
+        }
+      }
+    });
+  }
 
   // Past the knock limit is a damage risk. Past MBT is only wasted effort. Reporting
   // them as one category would either cry wolf about a safe cruise cell or say nothing
@@ -907,7 +950,7 @@ export function afrTargetVerdict({ value, kpa, direct }) {
  * cells can all be set to their numbers at once, and the number does not depend on what the
  * cell holds now.
  *
- * Where a point that KNOCKED sits between two load rows, the limit is not the same number for
+ * Where a point sits between two load rows, the limit is not the same number for
  * both: the knock limit falls with pressure (COEFF.KNOCK_LIMIT_DEG_PER_PSI), so each row's cell
  * is held to the limit carried to its own row's pressure, the higher-boost row lower and the
  * row under it higher, and their blend at the point is still exactly the measured limit. A
@@ -971,9 +1014,10 @@ export function pullCellLimits(points, timing, inForce) {
  */
 function splitByRow(p, all, wSum, limitHere) {
   const same = () => limitHere;
-  // Only a point that knocked, read between rows whose pressures it sits between (not clamped
-  // past the table's last row, where the row's own pressure is not the point's).
-  if (!(p.margin < 0) || all.some((c) => !Number.isFinite(c.rowKpa))) return same;
+  // Every point read between rows whose pressures it sits between (not clamped past the
+  // table's last row, where the row's own pressure is not the point's), knocking or not: the
+  // numbers then come from the measurement alone, so typing one cell does not move another's.
+  if (all.some((c) => !Number.isFinite(c.rowKpa))) return same;
   const rows = new Set(all.map((c) => c.rowKpa));
   const mean = all.reduce((a, c) => a + c.w * /** @type {number} */ (c.rowKpa), 0) / wSum;
   if (rows.size < 2 || Math.abs(mean - p.map) > 1) return same;

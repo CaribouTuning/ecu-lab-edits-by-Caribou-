@@ -1288,8 +1288,9 @@ describe('the DYNO page switcher', () => {
       </StoreProvider>,
     );
     fireEvent.click(screen.getByRole('button', { name: /^Sandbox/ }));
-    // A stock pull logs nothing; 10° of extra spark everywhere makes it knock.
-    const timing = makeInitialState().tune.timing.map((row) => row.map((v) => v + 10));
+    // A stock pull logs nothing; 15° of extra spark everywhere makes it knock (the default V6
+    // on 91 runs best-power timing with 10-15° to its knock limit at full throttle).
+    const timing = makeInitialState().tune.timing.map((row) => row.map((v) => v + 15));
     act(() => dispatch({ type: ACTIONS.SET_TABLE, table: 'timing', value: timing }));
     goTo('DYNO');
     fireEvent.click(screen.getByRole('button', { name: 'Run a pull' }));

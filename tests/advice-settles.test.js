@@ -44,7 +44,7 @@ const withCell = (st, table, ri, ci, v) => {
 };
 
 describe('following the advice settles', () => {
-  it('a marked cell keeps its number when typed, or typed lower, and drops off the list', () => {
+  it('a marked cell keeps its number when typed, is never asked for more when typed lower, and drops off the list', () => {
     const { st } = turboRevUp(5, 550);
     const a0 = advice(st, pull(st));
     const marked = a0.overAdvanced.find((c) => !c.beyondReach && c.knockingOnPull);
@@ -53,7 +53,12 @@ describe('following the advice settles', () => {
     for (const typed of [marked.suggested, marked.suggested - 0.49, marked.suggested - 3]) {
       const a1 = advice(withCell(st, 'timing', marked.ri, marked.ci, typed), pull(withCell(st, 'timing', marked.ri, marked.ci, typed)));
       const again = a1.spark.find((c) => c.ri === marked.ri && c.ci === marked.ci);
-      expect(again.suggested, `typed ${typed}`).toBe(marked.suggested);
+      // Typed at its number, the number stays. Typed lower, the cell is done: never asked for
+      // more retard, never marked again. (Its row partner is held by the knock limit carried to
+      // its own row, not to this one's, so taking more out here can leave the point clean, and
+      // a clean cell's number is what the pull measured room for, if it ran the cell's row.)
+      if (typed === marked.suggested) expect(again.suggested, `typed ${typed}`).toBe(marked.suggested);
+      expect(again.suggested, `typed ${typed}`).toBeGreaterThanOrEqual(typed);
       expect(a1.overAdvanced.some((c) => c.ri === marked.ri && c.ci === marked.ci), `typed ${typed}`).toBe(false);
     }
   }, 300_000);

@@ -14,7 +14,7 @@ import { AlertTriangle, ChevronDown, RotateCcw } from 'lucide-react';
 import React from 'react';
 
 import {
-  ECU_META, GAME_LAYOUT, defaultEcuCalibration, deriveEngine, ecuHardwareOf, engineLayout, fitsGameGrid, getCal, peakMapKpaOf, setCal, setupMismatches,
+  ECU_META, GAME_LAYOUT, defaultEcuCalibration, deriveEngine, ecuHardwareOf, engineLayout, factoryTorqueLimit, fitsGameGrid, getCal, peakMapKpaOf, presetById, setCal, setupMismatches,
 } from '../../../sim/index.js';
 import { Eyebrow } from '../../primitives/Eyebrow.jsx';
 import { Info } from '../../primitives/Info.jsx';
@@ -63,7 +63,11 @@ export function EcuSection({ section, title, icon, intro, liveVars = null, embed
     const redline = build.engineConfig.redline ?? 7000;
     const peakMapKpa = peakMapKpaOf({ turboOn: !!f?.turboOn, boostCurve: f?.boostCurve ?? [] });
     const stock = fitsGameGrid({ redline, peakMapKpa }) ? GAME_LAYOUT : engineLayout({ redline, peakMapKpa });
-    return defaultEcuCalibration({ derived: deriveEngine(build.engineConfig), gate: ecuHardwareOf(build).gate, axes: stock.timing });
+    const d = defaultEcuCalibration({ derived: deriveEngine(build.engineConfig), gate: ecuHardwareOf(build).gate, axes: stock.timing });
+    // A factory turbo engine rated as a torque plateau left the factory with its torque limit
+    // set (presets.js factoryTorqueLimit): that is its factory setting, not a change.
+    const origin = presetById(build.originPresetId ?? build.presetId ?? '');
+    return origin ? { ...d, torque: factoryTorqueLimit(origin, d.torque) } : d;
   }, [build]);
   // A field for one kind of nitrous kit only (a dry kit's fuel) is not offered on the
   // other: on a wet kit it does nothing, and a tuner reaching for it is chasing nothing.
