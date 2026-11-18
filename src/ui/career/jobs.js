@@ -194,10 +194,13 @@ export const JOBS = [
   {
     id: 'turbo-kit', tier: 2,
     customer: { name: 'Sam', car: '3.5 V6 turbo project', color: 'purple', body: 'coupe' },
-    says: 'Bolted a turbo kit on: 8 psi, intercooler, bigger injectors. The kit said the ECU would “adapt”. It pulls hard, then it rattles and goes flat.',
+    says: 'Bolted a turbo kit on: 9 psi, intercooler, bigger injectors. The kit said the ECU would “adapt”. It pulls hard, then it rattles and goes flat.',
     wants: 'I want to use the boost, but I don’t want to blow it up.',
     work: ['Turbo kit already fitted, injectors already scaled', 'Tune for boost on the dyno'],
-    car: { preset: null, build: (b) => ({ turboOn: true, boostCurve: [0, 0, 3, 6, 8, 8, 8, 7], injIdx: 2, ecuInjectorCc: 550, octaneIdx: 1, mods: { ...b.mods, intercooler: true } }) },
+    // On 91, as most kit cars are run: with the knock model anchored to real calibrations, the
+    // naturally aspirated timing through an intercooler is safe on 93 at 8 psi; at 9 psi on 91 it
+    // knocks by about 1.5 degrees, the rattle Sam hears, which fuel alone does not take out.
+    car: { preset: null, build: (b) => ({ turboOn: true, boostCurve: [0, 0, 4, 7, 9, 9, 9, 8], injIdx: 2, ecuInjectorCc: 550, octaneIdx: 0, mods: { ...b.mods, intercooler: true } }) },
     needs: { training: ['spark'] }, minRep: 45, pay: 1600, rep: 14,
     checks: [
       { type: 'events', kind: 'complaint', types: ['knock', 'knockprot'], label: 'No rattle under boost' },
@@ -232,7 +235,9 @@ export const JOBS = [
     says: 'Supercharger’s on with the small pulley, intercooled, injectors sized for it. It’s on the old tune and it rattles. I have a track weekend in two weeks.',
     wants: '330 at the wheels, and it has to survive the whole weekend. No knock, no heat, no drama.',
     work: ['Supercharger kit already fitted and injectors scaled', 'Dyno tune for power and reliability'],
-    car: { preset: null, build: (b) => ({ blowerId: 'm90', blowerRatio: 1.6, octaneIdx: 1, injIdx: 2, ecuInjectorCc: 550, mods: { ...b.mods, intercooler: true } }) },
+    // The small pulley (1.75) on 91: knocks on the old tune, as Rae hears. (On 93 at 1.6 the knock
+    // model anchored to real calibrations finds the old tune safe, and the job paid for nothing.)
+    car: { preset: null, build: (b) => ({ blowerId: 'm90', blowerRatio: 1.75, octaneIdx: 0, injIdx: 2, ecuInjectorCc: 550, mods: { ...b.mods, intercooler: true } }) },
     needs: { training: ['spark'], equipment: ['dyno', 'egt'] }, minRep: 130, pay: 3200, rep: 22,
     checks: [
       // 380 before October 2026, when friction rose with speed as GM's measured friction

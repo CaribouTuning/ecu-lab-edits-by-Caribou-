@@ -467,12 +467,30 @@ export function calibrationAdvice({
     if (!turboOn || blowerPull) return plain;
     const key = `${hardwareKey}|${curveAt(boostCurve, rpm)}|${rpm}:${mapKpa.toFixed(2)}`;
     if (!inductionMemo.has(key)) {
-      const s = inductionAtMap({
-        rpm, mapKpa, boostTargetPsi: curveAt(boostCurve, rpm), turbine, compressor,
-        veAt: (m) => (truthAt ? truthAt(rpm, m) : read('ve', rpm, m)), derived,
+      const solve = (m) => inductionAtMap({
+        rpm, mapKpa: m, boostTargetPsi: curveAt(boostCurve, rpm), turbine, compressor,
+        veAt: (x) => (truthAt ? truthAt(rpm, x) : read('ve', rpm, x)), derived,
         intakeKAt: (b) => chargeTempK(b, mods.intercooler),
         intakeKAtEff: (b, eta) => chargeTempK(b, mods.intercooler, undefined, eta),
       });
+      let s = solve(mapKpa);
+      // PAST WHAT THE TURBO MAKES HERE, at the edge it does make. A row graded a little past the
+      // boost target (the reach's slack), or a boost row this speed cannot spool to, has no
+      // solve of its own; graded with no backpressure and no compressor heat at all, a 10.3:1
+      // V6's 200 kPa row at 22 psi read a knock limit of -33 degrees where the pull at that
+      // pressure met +4.7, and every cell of the row was called past what spark can fix. As the
+      // factory generator does (presets.js chargeKAt), the cell takes the backpressure and the
+      // compressor's efficiency at the highest pressure the turbo reaches at this speed, at its
+      // own pressure.
+      if (!s && mapKpa > BARO_KPA) {
+        let lo = BARO_KPA; let hi = mapKpa; let edge = null;
+        for (let i = 0; i < 14 && hi - lo > 0.25; i += 1) {
+          const mid = (lo + hi) / 2;
+          const at = solve(mid);
+          if (at) { edge = at; lo = mid; } else hi = mid;
+        }
+        if (edge) s = { ...edge, boostPsi: plain.boostPsi };
+      }
       inductionMemo.set(key, s ?? plain);
     }
     return inductionMemo.get(key);
@@ -768,28 +786,21 @@ export function calibrationAdvice({
         const L = byCell.get(`${ri}|${ci - 1}`); const Rc = byCell.get(`${ri}|${ci}`);
         if (!L || !Rc || (L.unbounded && Rc.unbounded)) continue;
         if (L.rpm <= IDLE_COLUMN_MAX_RPM || L.map < OPEN_LOOP_KPA || Rc.map < OPEN_LOOP_KPA) continue;
-        for (const [key, vOf] of /** @type {const} */ ([['suggested', (c) => c.suggested], ['knockCeiling', (c) => c.current]])) {
-          for (const f of INTERP_SAMPLE_FRACTIONS) {
-            const room = ceilingAt(L.rpm + f * (Rc.rpm - L.rpm), L.gradeKpa + f * (Rc.gradeKpa - L.gradeKpa)) - KNOCK_SAFETY_DEG;
-            const vL = vOf(L); const vR = vOf(Rc);
-            if ((1 - f) * vL + f * vR <= room + 1e-9) continue;
-            // The excess out of the cell carrying more, as far as the table's least spark.
-            const hi = vR >= vL ? Rc : L; const w = hi === Rc ? f : 1 - f; const other = hi === Rc ? vL : vR;
-            const cap = (room - (1 - w) * other) / w;
-            if (key === 'suggested') {
-              hi.suggested = clamp(Math.floor(cap + 1e-9), SPARK_MIN_DEG, SPARK_MAX_DEG);
-              hi.delta = Number((hi.suggested - hi.current).toFixed(1));
-              hi.interpolationLimited = true;
-              if (cap < SPARK_MIN_DEG) {
-                const lo = hi === Rc ? L : Rc;
-                const capLo = (room - w * SPARK_MIN_DEG) / (1 - w);
-                if (capLo < lo.suggested) { lo.suggested = clamp(Math.floor(capLo + 1e-9), SPARK_MIN_DEG, SPARK_MAX_DEG); lo.delta = Number((lo.suggested - lo.current).toFixed(1)); lo.interpolationLimited = true; }
-              }
-            } else {
-              // Judged against the table as it stands: the cell carrying more is past the limit
-              // the blend allows it.
-              hi.knockCeiling = Math.min(hi.knockCeiling, Number(cap.toFixed(1)));
-            }
+        // Advice only: a cell's own ceiling is graded at its own row, and a neighbour's current
+        // number says nothing about it (judged against a stock table's 30 degrees, every cell of a
+        // boosted row came out "past what spark can fix").
+        for (const f of INTERP_SAMPLE_FRACTIONS) {
+          const room = ceilingAt(L.rpm + f * (Rc.rpm - L.rpm), L.gradeKpa + f * (Rc.gradeKpa - L.gradeKpa)) - KNOCK_SAFETY_DEG;
+          if ((1 - f) * L.suggested + f * Rc.suggested <= room + 1e-9) continue;
+          // The excess out of the cell carrying more, as far as the table's least spark.
+          const hi = Rc.suggested >= L.suggested ? Rc : L; const w = hi === Rc ? f : 1 - f; const lo = hi === Rc ? L : Rc;
+          const cap = (room - (1 - w) * lo.suggested) / w;
+          hi.suggested = clamp(Math.floor(cap + 1e-9), SPARK_MIN_DEG, SPARK_MAX_DEG);
+          hi.delta = Number((hi.suggested - hi.current).toFixed(1));
+          hi.interpolationLimited = true;
+          if (cap < SPARK_MIN_DEG) {
+            const capLo = (room - w * SPARK_MIN_DEG) / (1 - w);
+            if (capLo < lo.suggested) { lo.suggested = clamp(Math.floor(capLo + 1e-9), SPARK_MIN_DEG, SPARK_MAX_DEG); lo.delta = Number((lo.suggested - lo.current).toFixed(1)); lo.interpolationLimited = true; }
           }
         }
       }

@@ -96,31 +96,44 @@ describe('the jets', () => {
 });
 
 describe('what it does to the engine', () => {
-  it('adds power in step with the shot: 0.85-1.05 × the rating at the crank', () => {
+  it('adds power in step with the shot: 0.85-1.15 × the rating at the crank', () => {
     // Kit ratings are crank figures and real kits land near them. It read 1.0-1.35 while a
     // rich flame was credited with all the heat its oxygen could release; a wet kit sprays
     // at lambda 0.75-0.80, where the CO and H2 left behind cost real power (thermo.js,
     // heatReleasedShare), and the smallest shot, sprayed richest, lands lowest.
+    // The upper edge is measured 150 shots' spread: 134 hp at the wheels on a 2015 Mustang GT
+    // (about 158 at the crank; FordMuscle, 'Quick Hitter Tech: 2015 Mustang GT Nitrous Express
+    // Install and Dyno'), 139 on a CompuCar test, 171 from a Zex 150 on a 347 (FordMuscle, 'Adding
+    // 171 Dyno-Proven Horsepower With Zex Nitrous'): 0.9-1.14 × the rating. The model's 150 shot
+    // reads 1.10 at the 16° the kit's retard leaves, once it no longer knocks there (it read 1.06
+    // while the knock model was the cautious one, the 150 shot losing 2° to knock retard).
     const base = at(pull(null), 4500).hp;
     const gains = [50, 100, 150].map((shot) => (at(pull(kit(shot)), 4500).hp - base) / S.DRIVETRAIN_EFF / shot);
     for (const g of gains) {
       expect(g).toBeGreaterThan(0.85);
-      // 1.05 plus the counting of molar expansion (thermo.js, molarExpansion): the rich
-      // spray's products gain the most moles of any mixture, and the 150 shot reads 1.051.
-      expect(g).toBeLessThan(1.06);
+      expect(g).toBeLessThan(1.15);
     }
-    expect(Math.max(...gains) - Math.min(...gains)).toBeLessThan(0.1);
+    // In step: the three shots within half the measured spread of each other (0.99, 1.06, 1.10:
+    // the smallest shot, sprayed richest, lowest).
+    expect(Math.max(...gains) - Math.min(...gains)).toBeLessThan(0.125);
   });
 
   it('drops the knock limit a few degrees per 50 hp of shot, near the rule of thumb', () => {
     // Measured as the knock limit itself, with and without the shot at the same speed.
     // (Measuring the retard the ECU applied instead reads the drop minus whatever margin
     // the spark table happened to leave, and hid a drop of about 7° per 50 hp once.)
-    // Tuners start from 2° per 50 hp; on pump 93 the model asks for more, about 3.5-5°
+    // Tuners start from 2° per 50 hp; the model asks for more, about 3.5-5°
     // (docs/accuracy.md: it read 3.0-4.1 before the rod length was corrected).
-    const base = pull(null);
+    // The rule is for a tune that runs near its knock limit, so it is checked on one: 11.5:1 on
+    // 91, whose limit at 4500 RPM sits about 4° past best power. On 93 at 10.3:1 the limit sits
+    // 11° past it, and so far advanced the same shot moves it about twice as far (the burn starts
+    // well before the end gas is compressed, where a small change in the charge moves the limit a
+    // long way), a shift no tune at best power would ever have to take out.
+    const near = { engineConfig: { ...S.DEFAULT_ENGINE_CONFIG, compression: 11.5 }, octaneIdx: 0 };
+    const pullNear = (nitrous, opts = {}) => makeEngine({ build: { ...FUELLED, ...near, nitrous }, ...opts }).pull(100);
+    const base = pullNear(null);
     for (const shot of [50, 100, 150]) {
-      const p = pull(kit(shot), { cal: { 'nitrous.retardDeg': 0 } });
+      const p = pullNear(kit(shot), { cal: { 'nitrous.retardDeg': 0 } });
       const drops = p.points.filter((x) => x.nitrousLbMin > 0)
         .map((x) => base.points.find((y) => y.rpm === x.rpm).threshold - x.threshold)
         .sort((a, b) => a - b);
