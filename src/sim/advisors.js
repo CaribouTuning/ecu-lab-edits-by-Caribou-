@@ -635,6 +635,13 @@ export function calibrationAdvice({
   // cross. And it only ever lowers a suggestion, so it cannot make advice more aggressive
   // than the per-row grading already allows.
   const byCell = new Map(spark.map((c) => [`${c.ri}|${c.ci}`, c]));
+  // The cells a full-throttle pull ran with a real share, off the spray: where both cells of a
+  // gap are among them, the pull's own limits judge the gap (judgeAgainstPull).
+  const pulledCells = new Set();
+  for (const p of pull?.points ?? []) {
+    if (!offSpray(p)) continue;
+    for (const c of cellsInForce(p.rpm, loadOf(T, p.rpm, p.map), T)) if (c.w >= IN_FORCE_WEIGHT) pulledCells.add(`${c.ri}|${c.ci}`);
+  }
   T.rpm.forEach((rpm, ci) => {
     for (let ri = 1; ri < T.load.length; ri++) {
       const here = byCell.get(`${ri}|${ci}`);
@@ -655,7 +662,7 @@ export function calibrationAdvice({
       // unjudged number, the excess fell on the lower row at 1/(1 - f) and a 100 kPa cell was
       // told 3 deg under a 150 kPa cell told 7. Only the part of the gap the pull did not enter
       // is protected here.
-      if (pull && entered > 0 && enteredAdvice <= entered + 1e-6) continue;
+      if (pull && entered > 0 && enteredAdvice <= entered + 1e-6 && pulledCells.has(`${ri}|${ci}`) && pulledCells.has(`${ri - 1}|${ci}`)) continue;
       const aboveNow = above ? above.current : timing[ri - 1]?.[ci];
       const aboveAdvised = above ? above.suggested : aboveNow;
       // Neither row can knock at any advance it could carry, so nothing between them can:
@@ -791,10 +798,21 @@ export function calibrationAdvice({
       mixOffPct: Number(Math.max(0, ...sprayPts.filter((p) => p.afrCommanded > 0).map((p) => Math.abs(p.afr / p.afrCommanded - 1) * 100)).toFixed(0)),
       rich: sprayPts.some((p) => p.afr < p.afrCommanded * (1 - MISSED_MIX_PCT / 100)),
     } : null;
-    const judged = judgeAgainstPull(spark, pull, (p) => cellsInForce(p.rpm, loadOf(T, p.rpm, p.map), T));
+    // Where the engine ran richer than its AFR table asks, the knock limit it met is higher than
+    // the one it will have once the fuelling hits the table, the player's next step. The spark
+    // advice is set from the lower: otherwise correcting the VE leaned the mixture onto the
+    // timing just typed (a turbo VQ35DE knocked 0.1 deg at 4400 RPM after the guide's spark step).
+    const leanerBy = (p) => {
+      if (!(p.afr > 0) || !(p.afrCommanded > p.afr) || !missesTarget(p) || !truthAt) return 0;
+      const at = (afrVe) => pointAt(p.rpm, p.map, {
+        veVal: afrVe, veActualVal: truthAt(p.rpm, p.map), timingVal: read('timing', p.rpm, p.map), afrCommanded: p.afrCommanded,
+      }).threshold;
+      return Math.min(0, at(truthAt(p.rpm, p.map)) - at(read('ve', p.rpm, p.map)));
+    };
+    const judged = judgeAgainstPull(spark, pull, (p) => cellsInForce(p.rpm, loadOf(T, p.rpm, p.map), T), leanerBy);
     // The rows past the reach follow the judged numbers of the rows under them.
     const judgedSpark = boosted ? beyondReachCells(timing, T, reachFull, kpaOf, 'spark',
-      advisedIn(spark.filter((c) => judged.overAdvanced.includes(c) || c.pullMargin != null))) : [];
+      advisedIn(spark.filter((c) => judged.overAdvanced.includes(c) || c.atSuggestion))) : [];
     return { spark, fuelAdv, wrongMix: withBeyond(wrongMix, beyondAfr), missedMix, spray, ...judged, overAdvanced: withBeyond(judged.overAdvanced, judgedSpark) };
   }
   // Nor is a cell called dangerous for knock in the idle column where no spark the table can
@@ -890,82 +908,89 @@ export function cellsNotRunBy(cells, pull, axes = GAME_LAYOUT.timing) {
  * @param {{points: object[]}} pull a full-throttle `simulateSweep` result
  * @param {(p: object) => {ri: number, ci: number, w: number}[]} inForce the spark cells one
  *   point of the pull reads, on the spark table's own breakpoints
+ * @param {(p: object) => number} [leanerBy] how much lower, in degrees, a point's knock limit
+ *   falls once its fuelling hits the AFR table (0 or negative)
  * @returns {{overAdvanced: object[], underAdvanced: object[], pastMbt: object[]}}
  */
-function judgeAgainstPull(spark, pull, inForce) {
+function judgeAgainstPull(spark, pull, inForce, leanerBy = () => 0) {
   const knockBy = new Map();
   const marginBy = new Map();
-  // The knock limit itself at the points a cell is used for: a property of the charge there,
-  // not of the spark in the table. The advice is set from it, so typing the number shown ends
-  // the matter. Set from "this cell's value plus the blend's margin" instead, it charged a
-  // point's whole knock to each of the four cells the ECU blends there: a player who lowered
-  // one cell found it still "past the limit" by what its neighbours carried, and a new, lower
-  // number under it, every time (a turbo VQ35DE's 150 kPa cell at 1500 RPM went 4.5, -2.5, -4).
+  // The knock limit itself at the points a cell is in force, in the table's own terms, for the
+  // cells that must come down: the least of them, so any blend of cells at their numbers stays
+  // under every limit, and the same figure whatever the cell holds. Set instead from "this
+  // cell's value plus the blend's margin", it charged a point's whole knock to each of the cells
+  // the ECU blends there: a player who lowered one cell found it still "past the limit" by what
+  // its neighbours carried, and a new, lower number under it, every time (a turbo VQ35DE's
+  // 150 kPa cell at 1500 RPM went 4.5, -2.5, -4).
   const limitBy = new Map();
-  // The same limit while the nitrous sprays: not a verdict (knock on the spray is the nitrous
-  // retard's to fix, as the pull log says), but no cell the spray reads is told to take more
-  // advance than the spray tolerates at the retard set. Asked anyway, a wet 75 shot on a
-  // VQ35DE had timing added under the spray, then more retard, then a smaller shot: 28 hp less.
-  const sprayLimitBy = new Map();
+  // The same while the nitrous sprays: not a verdict (knock on the spray is the nitrous retard's
+  // to fix, as the pull log says), but no cell the spray reads is told to take more advance than
+  // the spray had room for (a wet 75 shot on a VQ35DE had timing added under it, then more
+  // retard, then a smaller shot: 28 hp less).
+  const sprayMarginBy = new Map();
   const cur = new Map(spark.map((c) => [`${c.ri}|${c.ci}`, c.current]));
   for (const p of pull.points) {
-    if (!Number.isFinite(p.threshold)) continue;
-    // In the table's own terms: the limit, plus whatever the ECU did between the cells' blend
-    // and the spark it fired (the nitrous retard, temperature corrections).
     const cells = inForce(p);
-    const wSum = cells.reduce((a, c) => a + (cur.has(`${c.ri}|${c.ci}`) ? c.w : 0), 0);
-    const blend = wSum > 0 ? cells.reduce((a, c) => a + c.w * (cur.get(`${c.ri}|${c.ci}`) ?? 0), 0) / wSum : null;
-    const fired = p.commandedTiming ?? p.timing;
-    const tableLimit = p.threshold + (blend != null && Number.isFinite(fired) ? blend - fired : 0);
     const spraying = !offSpray(p);
     for (const { ri, ci, w } of cells) {
       if (w < IN_FORCE_WEIGHT) continue;
       const key = `${ri}|${ci}`;
-      if (spraying) { sprayLimitBy.set(key, Math.min(sprayLimitBy.get(key) ?? Infinity, tableLimit)); continue; }
+      if (spraying) { sprayMarginBy.set(key, Math.min(sprayMarginBy.get(key) ?? Infinity, p.margin)); continue; }
       marginBy.set(key, Math.min(marginBy.get(key) ?? Infinity, p.margin));
-      limitBy.set(key, Math.min(limitBy.get(key) ?? Infinity, tableLimit));
       if (p.margin < 0) knockBy.set(key, Math.max(knockBy.get(key) ?? 0, -p.margin));
+    }
+    if (spraying || !Number.isFinite(p.threshold)) continue;
+    // The limit, plus whatever the ECU did between the cells' blend and the spark it fired
+    // (temperature corrections), plus how much lower it falls once the fuelling hits the table.
+    const wSum = cells.reduce((a, c) => a + (cur.has(`${c.ri}|${c.ci}`) ? c.w : 0), 0);
+    const blend = wSum > 0 ? cells.reduce((a, c) => a + c.w * (cur.get(`${c.ri}|${c.ci}`) ?? 0), 0) / wSum : null;
+    const fired = p.commandedTiming ?? p.timing;
+    const tableLimit = p.threshold + (blend != null && Number.isFinite(fired) ? blend - fired : 0) + leanerBy(p);
+    for (const { ri, ci, w } of cells) {
+      if (w < IN_FORCE_WEIGHT) continue;
+      const key = `${ri}|${ci}`;
+      limitBy.set(key, Math.min(limitBy.get(key) ?? Infinity, tableLimit));
     }
   }
   // Whole degrees, rounded down: what the table's editor steps in, and never past the limit.
   const down = (v) => Math.floor(v + 1e-9);
+  /** No more advance than the spray had room for, and never a cut because of it. */
+  const sprayCap = (c, key) => (sprayMarginBy.has(key) ? Math.max(down(c.current + sprayMarginBy.get(key) - KNOCK_SAFETY_DEG), c.current) : Infinity);
   const overAdvanced = [], underAdvanced = [], pastMbt = [];
   for (const c of spark) {
     const key = `${c.ri}|${c.ci}`;
     const idle = c.rpm <= IDLE_COLUMN_MAX_RPM || c.map <= 30;
     if (marginBy.has(key)) {
       c.pullMargin = Number(marginBy.get(key).toFixed(1));
-      const limit = limitBy.get(key) ?? c.current + marginBy.get(key);
-      // The limit the pull met where this cell is in force, less the safety margin: the same
-      // figure whatever the cell holds, so the verdict and the number to type never move.
-      c.knockCeiling = Number((limit - KNOCK_SAFETY_DEG).toFixed(1));
-      const safe = down(limit - KNOCK_SAFETY_DEG);
       const knock = knockBy.get(key) ?? 0;
       if (knock > 0) {
+        const limit = limitBy.get(key) ?? c.current + marginBy.get(key);
+        c.knockCeiling = Number((limit - KNOCK_SAFETY_DEG).toFixed(1));
         c.knockingOnPull = true;
-        const spray = sprayLimitBy.has(key) ? down(sprayLimitBy.get(key) - KNOCK_SAFETY_DEG) : Infinity;
-      c.suggested = clamp(Math.min(c.suggested, safe, Math.max(spray, c.current)), SPARK_MIN_DEG, SPARK_MAX_DEG);
+        c.suggested = clamp(Math.min(c.suggested, down(limit - KNOCK_SAFETY_DEG)), SPARK_MIN_DEG, SPARK_MAX_DEG);
         c.delta = Number((c.suggested - c.current).toFixed(1));
         // No spark the table can hold is safe there: listed whatever it holds, with what can fix
         // it (less boost, a richer charge, a cooler one, better fuel), as the pull log says.
         if (limit - KNOCK_SAFETY_DEG < SPARK_MIN_DEG) c.sparkCannotFix = true;
-        // Already at its number: the knock left there is the cells it blends with, which are
+        // Already at its number: what is left there is the cells it blends with, which are
         // listed with their own. This one is done.
         if (c.sparkCannotFix || c.current - c.suggested > ADVANCE_TOLERANCE_DEG / 2) overAdvanced.push(c);
         else c.atSuggestion = true;
         continue;
       }
-      // Clean on the pull: as much advance as the limit leaves room for, to MBT.
-      const spray = sprayLimitBy.has(key) ? down(sprayLimitBy.get(key) - KNOCK_SAFETY_DEG) : Infinity;
-      c.suggested = clamp(Math.min(c.suggested, safe, Math.max(spray, c.current)), SPARK_MIN_DEG, SPARK_MAX_DEG);
+      // Clean on the pull, with the margin: as much advance as the pull measured room for
+      // (main's rule; the room shrinks as the blend rises, so it is found a step at a time).
+      // The limit shown beside the verdict is the one the pull met, so the two never disagree.
+      c.knockCeiling = Number((c.current + marginBy.get(key)).toFixed(1));
+      c.suggested = clamp(Math.min(c.suggested, down(c.current + marginBy.get(key) - KNOCK_SAFETY_DEG), sprayCap(c, key)), SPARK_MIN_DEG, SPARK_MAX_DEG);
       c.delta = Number((c.suggested - c.current).toFixed(1));
       if (c.current - c.mbt > ADVANCE_TOLERANCE_DEG) pastMbt.push(c);
       else if (!idle && c.delta > UNDER_ADVANCED_DEG) underAdvanced.push(c);
       continue;
     }
-    // A cell only the spray reads keeps its row grading, capped at what the spray tolerates.
-    if (sprayLimitBy.has(key)) {
-      c.suggested = clamp(Math.min(c.suggested, Math.max(down(sprayLimitBy.get(key) - KNOCK_SAFETY_DEG), c.current)), SPARK_MIN_DEG, SPARK_MAX_DEG);
+    // A cell only the spray reads keeps its row grading, capped at what the spray had room for.
+    if (sprayMarginBy.has(key)) {
+      c.suggested = clamp(Math.min(c.suggested, sprayCap(c, key)), SPARK_MIN_DEG, SPARK_MAX_DEG);
       c.delta = Number((c.suggested - c.current).toFixed(1));
     }
     if (c.bracketOnly) continue;

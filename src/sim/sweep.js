@@ -537,31 +537,16 @@ export function simulateSweep({
     .filter((c) => c.w >= IN_FORCE_WEIGHT);
   const roomBy = new Map();
   for (const p of points) {
-    // In the table's own terms, as the advisor reads it: the limit plus what the ECU did between
-    // the cells' blend and the spark it fired. A spraying point caps the room too: no cell the
-    // spray reads is short of advance the spray cannot take at the retard set.
-    const all = cellsInForce(p.rpm, loadFor(/** @type {any} */ (sparkAxes), { mapKpa: p.map, airmassG: p.airCharge }), sparkAxes);
-    const wSum = all.reduce((a, c) => a + (Number.isFinite(timing?.[c.ri]?.[c.ci]) ? c.w : 0), 0);
-    const blend = wSum > 0 ? all.reduce((a, c) => a + c.w * (Number.isFinite(timing?.[c.ri]?.[c.ci]) ? timing[c.ri][c.ci] : 0), 0) / wSum : null;
-    const fired = p.commandedTiming ?? p.timing;
-    const tableLimit = p.threshold + (blend != null && Number.isFinite(fired) ? blend - fired : 0);
-    if (!offSpray(p)) {
-      for (const { ri, ci } of cellsOf(p)) {
-        const cell = timing?.[ri]?.[ci];
-        const own = Number.isFinite(cell) ? cell : fired;
-        const k = `${ri}|${ci}`; roomBy.set(k, Math.min(roomBy.get(k) ?? Infinity, tableLimit - KNOCK_SAFETY_DEG - own));
-      }
-      continue;
-    }
-    // To best-power timing measured from the cell's own value, as the advisor caps a cell: a
-    // cell near its MBT blended with a far lower one has no room, whatever the blend is short
-    // (an LS6 with a TVS1900 read 6° short where its 100 kPa cell could take 3°).
+    // To best-power timing and to the pull's measured margin, from the cell's own value, as the
+    // advisor caps a cell: a cell near its MBT blended with a far lower one has no room, whatever
+    // the blend is short (an LS6 with a TVS1900 read 6 deg short where its 100 kPa cell could
+    // take 3). A spraying point caps the room too: no cell the spray reads is short of advance
+    // the spray had no room for.
+    const spraying = !offSpray(p);
     for (const { ri, ci } of cellsOf(p)) {
       const cell = timing?.[ri]?.[ci];
-      // And to the knock limit itself, less the margin, from the cell's own value: as the advisor
-      // now sets a cell (judgeAgainstPull), not from the blend's margin.
       const own = Number.isFinite(cell) ? cell : (p.commandedTiming ?? p.timing);
-      const room = Math.min(p.mbtIdeal - own, tableLimit - KNOCK_SAFETY_DEG - own);
+      const room = spraying ? p.margin - KNOCK_SAFETY_DEG : Math.min(p.mbtIdeal - own, p.margin - KNOCK_SAFETY_DEG);
       const k = `${ri}|${ci}`; roomBy.set(k, Math.min(roomBy.get(k) ?? Infinity, room));
     }
   }
