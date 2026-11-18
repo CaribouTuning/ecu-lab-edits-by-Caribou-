@@ -232,15 +232,11 @@ function solveDense(A, y) {
  * @param {VeSample[]} samples
  * @param {import('./layouts.js').TableAxes} [axes] the VE table's breakpoints, when not the
  *   ECU Lab grid (a layout's VE is always on manifold pressure)
- * @param {{minWeight?: number, minShare?: number}} [opts] how much data a cell needs before it
- *   is fitted (MIN_CELL_WEIGHT) and the least share of a sample a cell counts (MIN_SHARE). The
- *   button uses the defaults; the pull log asks with both near zero for the best fit these
- *   breakpoints could make at all, to tell a miss the grid cannot follow from one it can.
  * @returns {{ratio: (number|null)[][], weight: number[][], cell: (VeCell|null)[][], cells: number}}
  *   `ratio[row][col]` the mean factor for a cell with enough data, else null; `cell`
  *   the same cell with the parts it was worked out from
  */
-export function veCorrections(samples, axes, { minWeight = MIN_CELL_WEIGHT, minShare = MIN_SHARE } = {}) {
+export function veCorrections(samples, axes) {
   const keys = ['ratio', 'lambdaRatio', 'trim', 'maf', 'rescale'];
   const rows = axes?.load ?? LOAD;
   const cols = axes?.rpm ?? RPM;
@@ -252,7 +248,7 @@ export function veCorrections(samples, axes, { minWeight = MIN_CELL_WEIGHT, minS
       for (const [ci, wc] of bracket(cols, s.rpm)) {
         const w = wr * wc;
         if (w > 1e-9) touched.add(ri * cols.length + ci);
-        if (w < minShare) continue;
+        if (w < MIN_SHARE) continue;
         const a = acc[ri][ci];
         a.weight += w;
         a.samples += 1;
@@ -262,7 +258,7 @@ export function veCorrections(samples, axes, { minWeight = MIN_CELL_WEIGHT, minS
   }
   let cells = 0;
   const cell = acc.map((row) => row.map((a) => {
-    if (a.weight < minWeight) return null;
+    if (a.weight < MIN_CELL_WEIGHT) return null;
     cells += 1;
     /** @type {any} */
     const out = { weight: a.weight, samples: a.samples };

@@ -217,10 +217,10 @@ remaining risk is the same Node major with a different libm, which is what step 
   throttle first; pooling throttles into one fit split the difference on a boosted engine and
   never converged. Custom engines are played the way BUILD makes them: the figures, then the base
   map that follows them (`ownEngineBaseMap`), then the parts; patching the figures alone leaves a
-  2-litre four's tables on a V8. A miss the breakpoints cannot follow is `gridBound` in the log
-  (flat: the fit has nothing left to change; ripple: even the best fit these cells can make still
-  misses) and costs the score next to nothing; the advisor does not grade mixture at a column
-  past the redline (no pull runs there; the log judges it blended).
+  2-litre four's tables on a V8. The advisor does not grade mixture at a column past the redline
+  (no pull runs there; the log judges it blended). A rule that called a miss grid-bound wherever
+  even an all-samples fit still missed was tried and dropped: it also caught a turbo VQ35HR the
+  log and Correct VE do tune clean (tests/guided-workflow.test.js).
 - **A start-up map is a start** (`startUpTiming`, `START_UP_RETARD_DEG`): a player's own engine
   and "Load a base start-up map" sit 4° short at full load, so there is timing to find. The
   factory engines and the career's cars keep their factory calibration.
