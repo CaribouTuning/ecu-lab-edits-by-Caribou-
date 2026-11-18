@@ -342,13 +342,23 @@ export const COMPRESSOR_OPTS = [
     etaMax: 0.80, pkFlowKgS: 0.28, pkPr: 2.4, surgeSlope: 0.150, chokeFlowKgS: 0.50,
   },
   // THE FACTORY COMPRESSORS, one per turbo engine in the catalogue.
-  .../** @type {[string, string, number, number][]} */ ([
-    ['Mitsubishi TD03-10TK3 (N54, each)', 'td03-10tk3', 1.0, 24],
-    ['IHI IS20 (EA888 GTI)', 'is20', (42.5 / 35.6) ** 2, 26],
-    ['IHI IS38 (EA888 Golf R)', 'is38', (45.2 / 35.6) ** 2, 28],
-    ['BMTS twin-scroll (B58)', 'b58', (50.7 / 35.6) ** 2, 28],
-  ]).map(([label, id, area, ceiling]) => {
-    const surgeKgS = 0.034 * area * MITSUBISHI_INLET_DENSITY;
+  // The fifth figure moves the surge line left of where scaling the TD03's puts it, where the
+  // maker's own rating shows the factory match running. No IS20 or IS38 map is published (IHI,
+  // the turbo vendors, MyGolfMk7 and the tuning forums were searched, November 2026); scaled
+  // from the TD03's by inducer area, their surge lines put VW's rated torque at the lowest rated
+  // speed (the GTI's 258 lb-ft at 1500 RPM, the Golf R's 280 at 1800) in surge, and the engines
+  // fell 12-14% short there. A factory match runs on the map, so each line sits 5% of flow left
+  // of the point the rating needs in this model (`scripts` probe: GTI 0.0526 kg/s at a pressure
+  // ratio of 2.07, Golf R 0.0660 kg/s at 2.09). A modern ported-shroud compressor surging
+  // further left than a 2006 one is the expected direction. DERIVED FROM THE RATINGS, not from a
+  // measured map: replace with the map when one is found.
+  .../** @type {[string, string, number, number, number][]} */ ([
+    ['Mitsubishi TD03-10TK3 (N54, each)', 'td03-10tk3', 1.0, 24, 1],
+    ['IHI IS20 (EA888 GTI)', 'is20', (42.5 / 35.6) ** 2, 26, 0.80],
+    ['IHI IS38 (EA888 Golf R)', 'is38', (45.2 / 35.6) ** 2, 28, 0.87],
+    ['BMTS twin-scroll (B58)', 'b58', (50.7 / 35.6) ** 2, 28, 1],
+  ]).map(([label, id, area, ceiling, surgeScale]) => {
+    const surgeKgS = 0.034 * area * MITSUBISHI_INLET_DENSITY * surgeScale;
     const chokeKgS = 0.13 * area * MITSUBISHI_INLET_DENSITY;
     return {
       label, size: 'small', id, factory: true, boostCeiling: ceiling,

@@ -373,13 +373,12 @@ export const ENGINE_PRESETS = [
     },
     induction: {
       turboOn: true, turbineIdx: 0, compressorIdx: factoryCompressorIdx('is20'),
-      // IHI IS20: quick-spooling, so boost is in by 2500. It peaks around 14 psi in
-      // the low-mid range where the plateau torque figure is rated, then the ECU
-      // eases off toward redline the way the taper above does for the N54 — the
-      // same physical trade-off, smaller turbo. A "Small" compressor (12 psi
-      // ceiling) cannot sustain this without running outside its efficient range
-      // every pull, so this is sized Medium (20 psi ceiling) instead.
-      boost: RPM.map((r) => (r < 1500 ? 0 : r < 2500 ? 12 : r < 3500 ? 14
+      // IHI IS20, the factory compressor (hardware.js). VW rates 258 lb-ft from 1500 RPM; in
+      // this model that needs about 16 psi there, so the target asks for it and the engine
+      // computer's torque limit holds the plateau above it (factoryCalibration), as VW's
+      // load-based computer does. DERIVED FROM THE RATING: no stock IS20 boost log at 1500 RPM
+      // was found. Then the ECU eases off toward redline the way the N54's does.
+      boost: RPM.map((r) => (r < 1500 ? 0 : r < 2500 ? 16 : r < 3500 ? 14
         : r < 4500 ? 13 : r < 5500 ? 11.2 : r < 6500 ? 9.5 : 8.5)),
     },
     parts: { injectorIdx: 2, exhaustDiaIdx: 1, octaneIdx: 1 },
@@ -415,8 +414,10 @@ export const ENGINE_PRESETS = [
       // IS38 at 1.2 bar / 17.4 psi, held through the mid-range where this engine's
       // plateau torque is rated, then the same top-end taper as the smaller turbos
       // above — a bigger compressor gives it less of a fall-off, which is exactly
-      // the point of the upgrade over the GTI's IS20.
-      boost: RPM.map((r) => (r < 1500 ? 0 : r < 2500 ? 14 : r < 3500 ? 17
+      // the point of the upgrade over the GTI's IS20. From 1500 RPM it asks for the 16 psi
+      // VW's rated 280 lb-ft at 1800 needs in this model (DERIVED FROM THE RATING; the torque
+      // limit holds the plateau).
+      boost: RPM.map((r) => (r < 1500 ? 0 : r < 2500 ? 16 : r < 3500 ? 17
         : r < 4500 ? 17 : r < 5500 ? 16.5 : r < 6500 ? 15.8 : 15.2)),
     },
     parts: { injectorIdx: 4, exhaustDiaIdx: 1, octaneIdx: 1 },
