@@ -15,6 +15,7 @@
 
 import React from 'react';
 
+import { KNOCK_SAFETY_DEG } from '../../sim/index.js';
 
 import styles from './TuneAdvisory.module.css';
 
@@ -138,7 +139,9 @@ function TimingAdvisory({ report }) {
       return (
         <div className={styles.prose}>
           <CellStats cell={detail.cell} />
-          {detail.cell.knockingOnPull ? 'The engine knocked while it was reading this cell on a full-throttle pull. ' : ''}{detail.cell.sparkCannotFix
+          {detail.cell.knockingOnPull ? (detail.cell.why
+            ? `The last full-throttle pull knocked up to ${detail.cell.why.knockBy}° past the limit while reading this cell. The number under it is set from ${detail.cell.why.rpm.toLocaleString('en-US')} RPM at ${detail.cell.why.map} kPa, where this cell carries ${detail.cell.why.sharePct}% of the timing: ${KNOCK_SAFETY_DEG}° under the limit there, and the pull log gives the same number. `
+            : 'The engine knocked while it was reading this cell on a full-throttle pull. ') : ''}{detail.cell.measuredAtKpa != null ? `That was below this row's own pressure (the boost was still building, or a protection cut it), so the next pull at full boost checks it again. ` : ''}{detail.cell.sparkCannotFix
             ? 'No spark setting is safe here: even the most retard the table can hold is past the knock limit at the boost this cell sees. Retard alone cannot fix it. Richen this cell on TUNE → FUEL if the advisor lists it there (a richer charge raises the knock limit), lower the boost at this speed (the boost target of a turbo, or the drive ratio of a supercharger, on BUILD → INDUCTION), cool the charge (an intercooler, on BUILD → INDUCTION), or run better fuel.'
             : 'Past the knock limit the engine is damaging itself. Pull this cell back to the suggested value, or lower.'}
         </div>

@@ -274,7 +274,7 @@ export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm, intercooled =
       msg: `Knock protection cut boost across ${label(run)}`,
       cause: `Knock control was pulling more than ${cal.protect.knockRetardDeg}° — running that much retard is hot and inefficient, so the ECU took ${cal.protect.knockBoostCutPsi} psi out as well.`,
       fix: source.length || !hiddenKnock(run)
-        ? `This follows from ${source.length ? source.join(' and ') : 'the knock entry in this log (AFR target, then timing, in those cells on TUNE → FUEL and TUNE → SPARK)'}: fix ${source.length > 1 ? 'those' : 'that'} and this goes away. Lowering the boost target there on BUILD → INDUCTION also works.`
+        ? `This follows from ${source.length ? source.join(' and ') : 'the knock entry in this log (AFR target, then timing, in those cells on TUNE → FUEL and TUNE → SPARK)'}: fix ${source.length > 1 ? 'those' : 'that'} and this goes away. Lowering the boost target there on BUILD → INDUCTION also works. With the boost cut, this pull never reached the boost rows above here at these speeds: once it stays in, the next pull runs them for the first time and may find their limits too, so expect to set a few more cells then.`
         : hiddenKnock(run),
     });
   });

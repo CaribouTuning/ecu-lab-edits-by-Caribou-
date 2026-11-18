@@ -16,13 +16,14 @@ import { solveInduction } from './turbo.js';
 import { chargeTempK, INDUCTION_REF_EXHAUST_K } from './thermo.js';
 import { evaluatePoint } from './point.js';
 import {
-  IN_FORCE_WEIGHT, KNOCK_SAFETY_DEG, MIX_NOTABLE_AFR, UNDER_ADVANCED_DEG, cellsInForce, missedMixCause, missesTarget, offSpray,
+  IN_FORCE_WEIGHT, KNOCK_SAFETY_DEG, cellsInForce, missedMixCause, missesTarget,
+  afrTargetVerdict, pullCellLimits, pullSparkCells, pullTableCells, sparkForLimit,
 } from './advisors.js';
 import { bestPowerAfr } from './manifold.js';
 import { FAILURE_MODES, pointWear, sweepFailure, wearEffects } from './damage.js';
 import { trappedAirGrams } from './cycle.js';
 import { loadFor, needsAirmass, readEcuTable, truthReader } from './layouts.js';
-import { CURVE_RPM, LOAD, RPM, SPARK_MIN_DEG } from './tables.js';
+import { CURVE_RPM, IDLE_COLUMN_MAX_RPM, LOAD, OPEN_LOOP_KPA, RPM, SPARK_MIN_DEG } from './tables.js';
 import { ecuSweepEvents } from './ecu/ecuEvents.js';
 import { ECU_COEFF } from './ecu/ecuCoefficients.js';
 import { ecuDemandPoint, ecuSteadyPoint } from './ecu/strategy.js';
@@ -338,6 +339,34 @@ export function simulateSweep({
   // table is not the problem, the fuelling is — a tuner reading a wideband against the
   // target makes exactly this call before touching a single AFR cell.
   const missedTarget = (p) => Math.abs(p.afr - p.afrCommanded) > 0.5;
+  // The FUEL cells a point reads whose target TUNE marks, with the number it marks: judged by the
+  // same rule (advisors.js afrTargetVerdict), on cells at or under the pressure the point ran, at
+  // full load, past the idle column and inside the redline, as TUNE grades them.
+  const afrCellsOf = pullTableCells({ tables, derived, mods }, 'afr');
+  const afrAxesOf = (tables.layout ?? null)?.afr ?? { rpm: RPM, load: LOAD, loadUnit: 'kPa' };
+  const pastRedlineCol = (ci) => derived.redline != null && (afrAxesOf.rpm[ci] > derived.redline || (ci > 0 && afrAxesOf.rpm[ci - 1] >= derived.redline));
+  /** @type {Map<string, any>|null} the spark cells' pull limits, once worked out (the knock entry) */
+  let sparkLimitsForFuel = null;
+  // Where no spark the table holds is safe, a direct-injected engine's target is judged as a
+  // port one's (TUNE does the same).
+  const portBandAt = (ri, ci) => {
+    const L = sparkLimitsForFuel?.get(`${ri}|${ci}`);
+    return !!L && L.knockBy > 0 && L.limit - KNOCK_SAFETY_DEG < SPARK_MIN_DEG;
+  };
+  const offTargets = (p) => (afr ? afrCellsOf(p) : [])
+    .filter((c) => c.w >= IN_FORCE_WEIGHT && c.rowKpa <= p.map + 0.5 && c.rowKpa >= OPEN_LOOP_KPA
+      && afrAxesOf.rpm[c.ci] > IDLE_COLUMN_MAX_RPM && !pastRedlineCol(c.ci))
+    .map((c) => ({ ...c, v: afrTargetVerdict({ value: afr[c.ri][c.ci], kpa: c.rowKpa, direct: derived.injection === 'direct' && !portBandAt(c.ri, c.ci) }) }))
+    .filter((c) => c.v.outside);
+  const afrCellText = (c) => `${afrAxesOf.loadUnit === 'kPa' ? `${Math.round(afrAxesOf.load[c.ri])} kPa` : `${afrAxesOf.load[c.ri]} ${afrAxesOf.loadUnit}`} at ${afrAxesOf.rpm[c.ci].toLocaleString('en-US')} RPM from ${afr[c.ri][c.ci]} to ${c.v.suggested}`;
+  /** Where the target itself is also outside the band, the entry says so and names the cells:
+   *  the two faults are fixed in different places. */
+  const targetNote = (p) => {
+    const off = offTargets(p);
+    if (!off.length) return '';
+    const lean = off.some((c) => c.v.lean);
+    return ` The target itself is also ${lean ? 'leaner than is safe' : 'richer than makes power'} in ${off.length === 1 ? 'a cell' : `${off.length} cells`} this reads: TUNE → FUEL marks ${off.length === 1 ? 'it' : 'them'} with the number under each (${off.slice(0, 3).map(afrCellText).join(', ')}).`;
+  };
   /** The ECU's injector flow rate is not the fitted injector's: its own entry, and the
    *  first thing to fix when the mixture is off. */
   const injMismatch = Math.abs(injectorCc / ecuInjectorCc - 1) > 0.05;
@@ -471,10 +500,17 @@ export function simulateSweep({
         // it 4% at a time, pull after pull (an LR4 with its limiter raised took eleven).
         const colPct = unlogged ? Math.min(25, Math.max(pct, Math.round(pct / share))) : pct;
         const them = thin.length > 1 ? 'them' : 'it';
-        return `Fuel first: the AFR table is right, but the ECU's air estimate is ${pct}% ${lean ? 'low' : 'high'} here, so it fuels for ${lean ? 'less' : 'more'} air than the engine takes in and it runs ${Math.abs(deliveryLean).toFixed(1)} AFR ${lean ? 'lean' : 'rich'} of the table${lean ? '' : ', costing power'}. On TUNE → AIRFLOW ${lean ? 'raise' : 'lower'} the VE cells in ${where} by about ${pct}%, or use Correct VE from logs there, which reads this pull and writes it for you.${thin.length ? ` Correct VE from logs leaves ${thin.join(' and ')} alone (this pull crossed ${them} too briefly to trust): ${lean ? 'raise' : 'lower'} ${them} by hand by about ${pct}%, or log more time there on LIVE and correct from that.` : ''}${unlogged ? ` The ${above} RPM column is past the ${endRpm} RPM redline, where a pull cannot log it, so Correct VE from logs carries it on from the column before it; if the miss stays after that: ${lean ? 'raise' : 'lower'} it by hand by about ${colPct}%, carrying on the trend of the cells before it (at ${peak.rpm} RPM the ECU reads it for only ${Math.round(share * 100)}% of the blend, so it moves by more than the miss).` : ''}`;
+        return `Fuel first: the engine is not getting the mixture the AFR table asks for, because the ECU's air estimate is ${pct}% ${lean ? 'low' : 'high'} here, so it fuels for ${lean ? 'less' : 'more'} air than the engine takes in and it runs ${Math.abs(deliveryLean).toFixed(1)} AFR ${lean ? 'lean' : 'rich'} of the table${lean ? '' : ', costing power'}. On TUNE → AIRFLOW ${lean ? 'raise' : 'lower'} the VE cells in ${where} by about ${pct}%, or use Correct VE from logs there, which reads this pull and writes it for you.${thin.length ? ` Correct VE from logs leaves ${thin.join(' and ')} alone (this pull crossed ${them} too briefly to trust): ${lean ? 'raise' : 'lower'} ${them} by hand by about ${pct}%, or log more time there on LIVE and correct from that.` : ''}${unlogged ? ` The ${above} RPM column is past the ${endRpm} RPM redline, where a pull cannot log it, so Correct VE from logs carries it on from the column before it; if the miss stays after that: ${lean ? 'raise' : 'lower'} it by hand by about ${colPct}%, carrying on the trend of the cells before it (at ${peak.rpm} RPM the ECU reads it for only ${Math.round(share * 100)}% of the blend, so it moves by more than the miss).` : ''}`;
       }
     }
   };
+  // The cells each knock reaches, read the way TUNE reads the pull (advisors.js
+  // pullCellLimits): the numbers this entry gives are the numbers marked on the grid.
+  const sparkCellsOf = pullSparkCells({ tables, derived, mods });
+  const cellLimits = timing ? pullCellLimits(points, timing, sparkCellsOf) : new Map();
+  sparkLimitsForFuel = cellLimits;
+  const sparkAxesOf = (tables.layout ?? null)?.timing ?? { rpm: RPM, load: LOAD, loadUnit: 'kPa' };
+  const rowLabel = (ri) => (sparkAxesOf.loadUnit === 'kPa' ? `${Math.round(sparkAxesOf.load[ri])} kPa` : `${sparkAxesOf.load[ri]} ${sparkAxesOf.loadUnit}`);
   knockRuns.forEach((run) => {
     const peak = ecu
       ? run.reduce((a, b) => (b.margin < a.margin ? b : a))
@@ -488,14 +524,41 @@ export function simulateSweep({
     // engine can miss what the table asks for (delivery: the ECU's air estimate, the
     // injectors, the pump).
     const deliveryLean = peak.afr - peak.afrCommanded;
-    const targetLean = peak.afrCommanded - peak.bestAfr;
     const byDelivery = leanContrib >= 1.5 && deliveryLean > 0.3;
-    const byTarget = leanContrib >= 1.5 && targetLean > MIX_NOTABLE_AFR;
     if (byDelivery) causes.push(`the mixture running ${peak.afr.toFixed(1)}:1 where the AFR table asks for ${peak.afrCommanded.toFixed(1)}:1 (best power is ${peak.bestAfr.toFixed(1)}:1): the engine is getting less fuel than the table asks for`);
     else if (leanContrib >= 1.5) causes.push(`the mixture running leaner than the ${peak.bestAfr.toFixed(1)}:1 best-power target here (peak ${peak.afr.toFixed(1)}:1)${peak.fuelLimited ? ', partly from injectors maxing out' : ''}`);
     if (causes.length === 0) causes.push(`the commanded timing itself being too aggressive for ${octaneLabel} octane and this compression ratio at this load`);
-    const suggestedTiming = Math.max(SPARK_MIN_DEG, Math.round((peak.threshold - 1) * 2) / 2);
-    const sparkCanFix = peak.threshold - 1 >= SPARK_MIN_DEG;
+    // Every cell the knocking points read, with the number TUNE marks under it; a cell already at
+    // its number is done (its neighbours carry the rest), as TUNE leaves it unmarked.
+    const knocked = new Map();
+    for (const p of run) {
+      if (!(p.margin < 0 || p.knock)) continue;
+      for (const c of sparkCellsOf(p)) {
+        const L = cellLimits.get(`${c.ri}|${c.ci}`);
+        if (c.w < IN_FORCE_WEIGHT || !L || !(L.knockBy > 0) || !Number.isFinite(L.limit)) continue;
+        const now = timing[c.ri][c.ci]; const want = sparkForLimit(L.limit);
+        const cannot = L.limit - KNOCK_SAFETY_DEG < SPARK_MIN_DEG;
+        if (cannot || now - want > 0.5) knocked.set(`${c.ri}|${c.ci}`, { ri: c.ri, ci: c.ci, now, want, cannot, atTable: L.worst?.thresholdAtTable != null && L.worst.thresholdAtTable < L.worst.threshold });
+      }
+    }
+    const listed = [...knocked.values()].sort((a, b) => (b.now - b.want) - (a.now - a.want));
+    const fixable = listed.filter((c) => !c.cannot);
+    const unfixable = listed.filter((c) => c.cannot);
+    const cellText = (c) => `${rowLabel(c.ri)} at ${sparkAxesOf.rpm[c.ci].toLocaleString('en-US')} RPM`;
+    const sparkCanFix = !unfixable.length;
+    // The targets TUNE marks lean in the cells the knock reads (a direct-injected engine's
+    // stoichiometric target stands where spark can answer the knock, as TUNE judges it).
+    const leanTargets = leanContrib >= 1.5 ? offTargets(peak).filter((c) => c.v.lean) : [];
+    const targetWrong = leanTargets.length > 0;
+    const sparkLine = [
+      fixable.length
+        ? `On TUNE → SPARK, lower the ${fixable.length === 1 ? 'cell' : `${fixable.length} cells`} marked past the knock limit to the number under each: ${fixable.slice(0, 4).map((c) => `${cellText(c)} from ${c.now}° to ${c.want}°`).join(', ')}${fixable.length > 4 ? `, and ${fixable.length - 4} more` : ''}. Each is ${KNOCK_SAFETY_DEG}° under the knock limit this pull measured where that cell is in force${fixable.some((c) => c.atTable) ? ', at the mixture the AFR table asks for: once the fuel hits it, the engine knocks sooner than it did on this pull' : ''}. Set them all, then pull again.`
+        : null,
+      unfixable.length
+        ? `Timing alone can't fix this at ${unfixable.slice(0, 2).map(cellText).join(' and ')}${unfixable.length > 2 ? ` and ${unfixable.length - 2} more` : ''}: it knocks there even at ${SPARK_MIN_DEG}°, the most retard the SPARK table holds.`
+        : null,
+      !listed.length ? `On TUNE → SPARK, the cells around ${peak.rpm} RPM are already at the numbers marked under them: pull again to check.` : null,
+    ].filter(Boolean).join(' ');
     const levers = ['higher-octane fuel', 'lower compression', ...(boosted && !mods.intercooler ? ['an intercooler'] : []),
       ...(derived.injection !== 'direct' ? ['direct injection'] : []), ...(derived.chamberOffsetK > 0 ? ['an aluminum head'] : [])];
     const buildLevers = `${levers.slice(0, -1).join(', ')} or ${levers.at(-1)}`;
@@ -512,75 +575,20 @@ export function simulateSweep({
       // timing, then boost, then hardware.
       fix: [
         byDelivery ? deliveryFix(peak, run, deliveryLean) : null,
-        byTarget
-          ? `${byDelivery ? 'Then, o' : 'O'}n TUNE → FUEL, richen the AFR target in those cells to about ${peak.bestAfr.toFixed(1)}:1 (λ ${(peak.bestAfr / 14.7).toFixed(2)}): it asks for ${peak.afrCommanded.toFixed(1)}:1. A richer charge runs cooler and raises the knock limit.`
+        targetWrong
+          ? `${byDelivery ? 'Then, o' : 'O'}n TUNE → FUEL, richen the AFR target${leanTargets.length === 1 ? '' : 's'} marked there to the number under each: ${leanTargets.slice(0, 3).map(afrCellText).join(', ')}${leanTargets.length > 3 ? `, and ${leanTargets.length - 3} more` : ''} (λ ${(leanTargets[0].v.suggested / 14.7).toFixed(2)}). A richer charge runs cooler and raises the knock limit.`
           : null,
-        sparkCanFix
-          ? `On TUNE → SPARK, pull about ${Math.max(1, Math.ceil(-peak.margin + 1))}° of timing from ${tableRowsAt(peak.map, layout, peak.airCharge)} around ${peak.rpm} RPM, to about ${suggestedTiming}° there (less either side, across ${rangeLabel(run)}). Aim for 0–1° of knock retard on the next pull.`
-          : `Timing alone can't fix this: at ${peak.rpm} RPM it knocks even at ${SPARK_MIN_DEG}°, the most retard the SPARK table holds.`,
+        sparkLine,
         boosted ? `${sparkCanFix ? 'Or' : 'Instead,'} ${lessBoost}.` : null,
         `Hardware that raises the knock limit: ${buildLevers} (BUILD).`,
       ].filter(Boolean).join(' '),
     });
   });
 
-  // Spark left on the table. The other half of knock: timing well short of what the engine
-  // could carry here, measured against the same target the advisor and the factory tables use
-  // (MBT, or the knock limit less the advisor's safety margin, whichever is lower).
-  const SPARK_LOSS_PER_DEG2 = 0.00033;
-  const sparkTarget = (p) => Math.min(p.mbtIdeal, p.threshold - KNOCK_SAFETY_DEG);
-  const sparkShort = (p) => sparkTarget(p) - (p.commandedTiming ?? p.timing);
-  // At full throttle only: that is where a tuner chases power, and where the factory tables
-  // are written to the target.
-  const sparkAxes = layout?.timing ?? { rpm: RPM, load: LOAD, loadUnit: 'kPa' };
-  const cellsOf = (p) => cellsInForce(p.rpm, loadFor(/** @type {any} */ (sparkAxes), { mapKpa: p.map, airmassG: p.airCharge }), sparkAxes)
-    .filter((c) => c.w >= IN_FORCE_WEIGHT);
-  const roomBy = new Map();
-  for (const p of points) {
-    // To best-power timing and to the pull's measured margin, from the cell's own value, as the
-    // advisor caps a cell: a cell near its MBT blended with a far lower one has no room, whatever
-    // the blend is short (an LS6 with a TVS1900 read 6 deg short where its 100 kPa cell could
-    // take 3). A spraying point caps the room too: no cell the spray reads is short of advance
-    // the spray had no room for.
-    const spraying = !offSpray(p);
-    for (const { ri, ci } of cellsOf(p)) {
-      const cell = timing?.[ri]?.[ci];
-      const own = Number.isFinite(cell) ? cell : (p.commandedTiming ?? p.timing);
-      const room = spraying ? p.margin - KNOCK_SAFETY_DEG : Math.min(p.mbtIdeal - own, p.margin - KNOCK_SAFETY_DEG);
-      const k = `${ri}|${ci}`; roomBy.set(k, Math.min(roomBy.get(k) ?? Infinity, room));
-    }
-  }
-  const reachable = (p) => Math.min(sparkShort(p), Math.max(-Infinity, ...cellsOf(p).map(({ ri, ci }) => roomBy.get(`${ri}|${ci}`) ?? -Infinity)));
-  const lazy = (p) => loadKpa >= 95 && p.rpm > 1000 && !(p.knockPull > 0) && !(p.protect?.length) && !p.misfire
-    // The advisor rounds a suggestion down to the half degree and caps it at the cell's own
-    // best-power timing, at the row's pressure rather than the point's (up to half a degree
-    // lower), and lists a cell past UNDER_ADVANCED_DEG: a degree more here, so whatever this
-    // calls short, it lists (an EA888 on E85 read 3.6° short where every cell had 3.0°).
-    && offSpray(p) && reachable(p) > UNDER_ADVANCED_DEG + 1;
-  groupRuns(points, lazy).forEach((run) => {
-    if (run.length < 3) return;
-    const lostHp = (p) => {
-      const now = Math.max(0, p.mbtIdeal - (p.commandedTiming ?? p.timing));
-      const best = Math.max(0, now - reachable(p));
-      const lossNow = SPARK_LOSS_PER_DEG2 * now * now;
-      const lossBest = SPARK_LOSS_PER_DEG2 * best * best;
-      return Math.max(0, (p.hp / Math.max(0.05, 1 - lossNow)) * (lossNow - lossBest));
-    };
-    const worst = run.reduce((a, b) => (reachable(b) > reachable(a) ? b : a));
-    const cost = Math.max(...run.map(lostHp));
-    if (cost < 2) return;
-    const boosted = run.some((p) => p.boostPsi >= 1);
-    events.push({
-      type: 'timing', severity: 1,
-      // A clean tune that leaves power behind is not a dialled-in one, but it is not a
-      // danger either: charged like a mild mixture miss, by how much power it costs.
-      impact: Math.round(clamp(3 + cost * 0.6, 4, 20) * (0.4 + 0.6 * rangeFrac(run))),
-      rpmStart: run[0].rpm, rpmEnd: run[run.length - 1].rpm,
-      msg: `Spark held ${reachable(worst).toFixed(0)}° short of what the engine can take across ${rangeLabel(run)} — about ${Math.round(cost)} hp left on the table`,
-      cause: `Near ${worst.rpm} RPM the table commands ${(worst.commandedTiming ?? worst.timing).toFixed(1)}° where this engine${boosted ? ` at ${worst.boostPsi.toFixed(1)} psi` : ''} burns best at about ${worst.mbtIdeal.toFixed(1)}° and only knocks past about ${worst.threshold.toFixed(1)}°. Nothing is wrong and nothing is at risk: the burn simply lands late, so more of the fuel's heat leaves in the exhaust instead of pushing the piston${boosted ? ', and the turbine runs hotter for it' : ''}.`,
-      fix: `On TUNE → SPARK, add timing in ${tableRowsAt(worst.map, layout, worst.airCharge)} across ${rangeLabel(run)}, about ${Math.round(((worst.commandedTiming ?? worst.timing) + reachable(worst)) * 2) / 2}° near ${worst.rpm} RPM (the advisor lists each cell). Go a degree or two at a time and pull again: stop where the log shows knock retard or the power stops rising.`,
-    });
-  });
+  // Spark left on the table is not in this log: it lists problems, and a safe tune short of its
+  // best power is the player's to take further. TUNE shows the room a pull measured in each
+  // cell it ran (advisors.js judgeAgainstPull, its power hints), from the same reading as the
+  // knock entry above.
 
   // Mechanical overload, reported separately from knock because it is a separate
   // failure and — crucially — because the levers that fix it are different ones. Every
@@ -623,14 +631,14 @@ export function simulateSweep({
         : spraying(peak)
           ? `This is while the nitrous sprays: it brings oxygen worth about 1.6 times its weight in air, and ${nitrous?.kit === 'dry' ? 'a dry kit relies on the ECU to add the fuel for it through the injectors — too little arrived' : 'the wet kit\'s fuel jet did not bring enough to match it'}. Lean on nitrous is how pistons melt.`
           : peak.afrCommanded <= COEFF.LEAN_DAMAGE_AFR
-          ? `The AFR table asked for ${peak.afrCommanded.toFixed(1)}:1 here, but the engine got ${peak.afr.toFixed(1)}:1. The target is fine; the fuelling is not delivering it.`
+          ? `The AFR table asked for ${peak.afrCommanded.toFixed(1)}:1 here, but the engine got ${peak.afr.toFixed(1)}:1: the fuelling is not delivering what the table asks for.${targetNote(peak)}`
           : `The AFR target itself (${peak.afrCommanded.toFixed(1)}:1) is set leaner than is safe for ${Math.round(peak.map)} kPa in the manifold.${missedTarget(peak) ? ` And the engine got even leaner than that, ${peak.afr.toFixed(1)}:1.` : ''}`,
       fix: peak.fuelLimited
         ? `Upgrade injectors on BUILD → FUEL SYSTEM (and set TUNE → INJECTORS to match), or lower VE/boost so demand fits within current capacity.`
         : spraying(peak)
           ? baseVeOff(peak) < -0.08 ? baseFuelFix(peak) : nitrousFuelFix(peak, 'more')
           : peak.afrCommanded <= COEFF.LEAN_DAMAGE_AFR
-          ? `The AFR target is fine; fuel delivery isn't hitting it, so don't just ask for a richer number. Correct the VE table in this range on TUNE → AIRFLOW (log a pull and accept the suggested cells), then check the injector flow rate on TUNE → INJECTORS and the MAF and sensor scaling on TUNE → SENSORS match the parts on BUILD.`
+          ? `Fuel delivery isn't hitting the target, so don't ask for a richer number to make up for it. Correct the VE table in this range on TUNE → AIRFLOW (log a pull and accept the suggested cells), then check the injector flow rate on TUNE → INJECTORS and the MAF and sensor scaling on TUNE → SENSORS match the parts on BUILD.`
           : `On TUNE → FUEL, richen the AFR target in these cells to about ${peak.bestAfr.toFixed(1)}:1 (λ ${(peak.bestAfr / 14.7).toFixed(2)})${peak.boostPsi > 1 ? ' — richer than the NA best-power mixture, because boost needs the charge cooling' : ''}.${missedTarget(peak) ? ' Then correct the VE table there on TUNE → AIRFLOW, so the engine gets what the target asks for.' : ''}`,
     });
   });
@@ -654,7 +662,7 @@ export function simulateSweep({
         rpmStart: run[0].rpm, rpmEnd: run[run.length - 1].rpm,
         ...(grid ? { gridBound: true } : {}),
         msg: `Mixture ${lean ? 'leaner' : 'richer'} than the AFR table asks for across ${rangeLabel(run)}: ${peak.afr.toFixed(1)}:1 where it asks for ${peak.afrCommanded.toFixed(1)}:1`,
-        cause: `The AFR table asks for ${peak.afrCommanded.toFixed(1)}:1 at ${peak.rpm} RPM and ${Math.round(peak.map)} kPa and the engine got ${peak.afr.toFixed(1)}:1. The target is not the fault: what reaches the cylinder is not what the ECU meant to give it. ${lean ? 'Lean under load runs hotter and knocks sooner.' : 'Rich past best power costs torque and washes the bores.'}`,
+        cause: `The AFR table asks for ${peak.afrCommanded.toFixed(1)}:1 at ${peak.rpm} RPM and ${Math.round(peak.map)} kPa and the engine got ${peak.afr.toFixed(1)}:1. What reaches the cylinder is not what the ECU meant to give it, so the fuelling is what to fix.${targetNote(peak)} ${lean ? 'Lean under load runs hotter and knocks sooner.' : 'Rich past best power costs torque and washes the bores.'}`,
         fix: deliveryFix(peak, run, miss).replace(/^Fuel first: (.)/, (m, c) => c.toUpperCase()),
       });
     });
@@ -669,7 +677,13 @@ export function simulateSweep({
       rpmStart: run[0].rpm, rpmEnd: run[run.length - 1].rpm,
       msg: `Lean-under-boost across ${rangeLabel(run)} (up to ${peak.afr.toFixed(1)}:1 at ${peak.boostPsi.toFixed(1)} psi) — elevated EGT, valve risk`,
       cause: `Boost raises cylinder pressure and heat at the same time the mixture goes lean — that combination burns exhaust valves over repeated pulls, separately from detonation. This spans ${Math.round(rangeFrac(run) * 100)}% of the sweep.`,
-      fix: `On TUNE → FUEL, richen the boost AFR target in this range (about 11.5–12:1 on gasoline). Check injector duty isn't maxed in the datalog, and fit an intercooler on BUILD → INDUCTION if there isn't one.`,
+      // The target only where the target is the fault: an engine that misses a right target is
+      // fixed in its fuelling, never by asking a richer number to make up for it.
+      fix: peak.fuelLimited
+        ? `On BUILD → FUEL SYSTEM, fit larger injectors (and set TUNE → INJECTORS to match), or lower the boost in this range on BUILD → INDUCTION so demand fits the injectors you have.`
+        : missedTarget(peak)
+          ? `${deliveryFix(peak, run, peak.afr - peak.afrCommanded)}${targetNote(peak)}`
+          : `The engine is getting the mixture its table asks for, so the target is too lean for this boost.${targetNote(peak) || ` On TUNE → FUEL, richen the boost AFR target in this range to about ${bestPowerAfr(peak.boostPsi).toFixed(1)}:1 on gasoline's scale: it asks for ${peak.afrCommanded.toFixed(1)}:1.`}${!mods.intercooler && peak.boostPsi > 3 ? ' An intercooler on BUILD → INDUCTION also takes heat out of the charge.' : ''}`,
     });
   });
 
@@ -696,7 +710,7 @@ export function simulateSweep({
         : `Far more fuel is being delivered than the available air can burn. Raw fuel washes the oil film off the cylinder walls, fouls plugs, and passes into the exhaust. It also costs a lot of power — the mixture is well past the point where extra fuel helps.`,
       fix: spraying(peak) && baseVeOff(peak) > 0.08 ? baseFuelFix(peak)
         : spraying(peak) ? nitrousFuelFix(peak, 'less') : peak.afrCommanded / 14.7 >= COEFF.RICH_DAMAGE_LAMBDA
-        ? `The AFR target asked for ${peak.afrCommanded.toFixed(1)}:1 and the engine got ${peak.afr.toFixed(1)}:1, so the fuelling is off, not the target. ${injMismatch ? `Fix the injector flow rate on TUNE → INJECTORS first (its own entry in this log) — it alone makes every pulse ${(injectorCc / ecuInjectorCc).toFixed(1)}× too big. Then correct` : 'Correct'} the VE table on TUNE → AIRFLOW, and check the MAF scalar on TUNE → SENSORS matches the parts on BUILD.`
+        ? `The AFR target asked for ${peak.afrCommanded.toFixed(1)}:1 and the engine got ${peak.afr.toFixed(1)}:1, so the fuelling is off.${targetNote(peak)} ${injMismatch ? `Fix the injector flow rate on TUNE → INJECTORS first (its own entry in this log) — it alone makes every pulse ${(injectorCc / ecuInjectorCc).toFixed(1)}× too big. Then correct` : 'Correct'} the VE table on TUNE → AIRFLOW, and check the MAF scalar on TUNE → SENSORS matches the parts on BUILD.`
         : `The AFR target itself asks for this much fuel. On TUNE → FUEL, lean the target in these cells back to about ${peak.bestAfr.toFixed(1)}:1 (λ ${(peak.bestAfr / 14.7).toFixed(2)}).${missedTarget(peak) ? ' Then check the VE table on TUNE → AIRFLOW and the injector flow rate on TUNE → INJECTORS, because the engine is getting even more than the target.' : ''}`,
     });
   });

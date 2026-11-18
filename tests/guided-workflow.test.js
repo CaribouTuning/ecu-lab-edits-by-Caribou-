@@ -141,12 +141,22 @@ describe('a turbo on any naturally aspirated engine, fitted as BUILD fits one, t
   }, 300_000);
 });
 
-describe('the log calls spark short only where the advisor lists a cell', () => {
-  it('holds for every timing entry along the way', () => {
+describe('the log lists problems only, and its knock numbers are TUNE\'s', () => {
+  it('holds for every pull along the way', () => {
     let st = build(build(preset('ls1'), 'blowerId', 'tvs1900'), 'blowerRatio', 2.4);
     for (let i = 0; i < 8; i += 1) {
       const p = pull(st);
-      if (p.events.some((e) => e.type === 'timing')) expect(advice(st, p).underAdvanced.length).toBeGreaterThan(0);
+      // Spark left on the table is TUNE's power hint, never a log entry.
+      expect(p.events.some((e) => e.type === 'timing')).toBe(false);
+      // Every cell the knock entry names carries the number TUNE marks under it.
+      const a = advice(st, p);
+      const ax = S.layoutById(st.tune.layout).timing;
+      for (const e of p.events.filter((x) => x.type === 'knock')) {
+        for (const m of String(e.fix).matchAll(/(\d+) kPa at ([\d,]+) RPM from -?[\d.]+° to (-?\d+)°/g)) {
+          const cell = a.overAdvanced.find((c) => Math.round(ax.load[c.ri]) === Number(m[1]) && ax.rpm[c.ci] === Number(m[2].replace(',', '')));
+          expect(cell?.suggested, `${m[1]} kPa at ${m[2]} RPM`).toBe(Number(m[3]));
+        }
+      }
       const r = round(st);
       if (!r.did.length) break;
       st = r.st;

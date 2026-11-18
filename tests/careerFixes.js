@@ -66,17 +66,26 @@ export const sparkClean = (st) => {
 };
 
 /**
- * Timing put back where the pull log says it was left on the table, the way its advice
- * reads: a degree at a time in the full-load and boost rows, pulling again each time, and a
- * degree back out at the first sign of knock.
+ * Timing put back where TUNE's power hints say the pull measured room for it (the pull log lists
+ * problems only): a degree at a time in the full-load and boost rows, pulling again each time,
+ * and a degree back out at the first sign of knock.
  */
+/** Whether TUNE's power hints show room to add timing in a full-load or boost cell. */
+const roomLeft = (st, p) => {
+  const { args, veTruth, mafErrorBase } = pullInputs({ ...st, session: { ...st.session, loadKpa: 100 } });
+  const a = S.calibrationAdvice({ ve: st.tune.ve, veTruth, timing: st.tune.timing, afr: st.tune.afr, layout: st.tune.layout, derived: args.derived,
+    fuel: args.fuel, mods: args.mods, turboOn: args.turboOn, boostCurve: args.boostCurve, compressor: args.compressor, turbine: args.turbine,
+    camAt: S.intakeCamAt(st.build.engineConfig, st.tune.ecu?.vvt), exhaustDia: args.exhaustDia, injectorCc: args.injectorCc, ecuInjectorCc: args.ecuInjectorCc,
+    mafScalar: args.mafScalar, mafErrorBase, pull: p });
+  return a.underAdvanced.some((c) => axesOf(st, 'timing').load[c.ri] >= 100);
+};
 export const sparkToLog = (st) => {
   let s = st;
   const step = (x, d) => ({ ...x, tune: { ...x.tune, timing: x.tune.timing.map((row, ri) => row.map((v) => (axesOf(x, 'timing').load[ri] >= 100 ? v + d : v))) } });
   for (let i = 0; i < 20; i += 1) {
-    const ev = pull(s).events;
-    if (ev.some((e) => e.type === 'knock')) return step(s, -1);
-    if (!ev.some((e) => e.type === 'timing')) return s;
+    const p = pull(s);
+    if (p.events.some((e) => e.type === 'knock')) return step(s, -1);
+    if (!roomLeft(s, p)) return s;
     s = step(s, 1);
   }
   return s;

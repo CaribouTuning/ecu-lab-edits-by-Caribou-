@@ -14,7 +14,7 @@ import { ACTIONS, reducer } from '../src/ui/state/reducer.js';
 import { boostSteps, safeBaseMap } from '../src/ui/state/safeBaseMap.js';
 import { buildChanges, buildSignature, guideStepNow, guidedSteps, offersTuneStart } from '../src/ui/state/tuneStart.js';
 import { nextStep } from '../src/ui/flow.js';
-import { pull } from './guidedPlayer.js';
+import { advice, pull } from './guidedPlayer.js';
 
 const preset = (id) => reducer(makeInitialState(), { type: ACTIONS.APPLY_PRESET, preset: S.applyPreset(S.presetById(id)) });
 const set = (s, field, value) => reducer(s, { type: ACTIONS.SET_BUILD_FIELD, field, value });
@@ -54,8 +54,10 @@ describe('the safe base map', () => {
     const loaded = reducer(st, m.action);
     const p = pull(loaded);
     expect(p.points.some((q) => (q.knockPull ?? 0) > 0.2)).toBe(false);
-    // A start, not a tune: the log still finds timing to add.
-    expect(p.events.some((e) => e.type === 'timing')).toBe(true);
+    // A start, not a tune: TUNE's power hints still find timing to add. The pull log lists
+    // problems only, so it says nothing about it.
+    expect(advice(loaded, p).underAdvanced.length).toBeGreaterThan(0);
+    expect(p.events.some((e) => e.type === 'timing')).toBe(false);
     // Loading it is one undoable write.
     expect(reducer(loaded, { type: ACTIONS.UNDO }).tune.timing).toEqual(st.tune.timing);
   }, 120_000);

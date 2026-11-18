@@ -298,6 +298,22 @@ export function evaluatePoint({
   // any of them. This is what the ECU's knock control is protecting against.
   const threshold = knockLimitedSpark(cyc);
   const margin = threshold - timingVal;
+  // The knock limit this point would have with the mixture its AFR table asks for: the same
+  // air, the same cycle, the table's fuel. Only where the engine missed the table by more
+  // than the tolerance, and never on the spray (its fuel is the kit's). Once the fuelling is
+  // fixed this is the limit the cells meet, so the spark a pull asks for is set from the
+  // lower of the two: the log and TUNE both read it from here (advisors.js pullCellLimits).
+  const lambdaTable = afrCommanded / 14.7;
+  const thresholdAtTable = !n2o && lambdaTable > 0 && Math.abs(lambdaActual / lambdaTable - 1) * 100 > MIXTURE_TOLERANCE_PCT
+    ? knockLimitedSpark(cycleInputsFor({
+      rpm, mapKpa, empKpa, intakeK: cylChargeK,
+      airChargeG: airChargeG * held,
+      burnedFuelG: Math.min(airChargeG / (lambdaTable * fuel.stoich), airChargeG / fuel.stoich) * held,
+      fuelMassG: (airChargeG / (lambdaTable * fuel.stoich)) * held,
+      lambda: lambdaTable, fuel,
+      derived: cycDerived, ...(E?.cam ? { cam: E.cam } : cam ? { cam } : {}),
+    }))
+    : null;
   const knockPull = E?.knock ? ecuKnockRetard(margin, E.knock) : (margin < 0 ? Math.min(COEFF.MAX_KNOCK_RETARD, -margin) : 0);
   const usedTiming = timingVal - knockPull;
 
@@ -421,6 +437,7 @@ export function evaluatePoint({
     iat: Number(chargeC.toFixed(0)), airCharge: Number(airChargeG.toFixed(3)),
     boostPsi: Number(boostPsi.toFixed(1)), trimPct: Number(trimPct.toFixed(1)),
     threshold: Number(threshold.toFixed(1)), margin: Number(margin.toFixed(1)),
+    ...(thresholdAtTable != null ? { thresholdAtTable: Number(thresholdAtTable.toFixed(1)) } : {}),
     chargeIndex: Number(chargeIndex.toFixed(3)),
     mbtIdeal: Number(mbtIdeal.toFixed(1)), openLoop,
     egt: Math.round(egtC),

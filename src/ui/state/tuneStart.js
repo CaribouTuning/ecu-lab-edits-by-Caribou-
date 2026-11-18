@@ -107,6 +107,9 @@ export function guideStepNow(steps) {
   return steps.find((s) => s.done === false) ?? steps.find((s) => s.done === null) ?? steps[steps.length - 1];
 }
 
+/** The guide's last word: where it stops, and where the player takes over. */
+const DONE = ' Once that pull is clean, the base map is done: the engine runs safe on these parts. The power left is yours to find: tap a SPARK cell to see the room the last pull measured there, add a degree or two at a time and pull again. The pull log speaks up only when something is wrong.';
+
 /** How close a cell must come to the target to count, by table. */
 export const GUIDE_TOLERANCE = Object.freeze({ spark: 1, afr: 0.3, vePct: 6, maf: 0.02 });
 
@@ -279,17 +282,17 @@ export function guidedSteps({ build, tune, target, samples, advice = null }) {
     },
     {
       id: 'pull', title: steps.length ? `First full-throttle pull at ${steps[0]} psi` : 'First full-throttle pull', short: 'First full pull', go: 'dyno',
-      text: `Run one full-throttle pull${steps.length ? ` with the boost held at ${steps[0]} psi` : ''}.${build.blowerId ? ' A supercharger\'s boost comes from its pulley, not from the computer, so this first pull already runs the full boost: the steps before it matter all the more.' : ''}${build.nitrous ? ' Leave the nitrous off (not armed) for now: it comes last, once the engine runs clean without it.' : ''} Then read the pull log from the top and do what it says, in its order: problems with the parts and the fuel first (a lean spot, or Correct VE from logs), then knock. Where it reports knock, take that much timing out of the cells it names, plus a couple of degrees to be safe. If it says false knock, the knock sensor is too sensitive; the timing is fine. Pull again until the log shows no lean and no knock.`,
+      text: `Run one full-throttle pull${steps.length ? ` with the boost held at ${steps[0]} psi` : ''}.${build.blowerId ? ' A supercharger\'s boost comes from its pulley, not from the computer, so this first pull already runs the full boost: the steps before it matter all the more.' : ''}${build.nitrous ? ' Leave the nitrous off (not armed) for now: it comes last, once the engine runs clean without it.' : ''} Then read the pull log from the top and do what it says, in its order: problems with the parts and the fuel first (a lean spot, or Correct VE from logs), then knock. Where it reports knock, set the cells it names to the numbers it gives: TUNE → SPARK marks the same cells with the same numbers. If it says false knock, the knock sensor is too sensitive; the timing is fine. Pull again until the log shows no lean and no knock.${steps.length > 1 || build.nitrous ? '' : DONE}`,
       done: null,
     },
     ...(steps.length > 1 ? [{
       id: 'boost', title: 'Raise the boost a little at a time', short: 'Boost in steps', go: 'boost',
-      text: `On TUNE → BOOST, raise Boost limit by gear for 4th in steps: ${steps.join(' → ')} psi. At each step run a pull and fix what the log says before going higher. If a step will not run clean, stop there: the answer is better fuel or less boost, not ever less timing. When you are done, set the limit back above your ${boostTarget} psi target.`,
+      text: `On TUNE → BOOST, raise Boost limit by gear for 4th in steps: ${steps.join(' → ')} psi. At each step run a pull and fix what the log says before going higher. If a step will not run clean once the marked cells are set, stop there: the log names what limits it (better fuel, an intercooler, bigger injectors, or less boost). When you are done, set the limit back above your ${boostTarget} psi target.${build.nitrous ? '' : DONE}`,
       done: null,
     }] : []),
     ...(build.nitrous ? [{
       id: 'nitrous', title: 'Add the nitrous last', short: 'Nitrous', go: 'nitrous',
-      text: `Only once the engine runs clean without it. Nitrous adds oxygen, so the ${build.nitrous.shotHp} hp shot burns more fuel, faster and hotter: while it sprays the engine needs less timing and ${build.nitrous.kit === 'dry' ? 'the computer must add the fuel for it' : 'its own fuel'}. On TUNE → NITROUS set Retard while spraying to at least ${wantRetard ?? 2}°${wantTrim ? ` and Fuel correction while spraying to ${wantTrim}%` : ''} (what the base map was checked with). Then arm it, make a pull, and work its log the same way.`,
+      text: `Only once the engine runs clean without it. Nitrous adds oxygen, so the ${build.nitrous.shotHp} hp shot burns more fuel, faster and hotter: while it sprays the engine needs less timing and ${build.nitrous.kit === 'dry' ? 'the computer must add the fuel for it' : 'its own fuel'}. On TUNE → NITROUS set Retard while spraying to at least ${wantRetard ?? 2}°${wantTrim ? ` and Fuel correction while spraying to ${wantTrim}%` : ''} (what the base map was checked with). Then arm it, make a pull, and work its log the same way.${DONE}`,
       done: wantRetard != null ? (getCal(tune.ecu, 'nitrous.retardDeg') ?? 0) >= wantRetard - 0.25 && (getCal(tune.ecu, 'nitrous.fuelTrimPct') ?? 0) >= (wantTrim ?? 0) - 0.5 : null,
     }] : []),
   ];

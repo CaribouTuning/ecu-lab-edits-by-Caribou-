@@ -32,7 +32,7 @@ describe('TuneStart', () => {
     expect(screen.getByRole('heading', { name: 'Start the tune' })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Load a safe base map/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Build it with the guide/ })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /Tune from the advice/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Tune it yourself/ }));
     expect(screen.queryByTestId('tune-start')).toBeNull();
     // Still there for later, on one line.
     expect(screen.getByTestId('tune-start-again')).toBeTruthy();

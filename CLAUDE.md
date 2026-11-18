@@ -212,18 +212,26 @@ remaining risk is the same Node major with a different libm, which is what step 
   spark and mixture steps read TUNE's advisor (`guidedSteps` `advice`), so they never disagree;
   tests/tune-guide.test.js follows it literally. It holds boost low with TUNE → BOOST's Boost
   limit by gear (4th is the dyno's), not by editing the build, which would reset the choice.
-- **Advice must settle: type the number shown and the next look asks for nothing more**
-  (tests/advice-settles.test.js; the scratchpad audit `followmarks` types every mark on all
-  112 SANDBOX builds, then corrects the VE). A pull point between breakpoints reads a blend of
-  four cells. A cell the pull knocked on comes down to the least knock limit of the points it is
-  in force at, in the table's own terms (limit + blend - fired spark + the drop once the
-  fuelling hits the AFR table): never "this cell plus the blend's margin", which charged a point's
-  whole knock to each cell in turn and chased one cell 4.5, -2.5, -4. A clean cell gains timing
-  by main's margin rule (stock tables stay clean), capped under a nitrous spray. Whole degrees,
-  rounded down. A knocking cell at its number is done (`atSuggestion`); one no spark can save
-  stays listed (`sparkCannotFix`). Mixture advice: none where the injectors are maxed. Tried and
-  dropped: flagging a clean cell past its own home limit (it flagged factory boost tables) and an
-  "inside the margin" verdict (it marked cells the pull log called clean).
+- **The pull log and TUNE read a pull once, and quote the same numbers**
+  (tests/log-grid-agree.test.js, tests/advice-settles.test.js; the scratchpad audit `agree` plays
+  every preset with every part the way a player does: fit it, pull, type every mark, pull again).
+  `pullCellLimits` (advisors.js) is the one reading: each spark cell's knock limit in the table's
+  own terms, the least over the points it is in force at (limit + blend - fired spark, using the
+  lower of the limit met and `thresholdAtTable`, point.js, the limit once the fuelling hits the
+  AFR table). The knock entry lists the cells with `sparkForLimit`'s number (1.5° under, whole
+  degrees, rounded down), TUNE marks the same; neither depends on what the cell holds, so typing
+  it never moves it. A clean cell only ever gets a power hint to add timing, and only where the
+  pull ran its own row (`ROOM_SHARE`): read a third of the way up from the row below, a turbo
+  VQ35DE's 150 kPa cells were offered timing full boost had knocked at. After a pull, a cell it
+  did not run is offered nothing more (room is something only a log shows).
+  **The pull log lists problems only** (knock, lean, fuelling misses, parts): spark left on the
+  table is TUNE's quiet hint, never an entry. **A FUEL target is judged on itself**
+  (`afrTargetVerdict`: the cell's value against `mixtureBand` at its row's own pressure), never
+  scaled by what was delivered: a fuelling miss is fixed in VE, MAF and injectors, and the log
+  never calls a target fine; where the target is also out of band it names those cells, with
+  TUNE's numbers. Scaling the target by the miss told a turbo LS1 to type 13.8 into a boost cell
+  while its VE was wrong. A direct-injected engine keeps its stoichiometric target unless no
+  spark the table holds is safe there (then the port band, as the knock entry asks).
 - **Tests that play the game do what the app offers.** Correct VE from logs reads the last pull
   only (EcuLab.jsx `veLog`), so `tests/guidedPlayer.js` corrects from one pull at a time, lightest
   throttle first; pooling throttles into one fit split the difference on a boosted engine and

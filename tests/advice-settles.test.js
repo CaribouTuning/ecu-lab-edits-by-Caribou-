@@ -72,14 +72,23 @@ describe('following the advice settles', () => {
     expect(spark.done).toBe(true);
   }, 300_000);
 
-  it('does not ask the AFR table for fuel maxed injectors cannot spray', () => {
-    // Stock injectors at 8 psi run out up top: the pull log names the injectors, and the
-    // advisor leaves those cells alone instead of richening them without end.
+  it('never chases fuel the injectors cannot spray through the AFR table', () => {
+    // Stock injectors at 8 psi run out up top: the pull log names the injectors. A FUEL cell
+    // there is marked only if its target itself is wrong for its boost, with best power for its
+    // row (the same whatever the injectors deliver), and once typed it is not marked again.
+    // Scaled by what was delivered instead, a turbo VQ's 6500 RPM cell was asked 12.2, 10.5, 9,
+    // 7.7, 6.6 while the engine took 14.1:1 every time.
     let { st } = turboRevUp(8, null);
     st = set(set(st, 'compressorIdx', 1), 'octaneIdx', 1);
     const p = pull(st);
     expect(p.events.some((e) => e.type === 'fuel')).toBe(true);
     const a = advice(st, p);
-    for (const c of a.wrongMix) expect(c.fuelLimited, `${c.map} kPa at ${c.rpm} RPM`).toBe(false);
+    for (const c of a.wrongMix) {
+      expect(c.suggested, `${c.map} kPa at ${c.rpm} RPM`).toBe(S.afrTargetVerdict({ value: c.current, kpa: c.map, direct: false }).suggested);
+    }
+    const typed = { ...st, tune: { ...st.tune, afr: st.tune.afr.map((r) => [...r]) } };
+    for (const c of a.wrongMix) typed.tune.afr[c.ri][c.ci] = c.suggested;
+    const again = advice(typed, pull(typed));
+    for (const c of again.wrongMix) expect(a.wrongMix.some((x) => x.ri === c.ri && x.ci === c.ci), `${c.map} kPa at ${c.rpm} RPM marked again`).toBe(false);
   }, 300_000);
 });

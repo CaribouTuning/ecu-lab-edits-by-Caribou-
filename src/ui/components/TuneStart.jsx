@@ -88,11 +88,11 @@ export function TuneStart({ onGo, force = false, advice = null, page = null }) {
   const options = [
     {
       id: 'base', Icon: Gauge, name: 'Load a safe base map',
-      text: 'Made for these parts and checked on the dyno: clean, with power left to find.',
+      text: 'The game makes one for these parts and proves it on the dyno: safe, with power left for you to find.',
       onPick: () => make((m) => { dispatch(/** @type {any} */ (m.action)); choose('base'); }),
     },
-    { id: 'guided', Icon: ListChecks, name: 'Build it with the guide', text: 'You type the cells; each step has targets and a check.', onPick: () => choose('guided') },
-    { id: 'advice', Icon: Wrench, name: 'Tune from the advice', text: 'Keep your tables and follow the pull log.', onPick: () => choose('advice') },
+    { id: 'guided', Icon: ListChecks, name: 'Build it with the guide', text: 'The game walks you through making a safe base map; you type each cell, and each step is checked.', onPick: () => choose('guided') },
+    { id: 'advice', Icon: Wrench, name: 'Tune it yourself', text: 'Keep your tables. The pull log and the cell advisor tell you what is wrong; the rest is up to you.', onPick: () => choose('advice') },
   ];
   return (
     <section className={styles.card} data-testid="tune-start" aria-labelledby="tune-start-title">
@@ -156,7 +156,7 @@ function BaseMapResult({ made, onClose }) {
         <div className={styles.barBody}>
           <p className={styles.lead}>
             {made.clean
-              ? <>Proven on the dyno as a tuner does it, with no knock and no lean. The timing sits under what the engine can take: the log and TUNE show where the rest is.</>
+              ? <>Proven on the dyno as a tuner does it, with no knock and no lean. It is a safe start, not a finished tune: the timing sits a few degrees under what the engine can take, so a hot day or a poor tank of fuel does not hurt it. The power left is yours to find: tap a SPARK cell to see the room the last pull measured there, add a degree or two at a time, and pull again. The pull log speaks up only when something is wrong.</>
               : <>As safe as a map can make it, but at what the build asks for it still {made.left.some((e) => /knock/.test(e.type)) ? 'knocks' : 'runs lean'}. Change what is listed before pulling hard.</>}
           </p>
           <ol className={styles.workLog} aria-label="What was done, in order">
