@@ -193,16 +193,13 @@ const KNOWN_GAPS = {
   'vq35de-revup': { hp: -0.051 },
   // MEASURED with its flow-bench ports (presets.js): the VQ35HR makes about 4.3% under its 306 hp.
   'vq35hr': { hp: -0.05 },
-  // MEASURED with the knock model anchored to real calibrations (KNOCK_TAU_SCALE 2.5): the GM
-  // truck V8s read high on peak torque, peaking 600-800 RPM before their published 4000 (LQ4
-  // +12.2%, LM7 +9.9%, LR4 +13.3% of the rating). Against measured stock engines the gap is
-  // smaller: a stock LQ4 with its stock exhaust made 399 lb-ft on an engine dyno (BD Turnkey
-  // Engines' published comparison), and stock LM7 trucks 253-295 lb-ft at the wheels on chassis
-  // dynos (GM-Trucks.com, PerformanceTrucks.net reports), so the game sits about 4-6% over the
-  // highest of them. The stock intake's restriction is in range (2-3 kPa at full flow), and no
-  // stock truck torque curve was found to place the early peak. docs/realism.md.
-  lq4: { tqHighWheel: 357 },
-  lr4: { tqHighWheel: 287 },
+  // MEASURED (November 2026) with GM's own full-load spark and the truck heads' bench flow
+  // (presets.js): the LM7 and LQ4 are inside their ratings' tolerances (torque +9% and +5%,
+  // power -1% and -3%). The LR4 reads 15% over its 295 lb-ft, peaking 600-800 RPM before the
+  // published 4000. Against measured stock trucks the GM V8s read high: stock LM7 trucks made
+  // 253-295 lb-ft at the wheels on chassis dynos (GM-Trucks.com, PerformanceTrucks.net reports),
+  // and no stock LR4 torque curve was found to place the early peak. docs/realism.md.
+  lr4: { tqHighWheel: 290 },
 };
 
 describe('factory calibration validates against real published figures', () => {

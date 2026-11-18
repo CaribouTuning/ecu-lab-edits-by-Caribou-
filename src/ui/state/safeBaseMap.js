@@ -5,7 +5,7 @@
  */
 
 import {
-  BARO_KPA, INJECTOR_OPTS, PSI_TO_KPA, START_UP_RETARD_DEG, ecuHardwareOf, getCal, setCal, SPARK_MIN_DEG, applyVeCorrections, calibrationAdvice, intakeCamAt, layoutById, loadFor, simulateSweep, veCorrections, veSamplesFromPull,
+  BARO_KPA, INJECTOR_OPTS, OPEN_LOOP_KPA, PSI_TO_KPA, monotoneFullLoad, START_UP_RETARD_DEG, ecuHardwareOf, getCal, setCal, SPARK_MIN_DEG, applyVeCorrections, calibrationAdvice, intakeCamAt, layoutById, loadFor, simulateSweep, veCorrections, veSamplesFromPull,
 } from '../../sim/index.js';
 
 import { baseMapAction } from './baseMap.js';
@@ -126,6 +126,10 @@ function evenedSpark(st, p) {
     timing[ri][ci] = Number((timing[ri][ci] + up).toFixed(1));
     moved = Math.max(moved, up);
   }
+  // Evened cell by cell, a boost row can come out over the row under it where best power sits
+  // higher there: drawn as a tuner draws full-load rows, it takes the lower row's number.
+  const top = Math.max(...axes.load);
+  monotoneFullLoad(timing, axes, (rpm, v) => (axes.loadUnit === 'kPa' ? v : v >= top * 0.6 ? OPEN_LOOP_KPA : 0));
   return moved > 0 || lowered > 0 ? { timing, moved, lowered } : null;
 }
 

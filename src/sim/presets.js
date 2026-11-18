@@ -34,7 +34,7 @@ import { defaultEcuCalibration } from './ecu/calibration.js';
 import { DEFAULT_ECU_HW, factoryIntakeSchedule, intakeCamAt, scheduledVeAt, tankFuel } from './ecu/context.js';
 import { deriveEngine, valveFloatRpm } from './engine.js';
 import { BOTTOM_END_OPTS, DEFAULT_BOTTOM_END } from './bottomEnd.js';
-import { clamp, curveAt } from './math.js';
+import { clamp, curveAt, interp1 } from './math.js';
 import { inductionAtFullThrottle, inductionAtMap } from './turbo.js';
 import { compressorMap } from './compressorMap.js';
 import {
@@ -533,6 +533,10 @@ export const ENGINE_PRESETS = [
       // Cams: GM 12561721, the stock cam for the LQ4 and LQ9, 196 / 201 degrees at 0.050 inch,
       // 0.467 / 0.479 in lift, 116 degree lobe separation (Chevrolet Performance camshaft
       // listing; michiganmotorsports.com stock-replacement LQ4 cam).
+      // Head: the 317 casting, which the Sloppy Mechanics LS head wiki ('LSX Head cast numbers /
+      // flow / swap info') benches beside the LS1's 241 on one table: 240 cfm peak intake against the
+      // 241's 227. Carried onto the 28 inch bench the LS1's 243 cfm comes from by that ratio.
+      intakePortCfm: 257,
       camDuration: 196, exhaustCamDuration: 201, springRate: 60,
       redline: 5600,
     },
@@ -564,6 +568,10 @@ export const ENGINE_PRESETS = [
       frictionLevel: 'older',
       // Cams: the 1999-2006 LM7 truck cam, 191 / 190 degrees at 0.050 inch, 0.457 / 0.466 in
       // lift, 114 degree lobe separation (OnAllCylinders, 'LM7 5.3L Vortec 5300 Engine Specs').
+      // Head: the 706 / 862 casting, which the Sloppy Mechanics LS head wiki ('LSX Head cast numbers /
+      // flow / swap info') benches beside the LS1's 241 on one table: 226 cfm peak intake against the
+      // 241's 227. Carried onto the 28 inch bench the LS1's 243 cfm comes from by that ratio.
+      intakePortCfm: 243,
       camDuration: 191, exhaustCamDuration: 190, springRate: 60,
       redline: 5800,
     },
@@ -593,6 +601,8 @@ export const ENGINE_PRESETS = [
       frictionLevel: 'older',
       // Cams: the 4.8 shares the LM7's truck cam, 191 / 190 degrees at 0.050 inch, 0.457 /
       // 0.466 in lift (cartipsdaily.com, '4.8 LS Engine Specs').
+      // Head: the 706 / 862 truck casting, as the LM7 (243 cfm on the LS1's bench).
+      intakePortCfm: 243,
       camDuration: 191, exhaustCamDuration: 190, springRate: 60,
       redline: 6000,
     },
@@ -931,6 +941,33 @@ export function factoryCalibration(preset, layout = null) {
     unbounded[ri][ci] = safe >= COEFF.KNOCK_UNBOUNDED_BTDC - FACTORY_KNOCK_MARGIN_DEG;
     return Number(clamp(Math.min(mbt, safe), SPARK_MIN_DEG, SPARK_MAX_DEG).toFixed(1));
   }));
+  // GM'S OWN FULL-LOAD SPARK, where this is a GM engine with figures of its own
+  // (COEFF.GM_STOCK_WOT_SPARK): a production calibration leaves timing under best power at full
+  // throttle, the trucks by 8-14 degrees, and the stock table is the one GM shipped, not the one a
+  // tuner finds. Read at each cell's own air per cylinder, between GM's 0.60 and 0.80 g rows (held
+  // at the nearer row outside them). Only the stock engine: a base map for a changed one is a
+  // tuner's, written to the physics.
+  const gmWot = COEFF.GM_STOCK_WOT_SPARK[/** @type {'ls6'} */ (preset.id)];
+  if (Array.isArray(gmWot)) {
+    const G = COEFF.GM_STOCK_WOT_SPARK;
+    T.load.forEach((v, ri) => T.rpm.forEach((rpm, ci) => {
+      const kpa = kpaOf(T, rpm, v);
+      if (rpm <= IDLE_COLUMN_MAX_RPM || kpa < OPEN_LOOP_KPA) return;
+      const f = clamp((airAt(rpm, kpa) - G.gPerCyl[0]) / (G.gPerCyl[1] - G.gPerCyl[0]), 0, 1);
+      const gm = (1 - f) * interp1(G.rpm, gmWot[0], rpm) + f * interp1(G.rpm, gmWot[1], rpm);
+      if (gm < timing[ri][ci]) timing[ri][ci] = Number(clamp(gm, SPARK_MIN_DEG, SPARK_MAX_DEG).toFixed(1));
+    }));
+  }
+  // IDLE SPARK RESERVE: the idle columns held under best power, at the engine's own MBT at
+  // that speed and COEFF.IDLE_SPARK_REF_KPA less COEFF.IDLE_SPARK_RESERVE_DEG (GM's pattern).
+  // Only ever lowers a cell, so the knock walk below still has the last word.
+  T.rpm.forEach((rpm, ci) => {
+    if (rpm > IDLE_COLUMN_MAX_RPM) return;
+    const cap = cellAt(rpm, COEFF.IDLE_SPARK_REF_KPA).mbt - COEFF.IDLE_SPARK_RESERVE_DEG;
+    T.load.forEach((_, ri) => {
+      if (timing[ri][ci] > cap) timing[ri][ci] = Number(clamp(cap, SPARK_MIN_DEG, SPARK_MAX_DEG).toFixed(1));
+    });
+  });
 
   // THE TABLE HAS TO BE SAFE BETWEEN ITS ROWS, NOT ONLY ON THEM. The ECU reads the table
   // interpolated, so between two rows the cylinder gets a blend at a pressure no row sits
@@ -968,6 +1005,12 @@ export function factoryCalibration(preset, layout = null) {
     plateau(afr, L.afr);
     plateau(ve, L.ve);
   }
+  // A FULL-LOAD ROW NEVER ASKS FOR MORE SPARK THAN THE ROW UNDER IT. The knock limit only
+  // falls with pressure, and a calibrator draws the full-load rows that way: a boost spike or a
+  // hot day reads more pressure and meets less spark, never more. Where best-power timing comes
+  // out a little higher at the higher row (a turbo LS1's 150 kPa row at 7500 RPM over its 100 kPa
+  // row), the higher row takes the lower one's number.
+  monotoneFullLoad(timing, T, (rpm, v) => kpaOf(T, rpm, v));
   // Tables written for the boost the engine will actually be asked for: where the limit
   // took boost out, the calibration is generated again at the limited curve (once — the
   // limit is already met there), so RESET, which starts from that curve, gives it back.
@@ -975,6 +1018,28 @@ export function factoryCalibration(preset, layout = null) {
     return factoryCalibration({ ...preset, induction: { ...preset.induction, boost } }, layout);
   }
   return { ve, timing, afr, mafScalar, layout: L, ecu, boost };
+}
+
+/**
+ * Holds each full-load row (from OPEN_LOOP_KPA up) to no more spark than the row under it, in
+ * place, by lowering the higher row.
+ * @param {number[][]} timing
+ * @param {{rpm: number[], load: number[]}} axes
+ * @param {(rpm: number, load: number) => number} kpaAt a row's manifold pressure at a speed
+ * @returns {number} the most a cell was lowered, degrees
+ */
+export function monotoneFullLoad(timing, axes, kpaAt) {
+  const up = axes.load.map((v, ri) => [v, ri]).sort((a, b) => a[0] - b[0]).map(([, ri]) => ri);
+  let most = 0;
+  axes.rpm.forEach((rpm, ci) => {
+    let cap = Infinity;
+    for (const ri of up) {
+      if (kpaAt(rpm, axes.load[ri]) < OPEN_LOOP_KPA) continue;
+      if (timing[ri][ci] > cap) { most = Math.max(most, timing[ri][ci] - cap); timing[ri][ci] = cap; }
+      cap = timing[ri][ci];
+    }
+  });
+  return most;
 }
 
 /**

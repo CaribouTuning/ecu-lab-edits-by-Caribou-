@@ -12,6 +12,9 @@ import { interp1 } from './math.js';
  * @property {number} enrichFromKpa closed-loop lambda 1 at or below this manifold pressure
  *   (naturally aspirated) or, for a turbo engine, this much boost in kPa above barometric
  * @property {number} enrichFullKpa the full-load target is reached here (same convention)
+ * @property {FuelStrategy} [offBoost] a turbo plan's targets up to barometric pressure, as a
+ *   naturally aspirated plan: full-throttle enrichment before the turbo makes boost, which the
+ *   boost ramp then starts from
  * @property {'validated'|'logged'|'reported'|'family'} confidence
  * @property {string[]} sources
  * @property {string} note
@@ -152,10 +155,21 @@ const GENERIC_NA = {
   ...NA_PORT, wot: [[1000, 0.88], [3000, 0.87], [5000, 0.85], [7000, 0.83], [11000, 0.82]],
   confidence: 'family', sources: [UPREV, HPT_PE], note: 'A port-injected, naturally aspirated engine\'s usual strategy.',
 };
-/** @type {FuelStrategy} */
+/**
+ * A port-injected turbo engine of the player's (or a turbo fitted to a naturally aspirated one).
+ * Full throttle runs open loop from where the ECU leaves closed loop, as the naturally aspirated
+ * plan does, and richer with boost: a speed-density turbo map enriches its full-throttle cells
+ * from the atmospheric row up, since the engine passes through them at full throttle while the
+ * turbo spools (GM's own power enrichment, the LS plans above, which a turbo LS keeps, commands about lambda 0.81-0.86
+ * at full throttle). Lambda 1 there would leave the spool-up cells at 14.7, the leanest a full-load
+ * cell can be.
+ * @type {FuelStrategy}
+ */
 const GENERIC_TURBO = {
   turbo: true, enrichFromKpa: 0, enrichFullKpa: 30, wot: [[1500, 0.86], [3000, 0.82], [5000, 0.8], [7000, 0.79], [11000, 0.78]],
-  confidence: 'family', sources: [JB4_N54], note: 'A turbo engine\'s usual strategy: lambda 1 off boost, rich under it.',
+  offBoost: GENERIC_NA,
+  confidence: 'family', sources: [JB4_N54, HPT_PE],
+  note: 'A port-injected turbo engine\'s usual strategy: closed loop at part throttle, enriched at full throttle from the atmospheric row up, richer under boost.',
 };
 
 /**
@@ -169,6 +183,9 @@ const GENERIC_TURBO = {
 export function fuelStrategyFor(id, turbo) {
   const own = FACTORY_FUEL[id ?? ''];
   if (own && !!own.turbo === turbo) return own;
+  // A turbo fitted to an engine with its own naturally aspirated plan keeps that plan's
+  // full-throttle enrichment off boost (a turbo LS keeps GM's power enrichment) and adds boost's.
+  if (turbo && own && !own.turbo) return { ...GENERIC_TURBO, offBoost: own };
   return turbo ? GENERIC_TURBO : GENERIC_NA;
 }
 
@@ -182,6 +199,17 @@ export function fuelStrategyFor(id, turbo) {
  * @returns {number}
  */
 export function factoryLambda(s, rpm, kpa, turbo, baroKpa) {
+  // Up to barometric pressure a plan with off-boost targets runs them; boost then ramps from
+  // the atmospheric target to the boosted one, so the two meet without a step.
+  if (turbo && s.offBoost) {
+    const atm = factoryLambda(s.offBoost, rpm, Math.min(kpa, baroKpa), false, baroKpa);
+    if (kpa <= baroKpa) return atm;
+    const boosted = factoryLambda({ ...s, offBoost: undefined }, rpm, kpa, true, baroKpa);
+    const full = interp1(s.wot.map((q) => q[0]), s.wot.map((q) => q[1]), rpm);
+    // The boost ramp's share of the way from lambda 1 to the boosted target, applied from atm.
+    const k = full === 1 ? 1 : (1 - boosted) / (1 - full);
+    return atm + (Math.min(atm, full) - atm) * k;
+  }
   const p = turbo ? kpa - baroKpa : kpa;
   const span = s.enrichFullKpa - s.enrichFromKpa;
   const t = p <= s.enrichFromKpa ? 0 : p >= s.enrichFullKpa ? 1 : (p - s.enrichFromKpa) / span;

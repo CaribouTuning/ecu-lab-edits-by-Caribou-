@@ -243,9 +243,11 @@ function mbtAtRow({ rpm, mapKpa, veCell, afrCell, fuel, mods, derived, turboOn, 
  * @param {(axes: any, rpm: number, load: number) => number} kpaOf
  * @param {'spark'|'afr'} kind
  * @param {(ri: number, ci: number) => number|null} [advised] what this advice already tells a
+ * @param {(ri: number, ci: number) => boolean} [judged] whether a pull judged the cell: the row
+ *   bracketing the reach is left to the pull only where the pull read it in force
  * @returns {object[]} cells, each with its suggestion: the row under it
  */
-function beyondReachCells(table, axes, reachAt, kpaOf, kind, advised = () => null) {
+function beyondReachCells(table, axes, reachAt, kpaOf, kind, advised = () => null, judged = () => true) {
   const out = [];
   const tol = kind === 'spark' ? ADVANCE_TOLERANCE_DEG : 0.05;
   axes.rpm.forEach((rpm, ci) => {
@@ -267,7 +269,13 @@ function beyondReachCells(table, axes, reachAt, kpaOf, kind, advised = () => nul
       // The first row past the reach brackets it: the ECU blends it in, the pull ran it, and
       // the pull judges it (a richer boost row can take more spark than the row under it).
       // Only the rows past that one are never read.
-      if (!bracketSeen) { bracketSeen = true; cap = settled; continue; }
+      // A pull that crossed it too thinly to judge it (a turbo LS1's 200 kPa cells, read for a
+      // tenth of the blend at 155 kPa, kept 26 degrees over a 150 kPa row knocked down to 16) has
+      // not: it follows the row under it like the rest.
+      if (!bracketSeen) {
+        bracketSeen = true;
+        if (judged(ri, ci) || cap === null) { cap = settled; continue; }
+      }
       if (cap === null) continue;
       if (v - cap > tol) {
         out.push({
@@ -814,8 +822,9 @@ export function calibrationAdvice({
       }
     }
     // The rows past the reach follow the judged numbers of the rows under them.
+    const ranCell = new Set(spark.filter((c) => c.pullMargin != null).map((c) => `${c.ri}|${c.ci}`));
     const judgedSpark = boosted ? beyondReachCells(timing, T, reachFull, kpaOf, 'spark',
-      advisedIn(spark.filter((c) => judged.overAdvanced.includes(c) || c.atSuggestion))) : [];
+      advisedIn(spark.filter((c) => judged.overAdvanced.includes(c) || c.atSuggestion)), (ri, ci) => ranCell.has(`${ri}|${ci}`)) : [];
     return { spark, fuelAdv, wrongMix: withBeyond(wrongMix, beyondAfr), missedMix, spray, ...judged, overAdvanced: withBeyond(judged.overAdvanced, judgedSpark) };
   }
   // Nor is a cell called dangerous for knock in the idle column where no spark the table can
@@ -898,6 +907,14 @@ export function afrTargetVerdict({ value, kpa, direct }) {
  * cells can all be set to their numbers at once, and the number does not depend on what the
  * cell holds now.
  *
+ * Where a point that KNOCKED sits between two load rows, the limit is not the same number for
+ * both: the knock limit falls with pressure (COEFF.KNOCK_LIMIT_DEG_PER_PSI), so each row's cell
+ * is held to the limit carried to its own row's pressure, the higher-boost row lower and the
+ * row under it higher, and their blend at the point is still exactly the measured limit. A
+ * tuner takes knock met while the turbo spools out of the boost row, not out of the
+ * atmospheric row the engine also runs at full throttle without boost. Where that would put a
+ * cell under the table's least spark, it is held there and the rest comes out of the others.
+ *
  * @param {object[]} points a `simulateSweep` result's points
  * @param {number[][]} timing the spark table the pull ran
  * @param {(p: object) => {ri: number, ci: number, w: number}[]} inForce the spark cells a point reads
@@ -928,6 +945,7 @@ export function pullCellLimits(points, timing, inForce) {
     const toTable = Number.isFinite(fired) ? blend - fired : 0;
     const limitHere = Math.min(p.threshold, p.thresholdAtTable ?? Infinity) + toTable;
     const mbtHere = Number.isFinite(p.mbtIdeal) ? p.mbtIdeal + toTable : Infinity;
+    const limitOf = splitByRow(p, all, wSum, limitHere);
     for (const { ri, ci, w } of cells) {
       const c = cell(`${ri}|${ci}`);
       // Best-power timing is the cell's own: read where it carries the most of the point. (The
@@ -936,10 +954,50 @@ export function pullCellLimits(points, timing, inForce) {
       if (w > c.share) { c.share = w; c.mbt = mbtHere; }
       c.margin = Math.min(c.margin, p.margin);
       if (p.margin < 0) c.knockBy = Math.max(c.knockBy, -p.margin);
-      if (limitHere < c.limit) { c.limit = limitHere; c.worst = p; c.worstShare = w; }
+      const lim = limitOf(ri, ci);
+      if (lim < c.limit) { c.limit = lim; c.worst = p; c.worstShare = w; }
     }
   }
   return out;
+}
+
+/**
+ * Each cell's share of a knocking point's limit, by its row's pressure (`pullCellLimits`).
+ * @param {any} p the point
+ * @param {{ri: number, ci: number, w: number, rowKpa?: number}[]} all every cell the point reads
+ * @param {number} wSum their shares' sum
+ * @param {number} limitHere the point's knock limit, in table degrees
+ * @returns {(ri: number, ci: number) => number} the limit a cell is held to
+ */
+function splitByRow(p, all, wSum, limitHere) {
+  const same = () => limitHere;
+  // Only a point that knocked, read between rows whose pressures it sits between (not clamped
+  // past the table's last row, where the row's own pressure is not the point's).
+  if (!(p.margin < 0) || all.some((c) => !Number.isFinite(c.rowKpa))) return same;
+  const rows = new Set(all.map((c) => c.rowKpa));
+  const mean = all.reduce((a, c) => a + c.w * /** @type {number} */ (c.rowKpa), 0) / wSum;
+  if (rows.size < 2 || Math.abs(mean - p.map) > 1) return same;
+  const perKpa = COEFF.KNOCK_LIMIT_DEG_PER_PSI / PSI_TO_KPA;
+  // The number each cell is asked for at the slope, in the terms sparkForLimit reads.
+  const want = all.map((c) => limitHere - KNOCK_SAFETY_DEG + perKpa * (p.map - /** @type {number} */ (c.rowKpa)));
+  // Held at the table's least spark where the slope asks for less; the cells over it give up
+  // the difference, evenly, so the blend still meets the limit.
+  const floor = SPARK_MIN_DEG;
+  let free = all.map((_, i) => want[i] > floor);
+  for (let k = 0; k < all.length; k += 1) {
+    const wFree = all.reduce((a, c, i) => a + (free[i] ? c.w : 0), 0);
+    if (wFree <= 0) return same;
+    const held = all.reduce((a, c, i) => a + (free[i] ? 0 : c.w * floor), 0);
+    const freeWant = all.reduce((a, c, i) => a + (free[i] ? c.w * want[i] : 0), 0);
+    const shift = ((limitHere - KNOCK_SAFETY_DEG) * wSum - held - freeWant) / wFree;
+    const next = all.map((_, i) => free[i] && want[i] + shift > floor);
+    if (next.every((v, i) => v === free[i])) {
+      const at = new Map(all.map((c, i) => [`${c.ri}|${c.ci}`, (free[i] ? want[i] + shift : floor) + KNOCK_SAFETY_DEG]));
+      return (ri, ci) => at.get(`${ri}|${ci}`) ?? limitHere;
+    }
+    free = next;
+  }
+  return same;
 }
 
 /**
@@ -1063,6 +1121,9 @@ function judgeAgainstPull(spark, pull, inForce, timing) {
         // The evidence, for the cell's own explanation: where the pull met the limit that sets
         // this number, and how much of that point's timing this cell carried.
         if (L.worst) c.why = { rpm: L.worst.rpm, map: L.worst.map, knockBy: Number(L.knockBy.toFixed(1)), sharePct: Math.round(L.worstShare * 100) };
+        // The number is the limit's, whatever the cell holds: typed lower, the cell is done and
+        // keeps its number. (The row under a knock between rows can be held to more than it has:
+        // also done, never a mark that adds timing.)
         c.suggested = sparkForLimit(L.limit);
         c.delta = Number((c.suggested - c.current).toFixed(1));
         // No spark the table can hold is safe there: listed whatever it holds, with what can fix

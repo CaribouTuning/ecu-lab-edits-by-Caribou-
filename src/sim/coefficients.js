@@ -638,6 +638,44 @@ export const COEFF = {
   MBT_MAX_DEG: 50,
   // Most retard an ECU accumulates from its knock sensors before simply running there.
   MAX_KNOCK_RETARD: 18,
+  // GM's own full-load spark, per engine: the mean of each engine's stock high-octane spark table
+  // (B5913) at 0.60 and 0.80 g of air per cylinder, by rpm, over its stock calibrations
+  // (data/realism/gm-stock-spark.json, docs/realism.md). GM ships its LS engines under best power
+  // at full throttle, the trucks by 8-14 degrees (towing, heat, poor fuel, an ageing engine), and
+  // tuners find that timing on the dyno. A factory engine with its own figures here gets them as
+  // its stock full-load spark wherever they sit under the physics' (factoryCalibration); one with
+  // none keeps best power. Each engine's own data only: the LS1 has no base-LS1 calibration in the
+  // source, so it borrows none.
+  GM_STOCK_WOT_SPARK: {
+    rpm: [800, 1200, 1600, 2000, 2400, 2800, 3200, 3600, 4000, 4400, 4800, 5200, 5600, 6000, 6400],
+    gPerCyl: [0.6, 0.8],
+    ls6: [[6, 14, 19, 23, 25, 27, 30, 29, 28, 30, 28, 26, 26, 26, 26], [1, 13, 17, 22, 25, 25, 26, 25, 22, 22, 22, 22, 22, 22, 22]], // 2 images, one calibration
+    lm7: [[5.6, 10.6, 15.2, 18.8, 22.1, 24.5, 25.3, 25.4, 24.9, 23.9, 22.6, 21.1, 20.8, 20.6, 20.1], [0.1, 1.8, 2.9, 5, 8.4, 10.8, 13.1, 14.9, 15.7, 15.7, 15.8, 14.9, 14.8, 14.9, 14.3]], // 7 images
+    lr4: [[-1.7, 11.3, 16.3, 20.3, 24.3, 25.3, 27.3, 24.3, 23.3, 23.3, 24.3, 25.3, 26.3, 27.3, 27.3], [-2.4, 6.3, 11.3, 15.3, 19.3, 20.3, 22.3, 21.3, 20.3, 20.3, 21.8, 21.3, 22.3, 23.3, 23.3]], // 3 images
+    lq4: [[3.3, 12, 18.2, 22.7, 25.9, 27.4, 27.9, 27.6, 26.9, 25.8, 24.6, 23.8, 23.5, 24, 24.2], [-0.5, 2.7, 4.1, 6.5, 9.6, 12.1, 13.9, 15.1, 15.8, 15.9, 15.3, 13, 10, 6.6, 6.6]], // 2 images
+  },
+  // How fast the knock limit falls with manifold pressure, degrees per psi. Splits a knock met
+  // between two load rows (a turbo spooling through 100-150 kPa) so the higher-boost row gives
+  // up more timing than the row under it, as a tuner takes it, instead of both rows going to the
+  // same number. The model's own factory turbo tables fall at about this rate through the
+  // midrange (B58 0.84-0.87, EA888 0.91-0.92, N54 0.65-1.03 degrees per psi), and tuners work to
+  // the same rule of thumb, about a degree per psi. Only the split rides on it: the blend at the
+  // point that knocked is held to the measured limit whatever this is.
+  KNOCK_LIMIT_DEG_PER_PSI: 0.9,
+  // Idle spark reserve. A production calibration holds spark in the idle columns below best
+  // power, so idle control has torque to add by advancing it, and does not run the column's
+  // lighter cells (overrun, coming off idle) at the 40-50 degrees MBT asks there. GM's Gen III
+  // high-octane tables (21 stock images, data/realism/gm-stock-spark.json's sources) hold the
+  // 800 rpm column flat at about 20-24 degrees from the lightest row to about 0.3 g/cylinder on
+  // every LS family, then falling with load. The factory rule caps each idle column at the
+  // engine's own MBT at that speed and 40 kPa less this reserve: 6 degrees is the mean, over
+  // the LS6, LM7, LQ4 and LR4, of the game's MBT there minus GM's spark at the same air charge
+  // (7, 4, 7 and 4 degrees). A fit to one maker's family, used as the pattern, not a copy of
+  // any one engine's number: each engine's cap moves with its own burn.
+  IDLE_SPARK_RESERVE_DEG: 6,
+  // The manifold pressure the idle cap's MBT is read at, kPa: the game grid's row nearest a
+  // stock LS's hot idle, and the row the reserve was fitted on.
+  IDLE_SPARK_REF_KPA: 40,
 
   // --- Combustion chamber as a physical object ---
   // Not corrections in degrees: chamber properties, which reach knock by moving burn

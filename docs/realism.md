@@ -34,21 +34,82 @@ on 91 "about 4° knock-limited from 1500 to 4500 rpm"). Scanned against these so
 there GM's premium calibration sits at its knock limit, the trucks are knock-free on 87 with 1–9° in
 hand, and the boosted LS1 lands at 18–21° at 7 psi.
 
-**Efficiency is right except near full load on two-valve pushrod engines.** Against the EPA maps the
-game's brake efficiency is within about ±2 points at every load on the two four-valve engines (LCV,
-SKYACTIV-G). On the two-valve pushrod LV3 it is right at light load (+1.0) but runs +6.6 points at
-9–11 bar and +10 above: the same family whose truck engines the game puts 7–13% over their torque
-ratings. A slower burn in a two-valve chamber is the leading suspect; not yet established.
+**Efficiency is right.** Compared like with like (both engines near stoichiometric, at the EPA's own
+speeds and loads), the game's brake efficiency is within about ±1.7 points of the EPA's at every load
+band on all three engines, the two-valve pushrod LV3 included. An earlier reading of +6.6 to +10 points
+near full load on the LV3 compared the game's stoichiometric part-throttle points with the EPA's
+enriched full-load ones: enrichment costs brake efficiency on fuel burned, so that was fuelling
+strategy, not combustion. Retracted.
 
 **The engine model makes 1–3 bar too much at full load below about 3000 rpm** on all three EPA
 engines. Their cam timing is not published (the comparison uses a 205° cam for each), and low-speed
 breathing turns on it, so this is not yet evidence against the physics.
 
+## What changed
+
+- **Knock constant 2.5** (`KNOCK_TAU_SCALE`), anchored to the sources above: GM's premium LS6
+  calibration sits at the physics' knock limit, the trucks run knock-free on 87, and an intercooled
+  LS1 on 93 gets 18–21° at 7 psi. The game's factory spark is now within about 1° of GM's on the LS6
+  below 4000 rpm.
+- **87 AKI regular** is offered, and the LM7, LQ4 and LR4 run on it, as GM calibrated them.
+- **Engine-computer torque caps** on the factory turbo engines (N54, B58, EA888), at the rated torque
+  or the rated power's torque, whichever is less: the flat plateaus BMW and VW enforce. The pull log
+  shows the cap as a note, never as a fault.
+- **Peak cylinder pressure limits by bottom end**: 105 bar naturally aspirated, 130 bar a factory
+  boosted engine, 160 bar forged.
+- **EA888**: the IS20 and IS38 surge lines and the 1500 rpm boost set from VW's ratings (the GTI makes
+  255 lb-ft at 1500 against 258 rated).
+- **Idle-column spark** (`IDLE_SPARK_RESERVE_DEG`). Compared on GM's own spark grid, cell by cell at
+  the same air charge, light-load spark needs no cap: GM's trucks run 45–58° at the lightest loads, and
+  the LS6's flat 40° is a choice in that performance calibration, not a pattern. What every LS family
+  shares is the idle column: GM holds 800 rpm at about 20–24° from the lightest row to about
+  0.3 g/cylinder, below best power, for idle spark reserve, where the factory rule had written best
+  power (31–41°). Each engine's idle columns are now capped at its own MBT at that speed and 40 kPa less
+  6°, the reserve fitted across the four LS families (the game minus GM there: 7, 4, 7 and 4°). The
+  game's 800 rpm column now sits within about 2–6° of each engine's own GM table.
+- **GM's own full-load spark on the stock GM engines** (`GM_STOCK_WOT_SPARK`). The factory rule wrote best
+  power wherever knock allowed, 27–31° at full throttle, where GM ships its trucks 8–14° under that
+  (LM7 and LQ4 about 14–17° at 3200–4800 rpm), the LR4 3–6° and the LS6 5–7° above 4000 rpm. LS tuners
+  find best power at about 26–28° on 91–93 ([LS1Tech](https://ls1tech.com/forums/dynamometer-results-comparisons/282225-how-much-timing-you-seeing-wot-tuned.html),
+  [HP Academy](https://www.hpacademy.com/courses/practical-standalone-tuning/holley-terminator-x-step-8-steady-state-ignition-tuning/)),
+  where the game's physics puts it, so GM leaves timing on the table on purpose (towing, heat, poor
+  fuel, an ageing engine), which is why adding timing to a stock LS makes power. The LS6, LM7, LQ4 and
+  LR4 now run, at full load, the mean of their own calibrations' spark (summary data, by rpm, at their
+  own air charge) wherever it is under the physics'. The LS1 keeps best power: no base-LS1
+  calibration is in the source, and no engine borrows another's.
+- **Truck head flow.** That spark took the trucks' horsepower 5.5% under their ratings: the over-
+  advanced spark had been hiding top-end breathing the model gave them too little of. The trucks' heads
+  had no bench figure, so the model sized their ports from the valve alone (195 cfm on the 706 / 862,
+  218 on the 317). The Sloppy Mechanics LS head wiki benches all four stock castings on one table
+  ([LSX head cast numbers / flow](https://sites.google.com/site/sloppywiki/everything-ls/lsx-head-cast-numbers-flow-swap-info)):
+  706 / 862 226 cfm, 317 240, against the LS1's 241 at 227 and the LS6's 243 at 257. Carried by that
+  ratio onto the bench the LS1's 243 cfm comes from: 243 and 257 cfm. Stock now: LM7 291 hp (rated 295),
+  LQ4 314 (325), LR4 288 (285).
+- **Spool knock split between rows** (`KNOCK_LIMIT_DEG_PER_PSI`). A knock met between two load rows,
+  as a turbo spools through 100–150 kPa, came out of both rows to the same number, leaving the
+  atmospheric row with a notch (14° at 2500 rpm between 16° and 26° on a turbo LS1). The limit is now
+  carried to each row's own pressure at 0.9° per psi, the rate the model's factory turbo tables fall at
+  (B58 0.84–0.87, EA888 0.91–0.92, N54 0.65–1.03) and tuners' rule of about a degree per psi; the blend
+  at the point that knocked is still held to the measured limit.
+- **Full-load rows are monotone**: no full-load row asks for more spark than the row under it, in the
+  factory tables and the safe base map; and a boost row a pull crossed too thinly to judge follows the
+  row under it, as the rows past the boost already did.
+- **Power enrichment from the atmospheric row on turbo builds.** A turbo fitted to a naturally aspirated
+  engine, or a turbo engine of the player's, ran λ 1 (14.7:1) in the 100 kPa row, a row it passes
+  through at full throttle while the turbo spools. It now enriches there as the naturally aspirated plan
+  does (a turbo LS keeps GM's own power enrichment, λ 0.81–0.86) and richer with boost.
+
 ## What is open
 
-- The knock constant: applying it raises every factory turbo engine 17–19% over its torque rating.
-  Those ratings are torque limits real engine computers enforce (BMW's and VW's flat plateaus), so the
-  factory turbo engines get an engine-computer torque cap, as the real cars have.
-- 87 AKI regular fuel, which GM calibrated the LM7, LQ4 and LR4 for; the game offers 91 and up.
-- The two-valve full-load efficiency.
+- **GM truck torque**: with GM's own spark and the bench head flow, the LM7 reads 9% over its torque
+  rating, the LQ4 5% and the LR4 15%, peaking 600–800 rpm before the published 4000. Stock LM7 trucks
+  measured 253–295 lb-ft at the wheels; no stock LR4 curve was found (tests/presets.test.js, `KNOWN_GAPS`).
+- **Low-speed part load.** At 1000–2000 rpm and mid load, GM runs 3–5° under the game's spark on every
+  LS family, more toward idle. Whether that is emissions and drivability strategy (retard for NOx, tip-in
+  feel) or the physics' best-power timing running early at low speed, the data cannot say; nothing was
+  changed for it.
+- **Part load on a turbo build** runs 3–6° more spark than the same engine naturally aspirated, from
+  the exhaust backpressure the turbine adds (more residual gas, a slower burn). Not checked against data.
+- **Golf R**: 261 lb-ft at 1800 rpm, where its torque plateau starts; the curve's breakpoints are spaced
+  too far apart there.
 - No base LS1 calibration is in the source (its "2004 Corvette" image states 5.7L HO, the Z06's LS6).
