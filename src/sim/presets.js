@@ -133,6 +133,14 @@ export const ENGINE_PRESETS = [
       // Aftermarket Cam data'), so 218 / 218 at 0.050 inch the same way (see vq35de-revup).
       // The spring rate carries the 7500 redline with margin to spare.
       camDuration: 218, exhaustCamDuration: 218, springRate: 68,
+      // Ports on a flow bench: the HR head flows about 304 cfm intake and 208 cfm exhaust per
+      // cylinder at full lift, against about 283 and 185 for a stock (non-Rev-Up) DE head (Gord
+      // Bush's HR vs DE flow test, data credited to SGSash / onpointdyno, my4dsc.com "VQ35 HR vs
+      // DE Head Flow", 2018, read off its charts to about 3 cfm; the test pressure is not stated,
+      // and 28 inches of water is the standard these figures are taken as). Estimated from the
+      // valves instead, the model gave the HR the DE's ports, 200 and 141 cfm, and the HR fell
+      // about 9% short of its rating.
+      intakePortCfm: 304, exhaustPortCfm: 208,
       redline: 7500,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },

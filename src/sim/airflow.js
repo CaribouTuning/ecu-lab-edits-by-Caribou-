@@ -474,7 +474,7 @@ export function headDefaultsOf(cfg) {
     exhaustLiftMm: COEFF.BREATH_LIFT_PER_DIA * g.exhaustValveM * 1000,
     exhaustValveMm: g.exhaustValveM * 1000,
     intakePortCfm: cfg.intakePortCfm ?? portCfm(g.intakeValves, g.intakeValveM),
-    exhaustPortCfm: portCfm(g.exhaustValves, g.exhaustValveM),
+    exhaustPortCfm: cfg.exhaustPortCfm ?? portCfm(g.exhaustValves, g.exhaustValveM),
     lsaDeg: centre, iclDeg: centre,
     get runnerMm() {
       if (runnerMm == null) runnerMm = breathingGeometry(plain).runnerLengthM * 1000;
