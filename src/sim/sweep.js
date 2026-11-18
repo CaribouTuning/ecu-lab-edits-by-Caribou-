@@ -17,7 +17,7 @@ import { chargeTempK, INDUCTION_REF_EXHAUST_K } from './thermo.js';
 import { evaluatePoint } from './point.js';
 import {
   IN_FORCE_WEIGHT, KNOCK_SAFETY_DEG, cellsInForce, missedMixCause, missesTarget,
-  afrTargetVerdict, pullCellLimits, pullSparkCells, pullTableCells, sparkForLimit,
+  afrTargetVerdict, pullCellLimits, pullSparkCells, pullTableCells, reachKpaAt, sparkForLimit,
 } from './advisors.js';
 import { bestPowerAfr } from './manifold.js';
 import { FAILURE_MODES, pointWear, sweepFailure, wearEffects } from './damage.js';
@@ -353,8 +353,12 @@ export function simulateSweep({
     const L = sparkLimitsForFuel?.get(`${ri}|${ci}`);
     return !!L && L.knockBy > 0 && L.limit - KNOCK_SAFETY_DEG < SPARK_MIN_DEG;
   };
+  // The rows TUNE grades at each speed: at or under what the engine reaches there, by the same
+  // rule (advisors.js reachKpaAt), so a row the turbo overshot into is not named when TUNE
+  // calls it out of reach.
+  const reachOf = reachKpaAt({ turboOn, boostCurve, pull: { points } });
   const offTargets = (p) => (afr ? afrCellsOf(p) : [])
-    .filter((c) => c.w >= IN_FORCE_WEIGHT && c.rowKpa <= p.map + 0.5 && c.rowKpa >= OPEN_LOOP_KPA
+    .filter((c) => c.w >= IN_FORCE_WEIGHT && c.rowKpa <= Math.min(p.map + 0.5, reachOf(afrAxesOf.rpm[c.ci]) + 1e-6) && c.rowKpa >= OPEN_LOOP_KPA
       && afrAxesOf.rpm[c.ci] > IDLE_COLUMN_MAX_RPM && !pastRedlineCol(c.ci))
     .map((c) => ({ ...c, v: afrTargetVerdict({ value: afr[c.ri][c.ci], kpa: c.rowKpa, direct: derived.injection === 'direct' && !portBandAt(c.ri, c.ci) }) }))
     .filter((c) => c.v.outside);
