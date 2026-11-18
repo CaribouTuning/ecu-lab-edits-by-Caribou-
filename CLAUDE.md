@@ -212,6 +212,15 @@ remaining risk is the same Node major with a different libm, which is what step 
   spark and mixture steps read TUNE's advisor (`guidedSteps` `advice`), so they never disagree;
   tests/tune-guide.test.js follows it literally. It holds boost low with TUNE → BOOST's Boost
   limit by gear (4th is the dyno's), not by editing the build, which would reset the choice.
+- **Advice must settle: type the number shown and the next look asks for nothing more**
+  (tests/advice-settles.test.js; the scratchpad audit `followmarks` types every mark on all
+  112 SANDBOX builds). A pull point between breakpoints reads a blend of four cells, so a cell's
+  advice comes from the knock limit the pull met where the cell is in force, never from "this
+  cell plus the blend's margin" (that charged a point's whole knock to each cell in turn and
+  chased one cell 4.5, -2.5, -4). Spark advice is in whole degrees, rounded down. A knocking cell
+  already at its number is done (`atSuggestion`); one no spark can save stays listed
+  (`sparkCannotFix`). The pull log's spark-short entry uses the same rule. Mixture advice is the
+  value that delivers the target at that point, and none where the injectors are maxed.
 - **Tests that play the game do what the app offers.** Correct VE from logs reads the last pull
   only (EcuLab.jsx `veLog`), so `tests/guidedPlayer.js` corrects from one pull at a time, lightest
   throttle first; pooling throttles into one fit split the difference on a boosted engine and

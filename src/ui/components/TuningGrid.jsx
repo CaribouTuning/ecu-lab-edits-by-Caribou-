@@ -121,7 +121,9 @@ export function TuningGrid({ data, min, max, decimals, selection, setSelection, 
   // An engine computer's own grid has three or four times the cells: smaller ones, so
   // more of it is in view at once.
   const dense = axes.rpm.length > 12;
-  const fmt = (v) => (decimals ? v.toFixed(decimals) : Math.round(v));
+  // A whole-number table shows a fraction where the cell holds one (a slider, a pasted map):
+  // shown rounded, -0.49 read as 0 while the advisor said -0.49.
+  const fmt = (v) => (decimals ? v.toFixed(decimals) : Math.abs(v - Math.round(v)) >= 0.05 ? v.toFixed(1) : Math.round(v));
   // The advisor's figure to a tenth where it gives one: 19.5° is not 20°.
   const fmtWant = (v) => (Number.isInteger(v) ? String(v) : v.toFixed(1));
   // 96 subtractions, on renders that already walk every cell — not memoised.

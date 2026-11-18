@@ -118,6 +118,9 @@ function sparkReportOf(calAdvice, selection) {
         detail: { cell },
       };
     }
+    // At its number, but the pull still knocked where it blends: the cells beside it, which are
+    // listed with their own numbers, carry the rest. This one is done.
+    if (cell.atSuggestion) return { tone: 'warn', headline: 'At its safe value', state: 'cell-done', detail: { cell } };
     return { tone: 'ok', headline: 'Inside both ceilings', state: 'cell-ok', detail: { cell } };
   }
 

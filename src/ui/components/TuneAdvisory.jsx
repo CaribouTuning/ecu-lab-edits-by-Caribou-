@@ -157,6 +157,13 @@ function TimingAdvisory({ report }) {
           This cell is leaving advance on the table. Add it a degree at a time and run a pull between each change.
         </div>
       );
+    case 'cell-done':
+      return (
+        <div className={styles.prose}>
+          <CellStats cell={detail.cell} />
+          This cell is at its safe value. The engine still knocked where it blends with the cells beside it, because they are still above theirs: set the other marked cells to the numbers under them, then pull again.
+        </div>
+      );
     case 'cell-ok':
       return (
         <div className={`${styles.prose} ${styles.ok}`}>

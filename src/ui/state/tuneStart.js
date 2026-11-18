@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from 'react';
 
-import { BARO_KPA, BLOWER_OPTS, IDLE_COLUMN_MAX_RPM, INJECTOR_OPTS, OPEN_LOOP_KPA, getCal, layoutById, loadFor, mafErrorFactor, readTable, tankFuel } from '../../sim/index.js';
+import { BARO_KPA, BLOWER_OPTS, IDLE_COLUMN_MAX_RPM, INJECTOR_OPTS, KNOCK_SAFETY_DEG, OPEN_LOOP_KPA, getCal, layoutById, loadFor, mafErrorFactor, readTable, tankFuel } from '../../sim/index.js';
 
 import { changedParts, isOwnEngine, offersBaseMap, originPreset } from './baseMap.js';
 import { boostSteps } from './safeBaseMap.js';
@@ -175,11 +175,11 @@ export function guidedSteps({ build, tune, target, samples, advice = null }) {
   // Spark cells past the knock limit, as TUNE's advisor judges them on the tables as they
   // stand (the limit moves with the mixture and the air, so a table comparison alone once
   // ticked a cell the advisor called past it).
-  /** @type {{load: number, rpm: number, want: number}[]} */
+  /** @type {{load: number, rpm: number, want: number, cannot?: boolean}[]} */
   const hotCells = [];
   const sparkAx = layoutById(tune.layout).timing;
   if (advice?.overAdvanced) {
-    for (const c of advice.overAdvanced) hotCells.push({ load: sparkAx.load[c.ri], rpm: c.rpm, want: c.suggested });
+    for (const c of advice.overAdvanced) hotCells.push({ load: sparkAx.load[c.ri], rpm: c.rpm, want: c.suggested, cannot: !!c.sparkCannotFix });
   } else {
     const tAx = layoutById(target.layout ?? tune.layout).timing;
     if (JSON.stringify(sparkAx) === JSON.stringify(tAx) && sparkAx.loadUnit === 'kPa') {
@@ -249,10 +249,28 @@ export function guidedSteps({ build, tune, target, samples, advice = null }) {
     },
     {
       id: 'spark', title: 'Start with safe spark timing', short: 'Safe timing', go: 'spark',
-      text: anchors.length
-        ? `Open SPARK. Each cell is how many degrees before the piston reaches the top the spark fires. More timing makes more power, up to a point; too much causes knock, where the fuel explodes instead of burning smoothly, and knock breaks pistons.${boosted ? ` Boost raises the pressure and heat in the cylinder, so this engine knocks at less timing than it did${noCooler ? ', and with no intercooler the air going in is hotter still' : ''}: the boost rows need less timing than the rows below them.` : ''}${fuel.label === 'E85' ? ' E85 resists knock far better than pump fuel, so it takes more timing than the same engine on gasoline.' : ''} At full throttle keep the timing no higher than about ${anchors.map((q) => `${Math.round(theirs('timing', q))}° at ${Math.round(q.rpm / 100) * 100} RPM`).join(', ')}, and blend the cells between so each column rises smoothly.${hotCells.length ? ` The advisor has marked ${hotCells.length === 1 ? 'a cell' : `${hotCells.length} cells`} on the table that are past the knock limit, with the number to type under each: ${hotCells.slice(0, 3).map((c) => `${c.load} kPa at ${c.rpm} RPM to ${Number(c.want.toFixed(1))}°`).join(', ')}${hotCells.length > 3 ? `, and ${hotCells.length - 3} more` : ''}.` : ''} This starts a few degrees under what the engine can take; the rest is found later on the dyno, a degree or two at a time, watching for knock.`
-        : 'Open SPARK and start the full-throttle timing a few degrees under what you expect the engine to take: too much timing causes knock, which breaks pistons.',
-      done: full.length > 0 && full.every((q) => mine('timing', q) <= theirs('timing', q) + GUIDE_TOLERANCE.spark) && !hotCells.length,
+      text: (() => {
+        const intro = `Open SPARK. Each cell is how many degrees before the piston reaches the top the spark fires. More timing makes more power, up to a point; too much causes knock, where the fuel explodes instead of burning smoothly, and knock breaks pistons.${boosted ? ` Boost raises the pressure and heat in the cylinder, so this engine knocks at less timing than it did${noCooler ? ', and with no intercooler the air going in is hotter still' : ''}: the boost rows need less timing than the rows below them.` : ''}${fuel.label === 'E85' ? ' E85 resists knock far better than pump fuel, so it takes more timing than the same engine on gasoline.' : ''}`;
+        // With TUNE's advisor on the table, the step is the advisor's: the marked cells and the
+        // numbers under them are what the player types, so the guide asks for nothing else. (It
+        // once also quoted the safe base map's figures, 6 degrees under the limit, while the
+        // marks sat 1.5 under it: followed exactly, the marks never ticked the step.)
+        if (advice) {
+          const cannot = hotCells.filter((c) => c.cannot);
+          const typeable = hotCells.filter((c) => !c.cannot);
+          // Knock no spark the table holds can fix: the boost there is the problem, as the pull
+          // log says, and timing typed lower would not save the engine.
+          const unfixable = cannot.length ? ` At ${cannot.length === 1 ? 'one cell' : `${cannot.length} cells`} (${cannot.slice(0, 2).map((c) => `${c.load} kPa at ${c.rpm} RPM`).join(', ')}${cannot.length > 2 ? ', …' : ''}) no timing the table can hold is safe at this boost: the knock limit sits under the most retard it allows. Lower the boost there first (BUILD → INDUCTION), or run a richer mixture, a cooler charge or better fuel, as the pull log says, then come back to this step.` : '';
+          if (!typeable.length && cannot.length) return `${intro}${unfixable}`;
+          return typeable.length
+            ? `${intro} The advisor works out where this engine knocks at every cell it runs and has marked ${typeable.length === 1 ? 'the cell' : `the ${typeable.length} cells`} past that limit, with the number to type under each: ${typeable.slice(0, 3).map((c) => `${c.load} kPa at ${c.rpm} RPM to ${Number(c.want.toFixed(1))}°`).join(', ')}${typeable.length > 3 ? `, and ${typeable.length - 3} more` : ''}. Each number sits ${KNOCK_SAFETY_DEG}° under the knock limit, the margin a tuner leaves, and it does not change when you type it: set them all, then pull.${unfixable} The rest is found later on the dyno, a degree or two at a time, watching for knock.`
+            : `${intro} Every full-throttle cell is under the knock limit with the ${KNOCK_SAFETY_DEG}° margin a tuner leaves: nothing to change here. The rest is found later on the dyno, a degree or two at a time, watching for knock.`;
+        }
+        return anchors.length
+          ? `${intro} At full throttle keep the timing no higher than about ${anchors.map((q) => `${Math.round(theirs('timing', q))}° at ${Math.round(q.rpm / 100) * 100} RPM`).join(', ')}, and blend the cells between so each column rises smoothly. This starts a few degrees under what the engine can take; the rest is found later on the dyno, a degree or two at a time, watching for knock.`
+          : 'Open SPARK and start the full-throttle timing a few degrees under what you expect the engine to take: too much timing causes knock, which breaks pistons.';
+      })(),
+      done: advice ? full.length > 0 && !hotCells.length : full.length > 0 && full.every((q) => mine('timing', q) <= theirs('timing', q) + GUIDE_TOLERANCE.spark) && !hotCells.length,
     },
     {
       id: 'air', title: 'Get the fuel right at part throttle', short: 'Part-throttle fuel', go: 'airflow',
