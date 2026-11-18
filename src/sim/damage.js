@@ -118,7 +118,7 @@ export function pointWear(p) {
   if (p.richRisk) piston += (COEFF.RICH_DAMAGE_LAMBDA - p.lambda) * COEFF.WEAR_RICH_BORE_WASH;
   // Mechanical overload: past a certain peak cylinder pressure the piston crown, the ring
   // lands and the rod are simply out of strength.
-  if (p.pressureRisk) piston += (p.peakPressure - COEFF.PEAK_PRESSURE_LIMIT_BAR) * COEFF.WEAR_PISTON_PER_BAR;
+  if (p.pressureRisk) piston += (p.peakPressure - (p.pressureLimitBar ?? COEFF.PEAK_PRESSURE_LIMIT_BAR)) * COEFF.WEAR_PISTON_PER_BAR;
   // Knock nobody corrected: the ECU could not hear it, so it ran on. This is the knock
   // that destroys pistons, charged far above knock the controller caught and pulled.
   if (p.knockUnheard > 0) piston += p.knockUnheard * COEFF.WEAR_KNOCK_UNHEARD;

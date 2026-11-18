@@ -8,7 +8,7 @@
  * danger it is, not as a success.
  */
 
-import { OCTANE_OPTS, computeTuningScore, simulateSweep } from '../../sim/index.js';
+import { FUEL_CHOICES, computeTuningScore, simulateSweep } from '../../sim/index.js';
 import { pullInputs } from '../state/pullInputs.js';
 
 import { customerCar, idleTest } from './cars.js';
@@ -116,7 +116,7 @@ function check(c, ctx) {
     }
     case 'fuelIs': {
       const idx = ctx.state.build.octaneIdx;
-      return { check: c, pass: idx === c.octaneIdx, measured: `on ${OCTANE_OPTS[idx]?.label ?? '?'}; ${OCTANE_OPTS[c.octaneIdx].label} asked for` };
+      return { check: c, pass: idx === c.octaneIdx, measured: `on ${FUEL_CHOICES[idx]?.label ?? '?'}; ${FUEL_CHOICES[c.octaneIdx].label} asked for` };
     }
     case 'naOnly': {
       const b = ctx.state.build;

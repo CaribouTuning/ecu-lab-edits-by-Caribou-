@@ -61,7 +61,7 @@ const UNRUN_KNOCK_CELL_CAP = 12;
 /**
  * Grades how clean a calibration is, from the pull's event log.
  *
- * @param {{events: {type?: string, impact?: number, msg: string}[]}} result a completed sweep
+ * @param {{events: {type?: string, impact?: number, msg: string, note?: boolean}[]}} result a completed sweep
  * @param {{ri: number, ci: number}[]} [unrunKnockCells] cells the advisor says are past the
  *   knock limit and this pull did not run, so its log cannot have shown them
  * @returns {{score: number, label: string, deductions: string[], advisories: string[]}}
@@ -76,7 +76,9 @@ export function computeTuningScore(result, unrunKnockCells = []) {
     deductions.push(`-${d}  TUNE flags ${unrunKnockCells.length} spark cell${unrunKnockCells.length === 1 ? '' : 's'} past the knock limit that this pull did not run. Pull at those loads to see it, then pull the timing back.`);
   }
   result.events.forEach((e) => {
-    if (HARDWARE_EVENT_TYPES.has(e.type)) {
+    // A note (the engine computer's own torque limit, say) tells the player something about the
+    // tune without anything being wrong: shown with the advisories, never deducted.
+    if (HARDWARE_EVENT_TYPES.has(e.type) || e.note) {
       advisories.push(e.msg);
       return;
     }

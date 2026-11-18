@@ -160,7 +160,19 @@ export const OCTANE_OPTS = [
 export const FUEL_CHOICES = [
   ...OCTANE_OPTS,
   { label: 'Flex', flex: true, bonus: 3, octane: 93, ron: 98, mon: 88, stoich: 14.7, density: 0.745, lhv: 44.0e6 },
+  // US regular, 87 AKI, as sold (E10): about 91 RON and 83 MON, the sensitivity of the
+  // premium above. What GM calibrated its Vortec and Gen III truck engines for (their stock
+  // calibrations, docs/realism.md). Appended, so a saved build's index means what it did:
+  // the fuel picker lists the fuels by octane (FUEL_ORDER).
+  { label: '87', bonus: -3, octane: 87, ron: 91, mon: 83, stoich: 14.7, density: 0.745, lhv: 44.0e6 },
 ];
+
+/** FUEL_CHOICES' indices in the order a fuel picker shows them: pump fuels by octane, then E85, then Flex. */
+export const FUEL_ORDER = Object.freeze(FUEL_CHOICES.map((f, i) => i)
+  .sort((a, b) => {
+    const rank = (f) => (f.flex ? 1e3 : f.stoich < 12 ? 500 : f.octane);
+    return rank(FUEL_CHOICES[a]) - rank(FUEL_CHOICES[b]);
+  }));
 
 /**
  * Real static flow ratings, cc/min.

@@ -17,7 +17,7 @@ import { Fuel } from 'lucide-react';
 import React from 'react';
 
 import {
-  DEFAULT_ECU_HW, INJECTION_OPTS, INJECTOR_OPTS, LINEAR_SCALES, FUEL_CHOICES, PUMP_OPTS, REGULATOR_OPTS, injectorLabel, stockInjectorIdx,
+  DEFAULT_ECU_HW, INJECTION_OPTS, INJECTOR_OPTS, LINEAR_SCALES, FUEL_CHOICES, FUEL_ORDER, PUMP_OPTS, REGULATOR_OPTS, injectorLabel, stockInjectorIdx,
 } from '../../../sim/index.js';
 import { Toggle } from '../../primitives/Toggle.jsx';
 import { BuildSection } from '../../components/BuildSection.jsx';
@@ -54,7 +54,7 @@ export function FuelSystemScreen({ active, onToggle }) {
       sub={`${flexTank ? `Flex E${Math.round(build.ethanolPct ?? 0)}` : FUEL_CHOICES[octaneIdx].label}, ${injectorLabel(injIdx, stockInjectorIdx(build))}`}
     >
       <div className={styles.label}>Fuel Octane</div>
-      <Seg variant="rule" equal label="Fuel Octane" options={FUEL_CHOICES.map((o) => ({ label: o.label, id: o.label }))} value={FUEL_CHOICES[octaneIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'octaneIdx', value: FUEL_CHOICES.findIndex((o) => o.label === v) })} />
+      <Seg variant="rule" equal label="Fuel Octane" options={FUEL_ORDER.map((i) => ({ label: FUEL_CHOICES[i].label, id: FUEL_CHOICES[i].label }))} value={FUEL_CHOICES[octaneIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'octaneIdx', value: FUEL_CHOICES.findIndex((o) => o.label === v) })} />
       <SetupNote paths={['config.stoichMode']} />
       <ExpandableInfo title="What Fuel Octane actually does — and what E85 costs you">
         Octane measures a fuel's resistance to auto-igniting under heat and pressure before the spark fires it — not energy content or "power." Higher octane tolerates more cylinder pressure and temperature before knock, letting a tuner run more advance or more boost safely. It does not add power on its own; it raises the ceiling for how much timing/boost you can use before knock becomes the limit. The number on the pump is the average of two lab tests, (RON + MON) ÷ 2; how your engine weighs them depends on how hot its charge runs for its pressure (Learn article 5), which is why boosted, direct-injected engines get more from a high-octane fuel than its pump number suggests.

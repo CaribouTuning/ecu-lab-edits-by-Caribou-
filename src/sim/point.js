@@ -359,7 +359,8 @@ export function evaluatePoint({
   // --- MECHANICAL LOAD. Torque is what the engine gives you; peak cylinder pressure is
   // what it costs the metal. Both come off the same trace, so they cannot disagree.
   const peakPressure = paToBar(cycle.peakPressurePa);
-  const pressureRisk = peakPressure > COEFF.PEAK_PRESSURE_LIMIT_BAR;
+  const pressureLimitBar = derived.peakPressureLimitBar ?? COEFF.PEAK_PRESSURE_LIMIT_BAR;
+  const pressureRisk = peakPressure > pressureLimitBar;
 
   // The CYCLE's own answer — the burned zone at exhaust valve open, blown down to the
   // manifold. Retard shows up here for the real reason rather than a per-degree
@@ -461,7 +462,7 @@ export function evaluatePoint({
     knockIntegral: Number(cycle.knockIntegral.toFixed(3)),
     endGasK: Math.round(cycle.peakEndGasK),
     knock: knockPull > 0, knockPull, fuelLimited, leanRisk, richRisk, valveRisk,
-    egtRisk, pressureRisk, mafFlag, compressorOver, injMismatch,
+    egtRisk, pressureRisk, ...(pressureRisk ? { pressureLimitBar } : {}), mafFlag, compressorOver, injMismatch,
     ...ecuFields,
     // Nitrous, only while it flows: what the jets are passing, what cooled the charge,
     // and the bottle behind them.

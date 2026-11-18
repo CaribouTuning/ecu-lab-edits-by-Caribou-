@@ -297,7 +297,8 @@ export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm, intercooled =
         ? 'Spark retard took the torque out: the burn phases late, so less of it pushes the piston and more of it heats the exhaust.'
         : cal.torque.method === 'throttle' ? 'The throttle closed to hold torque at the limit — the cleanest way, less air and less fuel.'
           : cal.torque.method === 'boost' ? 'Boost was reduced to hold torque at the limit.' : 'Cylinders were cut to hold torque at the limit.',
-      fix: 'On TUNE → TORQUE, raise the torque limit (by gear or by RPM) if the drivetrain is rated for it.',
+      fix: `This is the engine computer's own torque limit, not a fault: a factory turbo engine is rated as a torque plateau and its computer trims ${cal.torque.method === 'boost' ? 'boost' : 'torque'} to hold it (the hardware could make more). To go further, raise Crank torque limit by RPM on TUNE → TORQUE where the drivetrain is rated for it, then tune what the extra load needs: the boost, the mixture and the timing, a step at a time, reading this log after each pull.`,
+      note: true,
     });
   });
 

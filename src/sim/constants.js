@@ -58,6 +58,10 @@ export const AMBIENT_C = AMBIENT_K - KELVIN_OFFSET;
 
 /** Pounds per square inch to kilopascals. */
 export const PSI_TO_KPA = 6.895;
+/** Newton-metres per pound-foot. */
+export const NM_PER_LBFT = 1 / 0.7376;
+/** Watts per mechanical horsepower. */
+export const HP_TO_W = 745.7;
 
 /** Kilopascals per bar — cylinder pressures are conventionally quoted in bar. */
 export const KPA_PER_BAR = 100;

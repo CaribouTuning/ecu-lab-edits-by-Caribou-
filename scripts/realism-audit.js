@@ -77,13 +77,17 @@ if (!only || only === 'epa') {
     lcv: { name: '2013 GM 2.5 L LCV', cfg: 'I4', cyl: 4, bore: 88, stroke: 101, cr: 11.3, vt: 'dohc', vpc: 4, hp: 197, hpRpm: 6300, tq: 191, tqRpm: 4400, redline: 7000, fuel: '87' },
     mz20: { name: '2014 Mazda 2.0 L SKYACTIV-G', cfg: 'I4', cyl: 4, bore: 83.5, stroke: 91.2, cr: 13.0, vt: 'dohc', vpc: 4, hp: 155, hpRpm: 6000, tq: 150, tqRpm: 4000, redline: 6500, fuel: '87' },
   };
-  console.log('\nBrake efficiency against EPA-measured maps (game minus EPA, percentage points, by BMEP)');
+  console.log('\nBrake efficiency against EPA-measured maps, both near stoichiometric (game minus EPA, percentage points, by BMEP)');
   const base = S.presetById('lm7');
   for (const [key, E] of Object.entries(ENGINES)) {
     const rows = readFileSync(join(root, `data/realism/epa/${key}.csv`), 'utf8').trim().split('\n').slice(1).map((l) => l.split(',').map(Number));
     const vd = E.cyl * Math.PI / 4 * (E.bore / 1000) ** 2 * (E.stroke / 1000);
     const bmepOf = (nm) => nm * 4 * Math.PI / vd / 1e5;
     const speeds = [...new Set(rows.map((r) => Math.round(r[0] / 50) * 50))].sort((a, b) => a - b);
+    const epaMaxAt = (rpm) => {
+      const s = speeds.reduce((b, x) => (Math.abs(x - rpm) < Math.abs(b - rpm) ? x : b));
+      return Math.max(...rows.filter((r) => Math.round(r[0] / 50) * 50 === s).map((r) => bmepOf(r[1])));
+    };
     const effAt = (rpm, bmep) => {
       const s = speeds.reduce((b, x) => (Math.abs(x - rpm) < Math.abs(b - rpm) ? x : b));
       if (Math.abs(s - rpm) > 260) return null;
@@ -104,7 +108,12 @@ if (!only || only === 'epa') {
     for (const load of [100, 60, 40, 30, 25, 20, 16, 13, 10]) {
       for (const q of pull(st, load).points.filter((x) => x.rpm >= 1500 && x.rpm <= E.redline - 500 && x.rpm % 500 === 0)) {
         const e = effAt(q.rpm, q.bmep);
-        if (e == null || q.bmep < 1) continue;
+        // Like with like: only where both engines run near stoichiometric. A production
+        // calibration enriches toward full load (and the game's engine may reach a load at part
+        // throttle that the real one reaches only wide open), and enrichment alone costs brake
+        // efficiency on fuel consumed: compared across that, the check measures fuelling
+        // strategy and airflow, not combustion.
+        if (e == null || q.bmep < 1 || q.lambda < 0.97 || q.bmep > 0.85 * epaMaxAt(q.rpm)) continue;
         const kW = (q.hp / S.DRIVETRAIN_EFF) * 0.7457;
         const game = (kW * 1000) / ((q.maf / q.afr) * 43e3) * 100;
         bands[q.bmep < 6 ? '<6' : q.bmep < 9 ? '6-9' : q.bmep < 11 ? '9-11' : '>11'].push(game - e);

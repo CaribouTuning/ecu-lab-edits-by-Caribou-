@@ -48,6 +48,14 @@ const BOOST_CUTTING = new Set(['knock', 'duty', 'overboost', 'lean', 'torque', '
 
 /** A cell must sit more than this far past a ceiling before it is worth reporting. */
 const ADVANCE_TOLERANCE_DEG = 1.0;
+/**
+ * How far past best-power timing a cell must sit before TUNE hints that it could come back.
+ * Torque is flat around MBT: 2 degrees past it costs about 0.1% (sweep.js's
+ * SPARK_LOSS_PER_DEG2), less than a dyno repeats to, and tuners call that "at MBT". A factory
+ * table read between its rows, at a torque-limited point, sits up to about 1.7 degrees past it.
+ * (Knock keeps the 1-degree tolerance: past that ceiling the engine is hurting itself.)
+ */
+const PAST_MBT_TOLERANCE_DEG = 2.0;
 
 /** A cell has to be leaving this much advance on the table before it is worth chasing. */
 export const UNDER_ADVANCED_DEG = 3.0;
@@ -816,7 +824,7 @@ export function calibrationAdvice({
   const overAdvanced = spark.filter((c) => !c.bracketOnly && c.current - c.knockCeiling > ADVANCE_TOLERANCE_DEG
     && !(c.sparkCannotFix && c.rpm <= IDLE_COLUMN_MAX_RPM));
   const pastMbt = spark.filter((c) => !c.bracketOnly && c.current - c.knockCeiling <= ADVANCE_TOLERANCE_DEG
-    && c.current - c.mbt > ADVANCE_TOLERANCE_DEG);
+    && c.current - c.mbt > PAST_MBT_TOLERANCE_DEG);
   const underAdvanced = spark.filter((c) => !c.bracketOnly && c.delta > UNDER_ADVANCED_DEG);
   return { spark, fuelAdv, overAdvanced: withBeyond(overAdvanced, beyondSpark), underAdvanced, pastMbt, wrongMix: withBeyond(wrongMix, beyondAfr) };
 }
@@ -1073,7 +1081,7 @@ function judgeAgainstPull(spark, pull, inForce, timing) {
       // from the 100 kPa row, and was offered 24 degrees where full boost had knocked at 16.
       const room = ranRow ? Math.min(sparkForLimit(L.limit), Math.floor(c.mbt + 1e-9), sprayCap(c, L)) : c.current;
       c.suggested = clamp(Math.max(c.current, room), SPARK_MIN_DEG, SPARK_MAX_DEG);
-      if (c.current - c.mbt > ADVANCE_TOLERANCE_DEG) {
+      if (c.current - c.mbt > PAST_MBT_TOLERANCE_DEG) {
         c.suggested = clamp(Math.min(c.current, Math.floor(Math.min(c.mbt, L.limit - KNOCK_SAFETY_DEG) + 1e-9)), SPARK_MIN_DEG, SPARK_MAX_DEG);
         c.delta = Number((c.suggested - c.current).toFixed(1));
         pastMbt.push(c);
@@ -1093,7 +1101,7 @@ function judgeAgainstPull(spark, pull, inForce, timing) {
     // As without a pull: an idle-column cell no spark the table holds would protect is a
     // full-throttle tip-in at idle speed, shown with `sparkCannotFix`, not a danger verdict.
     if (c.current - c.knockCeiling > ADVANCE_TOLERANCE_DEG) { if (!(c.sparkCannotFix && c.rpm <= IDLE_COLUMN_MAX_RPM)) overAdvanced.push(c); }
-    else if (c.current - c.mbt > ADVANCE_TOLERANCE_DEG) pastMbt.push(c);
+    else if (c.current - c.mbt > PAST_MBT_TOLERANCE_DEG) pastMbt.push(c);
     else if (c.suggested > c.current) {
       // Room to add timing is something only a log shows: a cell this pull did not run is not
       // offered more than it holds. Estimated at its own row instead, a turbo LS1's 100 kPa cell

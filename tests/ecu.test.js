@@ -20,6 +20,11 @@ import { seedRandomPerTest } from './seededRandom.js';
 seedRandomPerTest();
 
 const types = (pull) => pull.events.map((e) => e.type).sort();
+/** A factory turbo engine's own torque limit lifted (2000 Nm): the model without an ECU has none. */
+const uncapped = (id) => {
+  const p = id && S.presetById(id);
+  return p?.factory?.torqueCapped ? { 'torque.limitByRpm': S.curve(S.applyPreset(p).ecu.torque.limitByRpm.x, () => 2000) } : {};
+};
 
 describe('the default calibration is the original model', () => {
   it('pulls the default build exactly as the model without an ECU does', () => {
@@ -33,7 +38,9 @@ describe('the default calibration is the original model', () => {
   });
 
   it.each(S.ENGINE_PRESETS.map((p) => [p.id]))('pulls the %s preset to the same power and log', (id) => {
-    const eng = makeEngine({ preset: id });
+    // With a factory turbo engine's own torque limit lifted: that limit is calibration the
+    // model without an ECU does not have (it is checked on its own below).
+    const eng = makeEngine({ preset: id, cal: uncapped(id) });
     const a = eng.pull(100, { legacy: true });
     const b = eng.pull(100);
     // Within one unit everywhere, peaks included: the boost-by-throttle curve is a table,
@@ -44,6 +51,17 @@ describe('the default calibration is the original model', () => {
     expect(Math.abs(b.peakTq - a.peakTq)).toBeLessThanOrEqual(1);
     b.points.forEach((p, i) => expect(Math.abs(p.torque - a.points[i].torque)).toBeLessThanOrEqual(1));
     expect(types(b)).toEqual(types(a));
+  });
+
+  it.each(S.ENGINE_PRESETS.filter((p) => p.factory.torqueCapped).map((p) => [p.id]))('holds the %s preset to its rated torque with its own torque limit, by boost', (id) => {
+    const p = S.presetById(id);
+    const r = makeEngine({ preset: id }).pull(100);
+    const crankLbFt = r.peakTq / S.DRIVETRAIN_EFF;
+    expect(crankLbFt).toBeLessThanOrEqual(p.factory.crankTq * 1.01);
+    expect(crankLbFt).toBeGreaterThan(p.factory.crankTq * 0.97);
+    const note = r.events.find((e) => e.type === 'torquelimit');
+    expect(note?.note).toBe(true);
+    expect(note?.msg).toMatch(/by boost/);
   });
 });
 
@@ -227,7 +245,7 @@ describe('ignition: knock control acts on what the sensor hears', () => {
     // threshold set for a much louder engine misses it.
     const deafEng = makeEngine({ cal: { 'ignition.knockThreshold': S.curve(S.RPM, () => 2) } });
     const heardEng = makeEngine();
-    const hot = deafEng.tables.timing.map((row) => row.map((v) => v + 10));
+    const hot = deafEng.tables.timing.map((row) => row.map((v) => v + 14));
     deafEng.tables.timing = hot;
     heardEng.tables.timing = hot;
     const deaf = deafEng.pull();
@@ -361,13 +379,15 @@ describe('the injector duty preview is the pull\'s own point', () => {
   const n54 = S.applyPreset(S.presetById('n54'));
   const builds = [
     { name: 'the default build', opts: {} },
-    ...S.ENGINE_PRESETS.map((p) => ({ name: `the ${p.id} preset`, opts: { preset: p.id } })),
+    // A factory turbo engine with its own torque limit lifted: where the limit acts the two
+    // are meant to differ (below).
+    ...S.ENGINE_PRESETS.map((p) => ({ name: `the ${p.id} preset`, opts: { preset: p.id, cal: uncapped(p.id) } })),
     // A blower heats its charge at its own efficiency, not the turbo's.
     ...S.BLOWER_OPTS.map((b) => ({ name: `a ${b.id} blower`, opts: { build: { ...FUELLED, mods: INTERCOOLED, blowerId: b.id } } })),
     { name: '2000 m of altitude', opts: { env: { ambientC: 24.85, altitudeM: 2000 } } },
     { name: 'a 40 °C day', opts: { env: { ambientC: 40, altitudeM: 0 } } },
     // More boost asked for than the turbo makes: the fuel is for the boost it makes.
-    { name: '30 psi asked of an N54', opts: { preset: 'n54', build: { boostCurve: n54.boostCurve.map((v, i) => (S.RPM[i] >= 5500 ? 30 : v)) } } },
+    { name: '30 psi asked of an N54', opts: { preset: 'n54', cal: uncapped('n54'), build: { boostCurve: n54.boostCurve.map((v, i) => (S.RPM[i] >= 5500 ? 30 : v)) } } },
     { name: 'a 2 ms dead time', opts: { cal: { 'injector.deadTime': S.curve(S.VOLT_AXIS, () => 2) } } },
   ];
 

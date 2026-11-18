@@ -192,6 +192,7 @@ export function intakeValveAreaRatio(cfg) {
  * @property {number} torqueScale displacement relative to the 3.5 L baseline
  * @property {number} bearingWearMult block material wear multiplier
  * @property {number} bearingFreeBar average peak pressure the bottom end carries for free, bar
+ * @property {number} peakPressureLimitBar peak cylinder pressure the pistons and rods are built for, bar
  * @property {number} bearingEventBar average peak pressure that raises the bottom-end advisory, bar
  * @property {string} character human-readable bore/stroke description
  * @property {number} perCylL per-cylinder displacement, litres
@@ -268,6 +269,10 @@ export function deriveEngine(cfg) {
   // starts: see BEARING_PRESSURE_FREE_BAR.
   const bearingFreeBar = cfg.boostRatedBottomEnd ? COEFF.BEARING_PRESSURE_FREE_BAR_BOOST_RATED : COEFF.BEARING_PRESSURE_FREE_BAR;
   const bearingEventBar = cfg.boostRatedBottomEnd ? COEFF.BEARING_EVENT_BAR_BOOST_RATED : COEFF.BEARING_EVENT_BAR;
+  // The peak cylinder pressure the pistons and rods are built for: forged and race assemblies
+  // carry the most, a factory turbo engine's own more than a naturally aspirated one's.
+  const peakPressureLimitBar = ['forged', 'race'].includes(cfg.bottomEnd) ? COEFF.PEAK_PRESSURE_LIMIT_BAR_FORGED
+    : cfg.boostRatedBottomEnd ? COEFF.PEAK_PRESSURE_LIMIT_BAR_BOOST_RATED : COEFF.PEAK_PRESSURE_LIMIT_BAR;
   // Architecture friction. Main bearings are counted in the friction model itself
   // (friction.js: an inline six pays for its seven mains); balance shafts are a share on
   // top of it.
@@ -303,7 +308,7 @@ export function deriveEngine(cfg) {
     cyl, displacementL, ratio, compression: cfg.compression,
     bore: cfg.bore, stroke: cfg.stroke,
     boreFlameFactor, sparkPlugs, chamberOffsetK, injection, evapInCylinder,
-    torqueScale, bearingWearMult, bearingFreeBar, bearingEventBar, character, perCylL,
+    torqueScale, bearingWearMult, bearingFreeBar, bearingEventBar, peakPressureLimitBar, character, perCylL,
     camDuration, exhaustCamDuration, springRate, overlapDeg, floatRpm, springPa, bottomEnd,
     balanceShaftFrac, redline,
     configuration: cfg.configuration, valvetrain, valvesPerCyl, follower,

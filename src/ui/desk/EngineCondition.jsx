@@ -99,7 +99,7 @@ function ValveArt({ wear, failed }) {
  * @param {{piston: number, bearing: number, valve: number}} props.health percent of life left
  * @param {any} props.point the pull's point at the page's speed and throttle
  * @param {number} props.pointsPerPull logged points in one dyno pull
- * @param {{cyl?: number, bearingFreeBar?: number, bearingWearMult?: number}} props.derived
+ * @param {{cyl?: number, bearingFreeBar?: number, bearingWearMult?: number, peakPressureLimitBar?: number}} props.derived
  * @param {(() => void)|null} [props.onRepair]
  */
 export function EngineCondition({ health, point: p, pointsPerPull, derived, onRepair = null }) {
@@ -123,7 +123,7 @@ export function EngineCondition({ health, point: p, pointsPerPull, derived, onRe
       (p?.knockUnheard ?? 0) > 0 && `knock it could not hear: ${f(p.knockUnheard, 1)}°, charged ${f(COEFF.WEAR_KNOCK_UNHEARD / COEFF.WEAR_KNOCK, 0)}× heard knock`,
       p?.leanRisk && !p?.valveRisk && `lean under load: ${f(p.afr, 1)}:1, past ${COEFF.LEAN_DAMAGE_AFR}:1`,
       p?.richRisk && `rich enough to wash the bore: λ ${f(p.lambda, 2)}`,
-      p?.pressureRisk && `peak pressure ${f(p.peakPressure, 0)} bar, past the parts' ${COEFF.PEAK_PRESSURE_LIMIT_BAR}`,
+      p?.pressureRisk && `peak pressure ${f(p.peakPressure, 0)} bar, past the parts' ${p.pressureLimitBar ?? derived?.peakPressureLimitBar ?? COEFF.PEAK_PRESSURE_LIMIT_BAR}`,
     ].filter(Boolean),
     bearing: [
       bearingPerPull > 0 && `peak pressure ${f(p.peakPressure, 0)} bar, over the ${f(bearingFree, 0)} bar the bottom end carries free`,

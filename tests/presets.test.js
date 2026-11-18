@@ -258,7 +258,7 @@ describe('factory calibration validates against real published figures', () => {
         // factory calibration over the limit, the limit is wrong, not the engine.
         expect(r.events.filter((e) => e.type === 'pressure')).toHaveLength(0);
         expect(Math.max(...r.points.map((p) => p.peakPressure)))
-          .toBeLessThan(S.COEFF.PEAK_PRESSURE_LIMIT_BAR);
+          .toBeLessThan(S.deriveEngine(preset.engine).peakPressureLimitBar);
       });
     });
   });

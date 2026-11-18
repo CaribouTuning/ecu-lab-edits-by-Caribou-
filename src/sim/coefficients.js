@@ -280,23 +280,22 @@ export const COEFF = {
   // engine's own compression temperature (octaneIndexK in cycle.js). At 2.0, before
   // either, a stock 10.3:1 engine on 91 never met its knock limit below 7° past MBT.
   //
-  // THREE ANCHORS, and changing SCALE must keep all three:
-  //   1. Every preset reaches published output with its factory calibration knock-free.
-  //   2. A stock port-injected 10.3:1 engine on 91 is KNOCK-limited at full load through
-  //      the low and middle of the rev range, and reaches MBT only near peak power, as
-  //      real 10-11:1 pump-fuel engines are. Measured at wide open throttle, knock limit
-  //      minus MBT: about -4° from 1500 to 4500 RPM, -1° at 5500, 0 at 6000, +2 at 6500;
-  //      93 octane buys about a degree, in line with Kalghatgi's 0.6-1° per octane-index
-  //      point.
-  //   3. The shipped stock calibration runs knock-free — what a new player meets first.
-  // `tests/presets.test.js` fails if 1 or 3 break.
-  //
-  // REFITTED from 1.1 to 1.3 when ROD_RATIO was corrected (it had been the per-stroke
-  // figure, half the real rod): a proper-length rod holds the piston near TDC longer, the
-  // end gas hotter for longer, and the knock limit fell about 1.8 degrees everywhere. 1.1
-  // had been absorbing that error. At 1.3 anchor 2 reads -4.0 at 4500, -0.9 at 5500 and
-  // +3.1 at 6500 on 91 (low RPM still runs -8, as it already did at 1.1 before the fix).
-  KNOCK_TAU_SCALE: 1.3,
+  // ANCHORED TO REAL CALIBRATIONS (docs/realism.md; `node scripts/realism-audit.js`):
+  //   1. A production calibration does not knock on the fuel it was written for. At full throttle
+  //      the physics' knock limit must sit at or above the spark GM ships in its stock Gen III
+  //      calibrations: the LS6 on premium, the LM7 and LR4 trucks on regular 87. At 2.5 the LS6's
+  //      high-octane table sits at the limit (GM writes it to borderline knock and lets the knock
+  //      sensor pick the low-octane table), within a degree of what the game's own factory LS6
+  //      runs below 4000 RPM; the trucks are knock-free with 0.5-11 degrees in hand.
+  //   2. Boosted, an intercooled LS1 on 93 gets about 18-21 degrees at 7 psi and 18 at 10 psi,
+  //      where LS turbo tuners run about 19 and 16.
+  //   3. Every preset reaches its published output with its factory calibration knock-free, and
+  //      the shipped stock calibration runs knock-free (`tests/presets.test.js`).
+  // It was 1.3, set to an unsourced anchor ("a 10.3:1 engine on 91 about 4 degrees knock-limited
+  // from 1500 to 4500 RPM"): there the physics said GM's own LS6 calibration knocked by 10
+  // degrees, and its turbo LS1 got 8 degrees at 7 psi. ECU Lab Pro found the same direction
+  // against a stock 6.4 Hemi calibration (5-12 degrees too cautious below 3000 RPM).
+  KNOCK_TAU_SCALE: 2.5,
   // The octane tests' own charge temperatures, for Kalghatgi's K (octaneIndexK): the RON
   // test (ASTM D2699) runs 52 °C intake air, the MON test (D2700) a 149 °C mixture, both
   // naturally aspirated. Tcomp15 is taken at 15 bar, as Kalghatgi defines it. K is held
@@ -654,21 +653,25 @@ export const COEFF = {
   // production rod bolts — survives indefinitely. Above it, damage accumulates whether or
   // not the mixture ever detonates.
   //
-  // Anchored on THIS MODEL's pressure scale, measured across a build ladder on E85 so
-  // knock does not confound it (stock V6, intercooled, large compressor, 850 cc
-  // injectors; re-measured after the turbo solve and exhaust fixes):
-  //     seven factory presets   65-89 bar   clear by 16 or more
-  //     stock CR, 8 psi        104 bar      clear by 1      (a mild, sane build)
-  //     stock CR, 14 psi       112 bar      trips           (stock rods, serious boost)
-  //     12.5:1, 18 psi         122 bar      trips
-  //     13.5:1, 24 psi         125 bar      trips
-  //
-  // Failure thresholds quoted for production internals are about 110-130 bar (a
-  // practitioners' figure; no primary source is cited here). The two-zone
-  // cycle reads close enough to that band for this to sit just under it, where the old
-  // single-zone estimate read low enough that borrowing the literature figure would have
-  // made the overload unreachable. `tests/presets.test.js` asserts every preset clears.
+  // Re-measured with the knock model anchored to real calibrations (KNOCK_TAU_SCALE 2.5), on
+  // E85 so knock does not confound it (a VQ35DE, intercooled, large compressor, 850 cc):
+  //     the factory NA presets    62-76 bar peak    clear by 29 or more
+  //     stock CR, 8 psi           99 bar            clears              (a mild, sane build)
+  //     stock CR, 14 psi          112 bar           trips               (stock rods, serious boost)
+  // Bosch's Automotive Handbook puts naturally aspirated gasoline engines at about 60 bar peak,
+  // and spark plugs are built for combustion pressures to 100 bar; no public source rates a
+  // production cast bottom end in bar, so this stays the ladder's figure.
   PEAK_PRESSURE_LIMIT_BAR: 105,
+  // A factory turbo engine's bottom end (`boostRatedBottomEnd`) is designed for its own peak
+  // pressure: about 130 bar for a modern production turbo gasoline engine (Mercedes-AMG M178,
+  // the maker's figure). The factory turbo presets peak at 89-109 on their own tunes.
+  PEAK_PRESSURE_LIMIT_BAR_BOOST_RATED: 130,
+  // Forged pistons and rods (BUILD's forged and race assemblies): 160 bar, the limit an SwRI
+  // engine study for the EPA (Engine Efficiency Technology Study, project 03.26457) records as
+  // used on high-load engines. MAHLE's piston handbook says forged pistons tolerate peak pressure
+  // better than cast without giving a number, and no source rates a race assembly higher, so it
+  // shares the forged figure: a race assembly only raises the speed rating (bottomEnd.js).
+  PEAK_PRESSURE_LIMIT_BAR_FORGED: 160,
 
   // --- Wear rates (percent of component life per pull) --- The MECHANISMS are sourced (MAHLE,
   // "Engine components.
@@ -697,16 +700,16 @@ export const COEFF = {
   // WEAR_BEARING_PER_BAR.
   //
   // THE THRESHOLD IS THE BOTTOM END'S, not one number for every engine. A factory
-  // engine's bottom end is designed for its own service pressure with margin: stock
-  // naturally aspirated pulls average about 58-59 bar and factory turbo engines 68-78,
-  // and none of them wears out on its own factory tune. One threshold of 55 for all of
-  // them would charge a stock B58 1.4 points of bearing life per pull and flag
-  // bottom-end stress on every factory turbo car. A naturally aspirated bottom end is
-  // free to 60 bar; a factory turbo engine's (`boostRatedBottomEnd`, set by its preset)
-  // to 80. A turbo bolted onto a naturally aspirated engine keeps the NA bottom end, and
-  // pays for it.
-  BEARING_PRESSURE_FREE_BAR: 60,
-  BEARING_PRESSURE_FREE_BAR_BOOST_RATED: 80,
+  // engine's bottom end is designed for its own service pressure with margin, and none of
+  // them wears out on its own factory tune. With the knock model anchored to real
+  // calibrations (KNOCK_TAU_SCALE 2.5), stock naturally aspirated pulls average 55-71 bar
+  // (the 6.4 Hemi highest) and the factory turbo engines 82-97 on their torque limits (the
+  // EA888 R highest). A naturally aspirated bottom end is free to 72 bar; a factory turbo
+  // engine's (`boostRatedBottomEnd`, set by its preset) to 98. A turbo bolted onto a
+  // naturally aspirated engine keeps the NA bottom end, and pays for it. (They were 60 and 80
+  // while the knock model held spark about 10 degrees short of real calibrations.)
+  BEARING_PRESSURE_FREE_BAR: 72,
+  BEARING_PRESSURE_FREE_BAR_BOOST_RATED: 98,
   WEAR_BEARING_PER_BAR: 0.075,
   // The thresholds above are for a pull's AVERAGE peak pressure.
   BEARING_LIVE_POINT_SPREAD_BAR: 11,
@@ -738,15 +741,13 @@ export const COEFF = {
   DAMAGE_OVERHEAT_C: 129,
   DAMAGE_OVERHEAT_PER_C_S: 0.05,
   // Average peak pressure that raises the bottom-end advisory. It means "boosted or
-  // high-compression loading", not "you drove it", so it sits above every bolt-on
-  // naturally aspirated pull on a 10.3:1 engine (stock V6 59 bar; intake, headers and
-  // exhaust 64) and below every factory-boosted engine (EA888 GTI 69, N54 70, EA888 R
-  // 78). At 60, one bar over stock, it once fired for a cold air intake with its MAF
-  // rescaled. An 11.5:1 NA engine on 93 (67 bar) still reaches it.
-  BEARING_EVENT_BAR: 66,
-  // The same advisory on a boost-rated bottom end: past its factory tune's pressure and
-  // into what a tuned one adds.
-  BEARING_EVENT_BAR_BOOST_RATED: 86,
+  // high-compression loading", not "you drove it", so it sits above every naturally aspirated
+  // street build measured: stock and bolt-ons on every NA preset (61-71 bar) and 11.5:1 on 93
+  // (70-75). Real 11-12:1 naturally aspirated engines do not wear their bearings out.
+  BEARING_EVENT_BAR: 78,
+  // The same advisory on a boost-rated bottom end: past its factory tune's pressure (82-97)
+  // and into what a tuned one adds.
+  BEARING_EVENT_BAR_BOOST_RATED: 104,
 
   // --- Inlet Mach index (engine.js): a yardstick; the breathing limit is breathing.js ---
   // Lumped (bore / inlet valve diameter)^2 from Taylor's index. DERIVED, not fitted: a

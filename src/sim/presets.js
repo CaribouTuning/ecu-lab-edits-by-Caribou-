@@ -17,10 +17,10 @@
  */
 
 import {
-  COMPRESSOR_OPTS, CONFIG_OPTS, CYL_COUNT, EXHAUST_DIA_OPTS, INJECTOR_OPTS, MATERIAL_OPTS, OCTANE_OPTS, TURBINE_OPTS,
+  COMPRESSOR_OPTS, CONFIG_OPTS, CYL_COUNT, EXHAUST_DIA_OPTS, FUEL_CHOICES, INJECTOR_OPTS, MATERIAL_OPTS, OCTANE_OPTS, TURBINE_OPTS,
   VALVES_PER_CYL_OPTS, VALVETRAIN_OPTS, compressorWithCount, idealExhaustDiameter, turbineWithCount, factoryCompressorIdx,
 } from './hardware.js';
-import { BARO_KPA, INJ_DEADTIME_MS, PSI_TO_KPA, RHO_AIR } from './constants.js';
+import { BARO_KPA, HP_TO_W, INJ_DEADTIME_MS, NM_PER_LBFT, PSI_TO_KPA, RHO_AIR, R_AIR } from './constants.js';
 import { COEFF } from './coefficients.js';
 import { GAME_LAYOUT, engineLayout, fitsGameGrid, layoutById, readEcuTable, readTable } from './layouts.js';
 import { chargeIndexOf } from './knock.js';
@@ -36,6 +36,7 @@ import { deriveEngine, valveFloatRpm } from './engine.js';
 import { BOTTOM_END_OPTS, DEFAULT_BOTTOM_END } from './bottomEnd.js';
 import { clamp, curveAt } from './math.js';
 import { inductionAtFullThrottle, inductionAtMap } from './turbo.js';
+import { compressorMap } from './compressorMap.js';
 import {
   CURVE_RPM, effectiveMafFactor, IDLE_COLUMN_MAX_RPM, interpolationRoomDeg, OPEN_LOOP_KPA, RPM, SPARK_MAX_DEG,
   SPARK_MIN_DEG,
@@ -63,7 +64,8 @@ export const FACTORY_KNOCK_MARGIN_DEG = 2;
  * @property {string} manufacturer
  * @property {string} years
  * @property {string} blurb
- * @property {object} factory published ratings
+ * @property {object} factory published ratings; `torqueCapped`: rated as a torque plateau the
+ *   factory engine computer holds with its torque limit (factoryCalibration)
  * @property {import('./engine.js').EngineConfig} engine
  * @property {object} induction
  * @property {{injectorIdx: number, exhaustDiaIdx: number, octaneIdx: number,
@@ -75,6 +77,12 @@ export const FACTORY_KNOCK_MARGIN_DEG = 2;
  * @property {number} [bottomEndRatedRpm] the speed the factory pistons and rods are rated to,
  *   when it is not the published limiter
  */
+
+/**
+ * US regular, 87 AKI: what GM calibrated its truck engines (LM7, LQ4, LR4) for. Their stock
+ * calibrations run their spark for it (docs/realism.md), and a truck's owner fills it.
+ */
+const REGULAR_87 = FUEL_CHOICES.findIndex((f) => f.label === '87');
 
 /** @type {Preset[]} */
 export const ENGINE_PRESETS = [
@@ -159,6 +167,9 @@ export const ENGINE_PRESETS = [
     factory: {
       crankHp: 302, crankHpRpm: 5800,   // 302 hp @ 5800 rpm
       crankTq: 295, crankTqRpm: 3000,   // 295 lb-ft, flat 1400-5000
+      // Rated as a torque plateau, which the factory engine computer holds by trimming boost
+      // (its torque limit; factoryCalibration): the engine could make more, and tuners raise it.
+      torqueCapped: true,
       displacementL: 2.98,
     },
     engine: {
@@ -203,6 +214,9 @@ export const ENGINE_PRESETS = [
     factory: {
       crankHp: 320, crankHpRpm: [5500, 6500],  // plateau-rated
       crankTq: 330, crankTqRpm: 1380,          // 330 lb-ft, flat 1380-5000
+      // Rated as a torque plateau, which the factory engine computer holds by trimming boost
+      // (its torque limit; factoryCalibration): the engine could make more, and tuners raise it.
+      torqueCapped: true,
       displacementL: 3.00,
     },
     engine: {
@@ -268,6 +282,9 @@ export const ENGINE_PRESETS = [
       // guide, 'engine speed at maximum power' to 6500). Launch press kits quote 5800 alone.
       crankHp: 382, crankHpRpm: [5800, 6500],  // plateau-rated
       crankTq: 369, crankTqRpm: 1800,   // 369 lb-ft, flat 1800-5000
+      // Rated as a torque plateau, which the factory engine computer holds by trimming boost
+      // (its torque limit; factoryCalibration): the engine could make more, and tuners raise it.
+      torqueCapped: true,
       displacementL: 3.00,
     },
     engine: {
@@ -335,6 +352,9 @@ export const ENGINE_PRESETS = [
     factory: {
       crankHp: 220, crankHpRpm: [4700, 6200],  // plateau-rated
       crankTq: 258, crankTqRpm: 1500,
+      // Rated as a torque plateau, which the factory engine computer holds by trimming boost
+      // (its torque limit; factoryCalibration): the engine could make more, and tuners raise it.
+      torqueCapped: true,
       displacementL: 1.98,
     },
     engine: {
@@ -374,6 +394,9 @@ export const ENGINE_PRESETS = [
     factory: {
       crankHp: 292, crankHpRpm: [5400, 6500],  // plateau-rated
       crankTq: 280, crankTqRpm: 1800,
+      // Rated as a torque plateau, which the factory engine computer holds by trimming boost
+      // (its torque limit; factoryCalibration): the engine could make more, and tuners raise it.
+      torqueCapped: true,
       displacementL: 1.98,
     },
     engine: {
@@ -515,7 +538,7 @@ export const ENGINE_PRESETS = [
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
     // GM rates its trucks on 87 regular, which this game's fuel list does not carry; 91
     // is the nearest, and a factory calibration on 91 is no more knock-limited than on 87.
-    parts: { injectorIdx: 0, exhaustDiaIdx: 2, octaneIdx: 0 },
+    parts: { injectorIdx: 0, exhaustDiaIdx: 2, octaneIdx: REGULAR_87 },
     mods: { intake: false, exhaust: false, headers: false, intercooler: false },
   },
   {
@@ -544,7 +567,7 @@ export const ENGINE_PRESETS = [
       redline: 5800,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
-    parts: { injectorIdx: 0, exhaustDiaIdx: 2, octaneIdx: 0 },
+    parts: { injectorIdx: 0, exhaustDiaIdx: 2, octaneIdx: REGULAR_87 },
     mods: { intake: false, exhaust: false, headers: false, intercooler: false },
   },
   {
@@ -573,7 +596,7 @@ export const ENGINE_PRESETS = [
       redline: 6000,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
-    parts: { injectorIdx: 0, exhaustDiaIdx: 2, octaneIdx: 0 },
+    parts: { injectorIdx: 0, exhaustDiaIdx: 2, octaneIdx: REGULAR_87 },
     mods: { intake: false, exhaust: false, headers: false, intercooler: false },
   },
   {
@@ -735,6 +758,19 @@ export function factoryCalibration(preset, layout = null) {
   const ecu = defaultEcuCalibration({ derived, gate: DEFAULT_ECU_HW.gate, axes: L.timing });
   const schedule = factoryIntakeSchedule(preset.engine, preset.mods, hw, ecu.vvt.intakeTarget.x, ecu.vvt.intakeTarget.y);
   if (schedule) ecu.vvt.intakeTarget = { ...ecu.vvt.intakeTarget, z: schedule };
+  // A factory turbo engine rated as a torque plateau holds its rating with the engine computer's
+  // torque limit, trimming boost as BMW's and VW's do: the rated torque, and above the plateau the
+  // rated power at each speed. The hardware could make more (docs/realism.md); raising the limit is
+  // part of tuning it, as it is on the real cars.
+  if (preset.factory?.torqueCapped) {
+    const tqNm = preset.factory.crankTq * NM_PER_LBFT;
+    const watts = preset.factory.crankHp * HP_TO_W;
+    ecu.torque = {
+      ...ecu.torque,
+      method: 'boost',
+      limitByRpm: { ...ecu.torque.limitByRpm, z: ecu.torque.limitByRpm.x.map((r) => Math.round(Math.min(tqNm, watts / ((2 * Math.PI * r) / 60)))) },
+    };
+  }
   const veAt = scheduledVeAt(preset.engine, preset.mods, hw, schedule ? ecu.vvt : null);
   const camAt = schedule ? intakeCamAt(preset.engine, ecu.vvt) : null;
 
@@ -866,10 +902,22 @@ export function factoryCalibration(preset, layout = null) {
   // production calibration limits boost there instead — the low-speed torque or boost
   // limit every turbo ECU carries. Stepped down by half a psi until spark can protect it.
   const curveRpm = preset.induction.boost.length === CURVE_RPM.length ? CURVE_RPM : RPM;
+  // A factory calibration never asks for boost the compressor can only make past its surge
+  // line: there the flow stalls and reverses, the compressor heats the air instead of pumping
+  // it (compressorMap's SURGE_EFF_PENALTY) and the turbo is damaged, so a maker's boost target
+  // stays on the map. Asked anyway, a B58's 17 psi at 1500 RPM met the surge line at 14 and
+  // came out of the intercooler at 75 C, past its own engine computer's protection.
+  const compressor = presetCompressor(preset);
+  const surges = (rpm, p) => {
+    const mapKpa = BARO_KPA + p * PSI_TO_KPA;
+    const chargeK = chargeTempK(p, preset.mods.intercooler);
+    const flowKgS = (veAt(rpm, mapKpa) / 100) * (derived.displacementL / 1000) * ((mapKpa * 1000) / (R_AIR * chargeK)) * (rpm / 120);
+    return compressorMap(compressor, flowKgS, mapKpa / BARO_KPA).surge;
+  };
   const boost = preset.induction.boost.map((psi, i) => {
     if (!preset.induction.turboOn || psi <= 0) return psi;
     let p = psi;
-    while (p > 0 && cellAt(curveRpm[i], BARO_KPA + p * PSI_TO_KPA).safe < SPARK_MIN_DEG) p -= 0.5;
+    while (p > 0 && (cellAt(curveRpm[i], BARO_KPA + p * PSI_TO_KPA).safe < SPARK_MIN_DEG || surges(curveRpm[i], p))) p -= 0.5;
     return Math.max(0, p);
   });
 

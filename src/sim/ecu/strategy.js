@@ -17,7 +17,7 @@
  */
 
 import { throttleBoreM } from '../throttle.js';
-import { BARO_KPA, DRIVETRAIN_EFF, KELVIN_OFFSET, PSI_TO_KPA } from '../constants.js';
+import { BARO_KPA, DRIVETRAIN_EFF, KELVIN_OFFSET, NM_PER_LBFT, PSI_TO_KPA } from '../constants.js';
 import { trappedAirGrams } from '../cycle.js';
 import { OCTANE_OPTS, STOCK_EXHAUST_DIA_IN } from '../hardware.js';
 import { needsAirmass, readEcuTable } from '../layouts.js';
@@ -40,7 +40,6 @@ import { nitrousDelivery, nitrousFraction } from './nitrousControl.js';
 import { readSensor, widebandTrueFor } from './sensors.js';
 import { camTargets, veAtPhase } from './vvt.js';
 
-const NM_PER_LBFT = 1 / 0.7376;
 
 /**
  * Everything physical the ECU is attached to, gathered once per pull.
