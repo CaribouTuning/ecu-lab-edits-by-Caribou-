@@ -445,7 +445,7 @@ export function simulateSweep({
    *  turbo's base target is the BUILD curve; TUNE → BOOST only trims it. */
   const lessBoost = blower
     ? 'fit a larger blower pulley (a lower drive ratio) on BUILD → INDUCTION'
-    : 'lower the boost target there on TUNE → BOOST (Boost Target Curve)';
+    : 'lower the boost target there on TUNE → BOOST (Boost target curve)';
   /**
    * Why the engine got less fuel than the table asked for, and the page that fixes it, in
    * the order a tuner checks: the injectors at their limit, the pump, the injector flow the

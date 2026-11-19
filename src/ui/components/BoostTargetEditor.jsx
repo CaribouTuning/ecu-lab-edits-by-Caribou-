@@ -36,7 +36,7 @@ export function BoostTargetEditor() {
   });
   return (
     <section aria-label="Boost target">
-      <div className={styles.boostLabel}>Boost Target Curve</div>
+      <div className={styles.boostLabel}>Boost target curve</div>
 
       <Panel tight style={{ marginBottom: 10 }}>
         {/* Tap a bar to select that RPM point, then edit it below with full-width controls. */}
@@ -87,11 +87,11 @@ export function BoostTargetEditor() {
         <div className={styles.presetRow}>
           <Button variant="ghost" size="sm" style={{ flex: 1 }}
             onClick={() => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: RPM.map(() => clamp(Number(boostCurve[boostSel]) || 0, 0, 25)) })}>
-            FLAT ACROSS ALL
+            Flat across all
           </Button>
           <Button variant="ghost" size="sm" style={{ flex: 1 }}
             onClick={() => { const peak = boostCurve[boostSel]; dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: RPM.map((r) => Math.round(peak * clamp((r - 1500) / 2600, 0, 1))) }); }}>
-            SPOOL RAMP
+            Spool ramp
           </Button>
           {/* Built from RPM so the curve can never be shorter than the
               axis. A hand-written literal previously had seven entries
@@ -99,7 +99,7 @@ export function BoostTargetEditor() {
               the entire simulation. */}
           <Button variant="ghost" size="sm" style={{ flex: 1 }}
             onClick={() => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: RPM.map(() => 0) })}>
-            ZERO
+            Zero
           </Button>
         </div>
         <div className={styles.ceilingWarning} data-over={peakOverCeiling ? 'true' : 'false'}>

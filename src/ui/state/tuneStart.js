@@ -225,7 +225,7 @@ export function guidedSteps({ build, tune, target, samples, advice = null }) {
   return [
     ...(build.turboOn && boostTarget <= 0 ? [{
       id: 'boost-target', title: 'Give the turbo a boost target', short: 'Boost target', go: 'build:induction',
-      text: 'The turbo is set to make 0 psi of boost, so it only gets in the way of the exhaust: the engine makes less power than it did without it. On TUNE → BOOST, set the Boost Target Curve; 6–8 psi is a common first step on pump fuel. A new boost is a new build, so the way into the tune is offered again for it.',
+      text: 'The turbo is set to make 0 psi of boost, so it only gets in the way of the exhaust: the engine makes less power than it did without it. On TUNE → BOOST, set the Boost target curve; 6–8 psi is a common first step on pump fuel. A new boost is a new build, so the way into the tune is offered again for it.',
       done: false,
     }] : []),
     ...(injStep ? [{
@@ -299,7 +299,7 @@ export function guidedSteps({ build, tune, target, samples, advice = null }) {
     },
     {
       id: 'air', title: 'Get the fuel right at part throttle', short: 'Part-throttle fuel', go: 'airflow',
-      text: `Now check the fuel against what really happens. On the dyno, run a pull at 40% throttle, then on AIRFLOW press Correct VE from logs. VE (volumetric efficiency) is how full of air each cylinder gets; the computer works out the fuel from it, and the pull's oxygen-sensor log shows where it is off. Repeat until the correction stays small, then do the same at 70% throttle.${steps.length ? ` Keep the boost at ${steps[0]} psi for now: on TUNE → BOOST, under Boost limit by gear, set 4th (the gear the dyno pulls in) to ${steps[0]}. The Boost Target Curve above it stays as it is: the limit holds the boost under it until you raise it.` : ''} Tuners get the fuel right at light load before going to full throttle, because a lean full-throttle run is what damages an engine.`,
+      text: `Now check the fuel against what really happens. On the dyno, run a pull at 40% throttle, then on AIRFLOW press Correct VE from logs. VE (volumetric efficiency) is how full of air each cylinder gets; the computer works out the fuel from it, and the pull's oxygen-sensor log shows where it is off. Repeat until the correction stays small, then do the same at 70% throttle.${steps.length ? ` Keep the boost at ${steps[0]} psi for now: on TUNE → BOOST, under Boost limit by gear, set 4th (the gear the dyno pulls in) to ${steps[0]}. The Boost target curve above it stays as it is: the limit holds the boost under it until you raise it.` : ''} Tuners get the fuel right at light load before going to full throttle, because a lean full-throttle run is what damages an engine.`,
       done: airDone,
     },
     {

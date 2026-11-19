@@ -247,7 +247,7 @@ export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm, intercooled =
       cause: `Hot intake air knocks sooner, so the ECU takes ${cal.protect.iatRetardPerC}° of timing out for every degree over the limit — about ${pulled.toFixed(1)}° here, whatever the SPARK table says.`,
       // An intercooler already fitted cannot be fitted again: the boost there is the lever.
       fix: intercooled
-        ? `The intercooler is already doing its work: the charge comes out of the compressor too hot for it at this boost. Lower the boost target across ${label(run)} on TUNE → BOOST (Boost Target Curve), or run better fuel, which takes the heat with less retard. Raising the IAT limit on TUNE → PROTECT only removes the safety net.`
+        ? `The intercooler is already doing its work: the charge comes out of the compressor too hot for it at this boost. Lower the boost target across ${label(run)} on TUNE → BOOST (Boost target curve), or run better fuel, which takes the heat with less retard. Raising the IAT limit on TUNE → PROTECT only removes the safety net.`
         : 'Cool the charge: fit an intercooler on BUILD → INDUCTION, or lower the boost target on TUNE → BOOST. Raising the IAT limit on TUNE → PROTECT only removes the safety net.',
     });
   });

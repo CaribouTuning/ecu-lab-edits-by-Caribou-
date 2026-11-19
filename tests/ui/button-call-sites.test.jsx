@@ -90,12 +90,16 @@ async function sweep() {
   const uninstalled = screen.getAllByRole('button').filter((b) => b.getAttribute('data-installed') === 'false');
   fireEvent.click(uninstalled[0]);
   collect();
+  // A turbo, so TUNE > Boost mounts its boost target editor (the turbo's target is the tune's).
+  buildPart('Induction');
+  fireEvent.click(within(screen.getByRole('group', { name: 'Forced induction' })).getByRole('button', { name: 'Turbocharger' }));
+  collect();
 
   goTo('TUNE');
   collect();
   // INJECTORS visited last: the scaling-mismatch step right after this loop needs
   // to still be on TUNE > Injectors, where ECU Injector Scaling and RESCALE live.
-  for (const view of ['Airflow (VE)', 'Spark', 'Fuel', 'Sensors', 'Injectors']) {
+  for (const view of ['Airflow (VE)', 'Spark', 'Fuel', 'Sensors', 'Boost', 'Injectors']) {
     clickButton(view);
     collect();
     // Selecting a grid cell mounts the SelectionDock and its DONE button.
@@ -160,7 +164,7 @@ function variantsOn(el) {
 // working would drop its screen's buttons and every "all of them are fine" assertion
 // below would go on passing over the shorter list.
 const EXPECTED = [
-  'RESET ALL TO STOCK', 'FLAT ACROSS ALL', 'SPOOL RAMP', 'ZERO',
+  'RESET ALL TO STOCK', 'Flat across all', 'Spool ramp', 'Zero',
   'Apply half', 'Apply all', 'Done', 'RESCALE ECU TO',
   'BUILD HISTOGRAM FROM THIS PULL', 'APPLY CORRECTIONS TO VE', 'DISCARD',
 ];

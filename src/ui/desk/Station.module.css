@@ -85,6 +85,7 @@
 /* On a phone the tabs take the toolbar's whole line and the live reading drops under them:
    side by side, "History" ran into "Peak 297 whp, 280 lb-ft" and "Pull log" wrapped. */
 @container (max-width: 560px) {
+  .appName { display: none; }
   .titleStatus { flex-basis: 100%; margin-left: 0; padding: 0 0 6px; }
 }
 
