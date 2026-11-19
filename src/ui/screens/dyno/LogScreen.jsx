@@ -14,7 +14,7 @@ import { Eyebrow } from '../../primitives/Eyebrow.jsx';
 import { useSession } from '../../state/StoreProvider.jsx';
 import { coversRpm, eventTone } from '../../components/eventBands.js';
 import { fixLinks } from '../../components/fixLinks.js';
-import { fixStep, groupByCause } from '../../components/fixOrder.js';
+import { fixStep, groupByCause, notesOf, problemsOf } from '../../components/fixOrder.js';
 
 import styles from './LogScreen.module.css';
 
@@ -61,11 +61,13 @@ export function LogScreen({ flagged = [], axes = GAME_LAYOUT.timing }) {
   }, [logFocusRpm]);
 
   let firstFocusedSeen = false;
+  const problems = problemsOf(result.events);
+  const notes = notesOf(result.events);
 
   return (
     <>
       <Eyebrow icon={AlertTriangle}>Pull Log</Eyebrow>
-      {result.events.length === 0 ? (
+      {problems.length === 0 ? (
         <div className={styles.clean}>
           Clean pull — no knock, fueling, or trim issues across the sweep.
           {flagged.length > 0 && (() => {
@@ -88,7 +90,7 @@ export function LogScreen({ flagged = [], axes = GAME_LAYOUT.timing }) {
         </div>
       ) : (
         <div className={styles.events}>
-          {result.events.length > 1 && (
+          {problems.length > 1 && (
             <div className={styles.order} data-testid="log-order">
               Grouped by cause, in the order a tuner fixes them: setup, then fuel, then spark, then boost. Each entry is a cause and the symptoms it produced; fix the top one and pull again, and what it caused clears with it.
             </div>
@@ -154,6 +156,14 @@ export function LogScreen({ flagged = [], axes = GAME_LAYOUT.timing }) {
           })}
         </div>
       )}
+      {/* How the engine computer runs, not something to fix: no step, no cost, and it does
+          not stop a pull reading clean. */}
+      {notes.map((n, i) => (
+        <div key={`note-${i}`} className={styles.engineNote} data-testid="log-note">
+          <b className={styles.eventLabel}>Engine computer: </b>{n.msg}. {n.fix}
+          <EventLinks fix={n.fix} />
+        </div>
+      ))}
     </>
   );
 }

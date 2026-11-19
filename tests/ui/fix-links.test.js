@@ -71,6 +71,13 @@ describe('fixLinks', () => {
     expect(counts).toEqual({ nitrous: 2, spark: 1 });
   });
 
+  it('does not point the Next bar at a note: a factory torque limit is not a fix', () => {
+    const counts = tuneAttention([
+      { type: 'torquelimit', note: true, rpmStart: 1500, rpmEnd: 6100, fix: 'To go further, raise Crank torque limit by RPM on TUNE → TORQUE.' },
+    ]);
+    expect(counts).toEqual({});
+  });
+
   it('counts causes, not the symptoms grouped under them', () => {
     // Lean boost cells and the lean protection they trip, over the same RPM: one cause,
     // so FUEL is pointed at once.

@@ -57,7 +57,7 @@ export function fixLinks(text) {
 /**
  * How many of a pull's causes send the player to each TUNE page.
  *
- * @param {{type: string, fix?: string, rpmStart?: number, rpmEnd?: number}[]} events
+ * @param {{type: string, fix?: string, rpmStart?: number, rpmEnd?: number, note?: boolean}[]} events
  * @returns {Record<string, number>} TUNE section id → event count
  */
 export function tuneAttention(events) {

@@ -165,10 +165,14 @@ describe('the guide is this build\'s, not a generic one', () => {
   it('opens with the boost target where a turbo is fitted at 0 psi', () => {
     const st = set(preset('vq35de-revup'), 'turboOn', true);
     const { g } = steps(st);
-    expect(g[0]).toMatchObject({ id: 'boost-target', go: 'build:induction', done: false });
+    // The boost target curve lives on TUNE → BOOST: the step's text says so, and its Go and
+    // the Next bar have to take the player there, not to the build bench it moved off.
+    expect(g[0]).toMatchObject({ id: 'boost-target', go: 'boost', done: false });
+    expect(g[0].text).toMatch(/On TUNE → BOOST, set the Boost target curve/);
     expect(guideStepNow(g).id).toBe('boost-target');
-    const step = nextStep(/** @type {any} */ ({ mode: 'sandbox', attention: [], guide: { n: 1, of: g.length, title: 'Boost target', go: 'build:induction', checkable: true } }));
-    expect(step).toMatchObject({ go: 'build', label: 'Build bench' });
+    const step = nextStep(/** @type {any} */ ({ mode: 'sandbox', attention: [], guide: { n: 1, of: g.length, title: 'Boost target', go: g[0].go, checkable: true } }));
+    expect(step).toMatchObject({ go: 'tune:boost' });
+    expect(step.label).not.toBe('Build bench');
   }, 300_000);
   it('keeps the mixture on the table\'s own petrol scale on E85: 14.7 is still lambda 1, never 9.8', () => {
     const st = set(preset('vq35de-revup'), 'octaneIdx', S.FUEL_CHOICES.findIndex((f) => f.label === 'E85'));

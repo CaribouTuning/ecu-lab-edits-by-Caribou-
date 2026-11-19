@@ -42,9 +42,9 @@ export const PAGE_GUIDES = {
     leave: 'The default is the same air model you have been tuning with all along.',
   },
   boost: {
-    does: 'How the ECU asks for boost and drives the wastegate to get it. The BUILD boost curve is the target; this page is how it is reached.',
+    does: 'How the ECU asks for boost and drives the wastegate to get it. The Boost target curve at the top of this page is the target; the settings below are how it is reached.',
     when: 'The log shows boost overshooting its target, falling short of it, or wheelspin in the low gears.',
-    leave: 'Closed loop with the factory duty table reaches the BUILD boost curve by itself, wherever the turbo can make it.',
+    leave: 'Closed loop with the factory duty table reaches the Boost target curve by itself, wherever the turbo can make it.',
   },
   vvt: {
     does: 'Where the cam phasers turn the camshafts at each speed and load.',

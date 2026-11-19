@@ -271,7 +271,18 @@ export function liveStepEcu(st, dt, input, cfg) {
     // cold engine), so the returning fuel meets a manifold it can burn in, not deep vacuum.
     const fuelReturnRpm = cal.fuel.dfcoExitRpm + (cal.fuel.dfcoColdRpm ? read1(cal.fuel.dfcoColdRpm, e.sEct) : 0);
     const captureRpm = Math.max(E.IDLE_CAPTURE_RPM, cal.fuel.dfcoEnabled ? fuelReturnRpm + 250 : 0);
-    if (holding) { /* hold base air through the flare */ } else if (s.rpm < captureRpm) {
+    if (holding) { /* hold base air through the flare */ } else if (s.rpm < captureRpm && s.dfco) {
+      // Still on the overrun cut: the valve opens to its base air, ready for the fuel coming
+      // back, and no further. The speed loop stays out of it — an engine falling a few
+      // thousand RPM a second with no fuel is not about to stall, and the damping term
+      // read it as one, threw the valve wide, and the returning fuel met so much air that
+      // the engine surged back over the cut and chopped in and out of it.
+      // How far: the throttle follower holds the air each cycle takes at idle, scaled to the
+      // speed the engine is turning, so the fuel comes back into a manifold like the idle's
+      // — burnable even cold — and not a deep vacuum, nor a surge's worth of air.
+      const follower = read1(cal.idle.baseAir, e.sEct) * clamp(s.rpm / idleTarget, 1, E.IDLE_FOLLOWER_MAX_RATIO);
+      s.idleTrim = clamp(follower, E.IDLE_AIR_MIN_PCT, E.IDLE_AIR_MAX_PCT);
+    } else if (s.rpm < captureRpm) {
       const err = idleTarget - s.rpm;
       const gain = err > 0 ? cal.idle.gainUp : cal.idle.gainDown;
       // Damping on the speed change over the last step — the derivative term. (Taken

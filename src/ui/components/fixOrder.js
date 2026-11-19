@@ -37,6 +37,28 @@ export function fixStep(type) {
 }
 
 /**
+ * The entries that are something to fix. A note (`note: true`: the engine computer holding
+ * a factory engine to its own torque limit, say) is how the engine works, not a fault: it
+ * is read beside the log, never numbered as a step, counted, scored or pointed at.
+ *
+ * @template E
+ * @param {(E & {note?: boolean})[] | null | undefined} events
+ * @returns {(E & {note?: boolean})[]}
+ */
+export function problemsOf(events) {
+  return (events ?? []).filter((e) => !e.note);
+}
+
+/**
+ * @template E
+ * @param {(E & {note?: boolean})[] | null | undefined} events
+ * @returns {(E & {note?: boolean})[]} the notes `problemsOf` leaves out
+ */
+export function notesOf(events) {
+  return (events ?? []).filter((e) => e.note);
+}
+
+/**
  * A pull's events in working order: by step, and within a step by what they cost the
  * pull, biggest first. Stable, and a new array — the result itself is left as logged.
  *
@@ -86,7 +108,7 @@ const overlaps = (a, b) => a.rpmStart == null || b.rpmStart == null
  * @returns {{root: E & {type: string}, effects: (E & {type: string})[]}[]}
  */
 export function groupByCause(events) {
-  const ordered = inFixOrder(events);
+  const ordered = inFixOrder(problemsOf(events));
   /** @type {Map<object, object>} each entry's direct cause */
   const parent = new Map();
   ordered.forEach((e) => {

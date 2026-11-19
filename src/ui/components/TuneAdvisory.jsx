@@ -274,7 +274,7 @@ function AfrAdvisory({ report }) {
       }[w.cause ?? 've'];
       return (
         <div className={styles.prose}>
-          At full throttle from {detail.from.toLocaleString('en-US')} to {detail.to.toLocaleString('en-US')} RPM the engine got <b className={styles.emInk}>{w.afr.toFixed(1)}:1</b> where this table asks for <b className={styles.emInk}>{w.afrCommanded.toFixed(1)}:1</b> (worst at {w.rpm.toLocaleString('en-US')} RPM, {Math.round(w.map)} kPa). The table is not the fault, so do not change it to chase the number. {fix}
+          At full throttle from {detail.from.toLocaleString('en-US')} to {detail.to.toLocaleString('en-US')} RPM the engine got <b className={styles.emInk}>{w.afr.toFixed(1)}:1</b> where this table asks for <b className={styles.emInk}>{w.afrCommanded.toFixed(1)}:1</b> (worst at {w.rpm.toLocaleString('en-US')} RPM, {Math.round(w.map)} kPa). That gap is the fuelling, not the targets: the engine would miss any number typed here by the same share, so a richer or leaner target only moves the miss. Set the targets this build wants first, then close the gap. {fix}
           {detail.alsoOff > 0 && <> Once it hits the table, {detail.alsoOff} high-load {detail.alsoOff === 1 ? 'cell is' : 'cells are'} still off best power: this page will list them.</>}
         </div>
       );
@@ -400,7 +400,7 @@ function VeAdvisory({ report }) {
           <div className={styles.acceptNote}>
             {state === 'log-sync'
               ? 'Within what a wideband and fuel trims can resolve. Nothing to correct here.'
-              : 'Apply half with CORRECT VE FROM LOGS under the table, log again, and repeat until every cell you use is within 2–3%.'}
+              : 'Apply half with CORRECT VE FROM LOGS under the table, log again, and repeat until every cell you use is within 1–2%.'}
           </div>
         </>
       );

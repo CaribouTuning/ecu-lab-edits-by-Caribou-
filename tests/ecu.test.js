@@ -465,6 +465,26 @@ describe('the live engine runs its controllers in time', () => {
     expect(Math.abs(rows.at(-1).ltft)).toBeLessThan(0.5);
   });
 
+  // A playtest found the GM V8s chopping in and out of the overrun cut at about 2000 RPM
+  // after a rev, some never finding idle: while the fuel was off the idle loop's damping
+  // read the coast-down as a stall coming and threw the valve open to its stop, so the
+  // fuel came back into far too much air and surged the engine back over the cut. These
+  // are the cases that hung (warm with the A/C on, and part-warm).
+  it.each([['ls1', 85, true, 60], ['ls6', 40, true, 100], ['lr4', 85, true, 100], ['hemi-392', 40, false, 60]])(
+    'comes off a rev into idle without chopping in and out of the fuel cut (%s, %i °C)', (preset, coolantC, ac, peak) => {
+      const { rows } = runLive(makeEngine({ preset }), {
+        seconds: 16, coolantC, aux: ac ? { ac: true, lights: true } : {}, pedal: (t) => (t > 6 && t < 7.5 ? peak : 0),
+      });
+      const after = rows.slice(Math.round(7.6 / 0.05));
+      const cutsBack = after.filter((r, i) => i > 0 && r.cut && !after[i - 1].cut).length;
+      expect(cutsBack).toBe(0);
+      // The follower opens the valve to idle's air per cycle at the speed the fuel returns
+      // (with the A/C and lights on top); the fault drove it to its 15% stop.
+      expect(Math.max(...after.map((r) => r.idleAir))).toBeLessThan(11);
+      expect(after.at(-1).running).toBe(true);
+      expect(Math.abs(after.at(-1).rpm - after.at(-1).idleTarget)).toBeLessThan(120);
+    });
+
   it('starts cold and settles on the idle target', () => {
     const { rows } = runLive(makeEngine(), { seconds: 15, coolantC: 20 });
     const tail = rows.slice(-60).map((r) => r.rpm);

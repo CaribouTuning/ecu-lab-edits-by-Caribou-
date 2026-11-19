@@ -565,6 +565,22 @@ describe('LogScreen', () => {
     expect(note).toMatch(/A pull at 100% throttle never reads them/);
   });
 
+  // A playtest pulled a stock EA888 and a stock B58 and read "Step 6 · Hardware … -5" for
+  // the factory torque limit: the computer holding its rated plateau, which is how the
+  // engine is meant to run. A note reads as clean, with the note beside it, unnumbered and
+  // costing nothing.
+  it('reads a pull whose only entry is a note as clean, and shows the note without a step or cost', () => {
+    const event = { type: 'torquelimit', severity: 1, impact: 5, note: true, rpmStart: 1500, rpmEnd: 6100,
+      msg: "Torque held to the calibration's limit (500 Nm at 1500 RPM) across 1500–6100 RPM, by boost",
+      cause: 'Boost was reduced to hold torque at the limit.', fix: 'This is the engine computer\'s own torque limit, not a fault.' };
+    mountWithResult(<LogScreen />, { result: { ...FAKE_RESULT, events: [event] } });
+    expect(screen.getByText(/Clean pull/)).toBeTruthy();
+    const note = screen.getByTestId('log-note').textContent;
+    expect(note).toMatch(/Engine computer: Torque held to the calibration's limit/);
+    expect(note).not.toMatch(/Step \d|-5/);
+    expect(document.querySelector('[data-tone]')).toBeNull();
+  });
+
   it('tones an unrecognised event type by its severity, not by a hardcoded name list', () => {
     // The exact regression this screen exists to prevent: a real event type
     // (`bearing`) once matched no name in a hand-kept list and fell through to the

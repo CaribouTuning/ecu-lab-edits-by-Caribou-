@@ -325,11 +325,13 @@ export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm, intercooled =
     });
   });
 
-  groupRuns(points, (p) => has(p, 'torque')).forEach((run) => {
+  // One note for the whole pull: it is one table, and a factory plateau held by boost
+  // drops in and out of the limit as the torque wanders round it, which read as three.
+  mergeNearbyRuns(groupRuns(points, (p) => has(p, 'torque')), Infinity).forEach((run) => {
     const peak = run[0];
     events.push({
       type: 'torquelimit', severity: 1, impact: imp(6, run), ...span(run),
-      msg: `Torque limited to ${peak.torqueLimitNm} Nm across ${label(run)} (by ${cal.torque.method})`,
+      msg: `Torque held to the calibration's limit (${peak.torqueLimitNm} Nm at ${peak.rpm} RPM)${/** @type {any} */ (run).intermittent ? ' on and off' : ''} across ${label(run)}, by ${cal.torque.method}`,
       cause: cal.torque.method === 'spark'
         ? 'Spark retard took the torque out: the burn phases late, so less of it pushes the piston and more of it heats the exhaust.'
         : cal.torque.method === 'throttle' ? 'The throttle closed to hold torque at the limit — the cleanest way, less air and less fuel.'

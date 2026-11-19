@@ -15,7 +15,7 @@
  * issue #34 removed.
  */
 
-import { LOAD, OPEN_LOOP_KPA, RPM } from '../../sim/index.js';
+import { LOAD, MIXTURE_TOLERANCE_PCT, OPEN_LOOP_KPA, RPM } from '../../sim/index.js';
 
 import { inRect, rectOf } from './selection.js';
 
@@ -249,8 +249,14 @@ function fuelReportOf(calAdvice, selection) {
   return { tone: 'ok', headline: 'High-load mixture is on best power', state: 'table-clean', detail: {} };
 }
 
-/** A logged cell within this is as right as a wideband and fuel trims can tell. */
-export const VE_LOG_GOOD_PCT = 2;
+/**
+ * A logged cell within this is settled: the same band the pull log uses to stop pointing at
+ * the VE table (`gridBound` in sweep.js, half the mixture tolerance). With 2% here a cell
+ * 1.9% off read "matches" with Apply greyed out while the log, rightly, still sent the
+ * player to it: the full-throttle mixture is held to 2%, and a cell 1–2% off leaves the
+ * speeds between breakpoints past that.
+ */
+export const VE_LOG_GOOD_PCT = MIXTURE_TOLERANCE_PCT / 2;
 
 /**
  * @typedef {object} VeLogInput

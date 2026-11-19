@@ -14,6 +14,8 @@
 
 import { isLocatable } from '../../sim/index.js';
 
+import { problemsOf } from './fixOrder.js';
+
 /**
  * The token family an event should be drawn in.
  *
@@ -49,7 +51,7 @@ export function eventTone(event) {
  * @returns {EventBand[]}
  */
 export function eventBands(events) {
-  return events.filter(isLocatable).map((e) => ({
+  return problemsOf(events).filter(isLocatable).map((e) => ({
     id: `${e.type}-${e.rpmStart}-${e.rpmEnd}`,
     rpmStart: /** @type {number} */ (e.rpmStart),
     rpmEnd: /** @type {number} */ (e.rpmEnd),

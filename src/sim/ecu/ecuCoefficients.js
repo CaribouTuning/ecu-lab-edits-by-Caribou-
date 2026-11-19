@@ -76,6 +76,9 @@ export const ECU_COEFF = Object.freeze({
   IDLE_COAST_AIR_PCT: 1.35,
   /** Above this the ECU is coasting, not idling. */
   IDLE_CAPTURE_RPM: 2000,
+  /** The overrun throttle follower holds idle's air per cycle up to this multiple of the
+   *  idle speed: the fuel's return, about twice idle on a warm engine and higher cold. */
+  IDLE_FOLLOWER_MAX_RATIO: 2.5,
   /** Below this idle spark control acts; above it (throttle shut) overrun retard does. */
   IDLE_SPARK_MAX_RPM: 1600,
   /** Share of the anti-stall kick applied per 50 ms step. */

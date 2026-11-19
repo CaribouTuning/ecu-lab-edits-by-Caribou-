@@ -19,6 +19,7 @@ import {
   applyPreset, calibrationAdvice, intakeCamAt, layoutById, readEcuTable, isLocatable, presetById, simulateSweep, veCorrections, veSamplesFromPull,
 } from '../../sim/index.js';
 import { eventBands } from '../components/eventBands.js';
+import { problemsOf } from '../components/fixOrder.js';
 import { makeInitialState } from '../state/initialState.js';
 import { pullInputs } from '../state/pullInputs.js';
 import { ACTIONS, reducer } from '../state/reducer.js';
@@ -81,7 +82,7 @@ export function runDemo(key, scenario = (s) => s) {
   const demo = {
     state, result, calAdvice, chartData, derived, veTruth, fuel,
     bands: eventBands(result.events),
-    wholePullCount: result.events.filter((e) => !isLocatable(e)).length,
+    wholePullCount: problemsOf(result.events).filter((e) => !isLocatable(e)).length,
     veLog: {
       pull, live: [], airModel: /** @type {'blend'|'sd'|'maf'|'alphan'} */ (base.tune.ecu?.config?.airModel ?? 'blend'),
       pullInfo: { state: /** @type {'ok'|'unused'} */ (pull.length ? 'ok' : 'unused') },

@@ -61,7 +61,7 @@ export const SECTION_LABELS = {
   'tune/fuel': { label: 'Fuel', keywords: ['afr', 'lambda', 'mixture'] },
   'tune/injectors': { label: 'Injectors', keywords: ['duty', 'scaling'] },
   'tune/sensors': { label: 'Sensors', keywords: ['maf'] },
-  'tune/boost': { label: 'Boost Control', keywords: ['wastegate', 'turbo', 'overboost'] },
+  'tune/boost': { label: 'Boost Control', keywords: ['boost target', 'wastegate', 'turbo', 'overboost'] },
   'tune/vvt': { label: 'Variable Cam Timing', keywords: ['vvt', 'vanos', 'cam', 'phaser'] },
   'tune/idle': { label: 'Idle Control', keywords: ['stall', 'hunt', 'rpm'] },
   'tune/protect': { label: 'Engine Protection', keywords: ['rev limiter', 'limp', 'safety'] },

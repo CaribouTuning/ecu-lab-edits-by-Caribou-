@@ -71,6 +71,7 @@ import { DynoConsole, StandConsole, StandStatus } from './desk/Consoles.jsx';
 import { LiveBars, LivePhysics, VeCurve } from './desk/BenchScreens.jsx';
 import { TableSurface } from './components/surface/TableSurface.jsx';
 import { eventBands } from './components/eventBands.js';
+import { problemsOf } from './components/fixOrder.js';
 import { tuneAttention } from './components/fixLinks.js';
 import { isApplePlatform, pageCommands, sectionAvailable } from './commands.js';
 import { CommandPalette } from './components/CommandPalette.jsx';
@@ -1101,7 +1102,7 @@ export function EcuLabApp({ startWith = null, startShown = false } = {}) {
   // is handed a model rather than deriving one.
   const bands = useMemo(() => (result ? eventBands(result.events) : []), [result]);
   const wholePullCount = useMemo(
-    () => (result ? result.events.filter((e) => !isLocatable(e)).length : 0),
+    () => (result ? problemsOf(result.events).filter((e) => !isLocatable(e)).length : 0),
     [result],
   );
 
@@ -1628,7 +1629,7 @@ export function EcuLabApp({ startWith = null, startShown = false } = {}) {
             for (const [id, label] of [['log', 'Pull log'], ['data', 'Data'], ['score', 'Score'], ['history', 'History']]) {
               if (!(id === 'history' ? (result || runs.length > 0) : result)) continue;
               if (!sectionAvailable(`dyno/${id}`, sectionFlags)) continue;
-              keys.push({ id, label, flag: id === 'log' && result.events.length > 0 });
+              keys.push({ id, label, flag: id === 'log' && problemsOf(result.events).length > 0 });
             }
           }
           const pick = (id) => goSection('dyno', id);

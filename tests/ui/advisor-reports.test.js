@@ -303,10 +303,15 @@ describe('veLogReport — only what the logs measured', () => {
     expect(r.detail.cell.table).toBe(80);
   });
 
-  it('calls a table within 2% of its logs in sync', () => {
-    const r = veLogReport(log(corrWith([[2, 3, 1.01], [2, 4, 0.985]])), null);
+  it('calls a table in sync only inside the band the pull log stops pointing at it', () => {
+    const r = veLogReport(log(corrWith([[2, 3, 1.006], [2, 4, 0.992]])), null);
     expect(r.state).toBe('log-sync');
     expect(r.tone).toBe('ok');
+    // The playtest's table: +1.9% in a cell read "match" and greyed Apply out while the pull
+    // log still sent the player to Correct VE from logs for it.
+    const near = veLogReport(log(corrWith([[2, 3, 1.019], [2, 4, 1.004]])), null);
+    expect(near.state).not.toBe('log-sync');
+    expect(near.tone).toBe('warn');
   });
 
   it('narrows to a selected cell, and says plainly when that cell has no data', () => {

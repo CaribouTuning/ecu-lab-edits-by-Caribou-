@@ -224,7 +224,7 @@ export function guidedSteps({ build, tune, target, samples, advice = null }) {
   // low load up, and only then full throttle, a turbo at its least boost first.
   return [
     ...(build.turboOn && boostTarget <= 0 ? [{
-      id: 'boost-target', title: 'Give the turbo a boost target', short: 'Boost target', go: 'build:induction',
+      id: 'boost-target', title: 'Give the turbo a boost target', short: 'Boost target', go: 'boost',
       text: 'The turbo is set to make 0 psi of boost, so it only gets in the way of the exhaust: the engine makes less power than it did without it. On TUNE → BOOST, set the Boost target curve; 6–8 psi is a common first step on pump fuel. A new boost is a new build, so the way into the tune is offered again for it.',
       done: false,
     }] : []),
