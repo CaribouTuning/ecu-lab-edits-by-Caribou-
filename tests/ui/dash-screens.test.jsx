@@ -14,13 +14,18 @@
  * create, and the one a later extraction is most likely to erode.
  */
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { LearnScreen } from '../../src/ui/screens/dash/LearnScreen.jsx';
+import { LiveEcuPanel } from '../../src/ui/screens/dash/LiveEcuPanel.jsx';
+import { LiveBars } from '../../src/ui/desk/BenchScreens.jsx';
 import { StandConsole, StandStatus } from '../../src/ui/desk/Consoles.jsx';
-import { StoreProvider } from '../../src/ui/state/StoreProvider.jsx';
+import { INJECTOR_OPTS } from '../../src/sim/index.js';
+import { makeLiveState } from '../../src/sim/live.js';
+import { ACTIONS } from '../../src/ui/state/reducer.js';
+import { StoreProvider, useBuild, useSession } from '../../src/ui/state/StoreProvider.jsx';
 
 afterEach(cleanup);
 
@@ -72,6 +77,60 @@ describe('the engine stand\'s controls', () => {
     expect(/** @type {HTMLButtonElement} */ (start).disabled).toBe(true);
     fireEvent.click(start);
     expect(onStart).not.toHaveBeenCalled();
+  });
+});
+
+describe('the stand\'s injector duty with a staged port kit (#166)', () => {
+  /** Mounts the stand's bars with `live.live` already holding a reading, as the engine loop would. */
+  function mountReading(reading) {
+    /** @type {Function} */
+    let dispatch;
+    const Capture = () => {
+      const [, d] = useSession();
+      dispatch = d;
+      return null;
+    };
+    const node = <LiveBars fullScaleRpm={7500} redline={7000} />;
+    const utils = render(<StoreProvider><Capture /></StoreProvider>);
+    act(() => dispatch({
+      type: ACTIONS.SET_SESSION_FIELD,
+      field: 'live',
+      value: { ...makeLiveState(), running: true, live: { timing: 12, knock: false, ...reading } },
+    }));
+    utils.rerender(<StoreProvider><Capture />{node}</StoreProvider>);
+    return utils;
+  }
+  const meter = (label) => screen.getByText(label).parentElement.textContent;
+
+  it('reads the port bank\'s duty when it is the busier one', () => {
+    mountReading({ pw: 2.4, duty: 20, portPw: 17.7, portDuty: 96 });
+    expect(meter('Injector duty')).toContain('96');
+  });
+
+  it('reads the direct bank when there is no kit (the port fields are zero)', () => {
+    mountReading({ pw: 6.1, duty: 42, portPw: 0, portDuty: 0 });
+    expect(meter('Injector duty')).toContain('42');
+  });
+});
+
+describe('LiveEcuPanel data-log channels', () => {
+  function FitKit() {
+    const [, dispatch] = useBuild();
+    return (
+      <button type="button" onClick={() => {
+        dispatch({ type: ACTIONS.SET_ENGINE_CONFIG_PATCH, patch: { injection: 'direct' } });
+        dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'portKit', value: { injIdx: INJECTOR_OPTS.findIndex((o) => o.cc === 1300), ecuInjectorCc: 1300 } });
+      }}>fit kit</button>
+    );
+  }
+
+  it('offers the port kit channels only once a kit is fitted', () => {
+    mount(<><FitKit /><LiveEcuPanel /></>);
+    expect(screen.queryByRole('button', { name: 'Port kit pulse width' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Port kit duty' })).toBeNull();
+    fireEvent.click(screen.getByText('fit kit'));
+    expect(screen.getByRole('button', { name: 'Port kit pulse width' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Port kit duty' })).toBeTruthy();
   });
 });
 

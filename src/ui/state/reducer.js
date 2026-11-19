@@ -610,6 +610,9 @@ function baseReducer(state, action) {
         // A figure the player sets is no longer one the app assumed for them.
         assumed: (state.build.assumed ?? []).filter((k) => !(k in action.patch)),
         presetId: null,
+        // A port engine's injectors already are port injectors: a kit only exists over
+        // direct injection.
+        ...(action.patch.injection && action.patch.injection !== 'direct' ? { portKit: null } : {}),
       };
       // An engine of the player's own, its tables untouched since they were generated: the
       // caller sends the safe base map for the block and head as they now are, in the same
@@ -656,9 +659,10 @@ function baseReducer(state, action) {
           ecuInjectorCc: p.ecuInjectorCc,
           octaneIdx: p.octaneIdx,
           exhaustDiaIdx: p.exhaustDiaIdx,
-          // A preset is a factory car: no supercharger or nitrous carried over from the last build.
+          // A preset is a factory car: no supercharger, nitrous or port kit carried over from the last build.
           blowerId: null,
           nitrous: null,
+          portKit: null,
           // A factory car's MAF calibration cancels its own intake and turbo plumbing
           // (factoryCalibration, src/sim/presets.js), so a preset brings its scalar.
           mafScalar: p.mafScalar ?? 1.0,

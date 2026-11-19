@@ -12,6 +12,7 @@
 import React from 'react';
 
 import { INJECTOR_OPTS, clamp } from '../../../sim/index.js';
+import { busiestBank } from '../../components/scrubPoint.js';
 import { useSession } from '../../state/StoreProvider.jsx';
 import { T } from '../../theme.js';
 
@@ -118,6 +119,10 @@ export function LiveGauges() {
   const [session] = useSession();
   const live = /** @type {Record<string, any>} */ (session.live);
   const engineOff = !live.running && !live.cranking;
+  // The busier injector bank: a staged port kit has its own duty, and can be at its limit
+  // while the direct injectors are not. The pulse width is read from the same bank.
+  const busiest = live.live ? busiestBank(live.live) : null;
+
   return (
     <>
       <div className={`${styles.gaugeRow} ${styles.gaugeRowFirst}`}>
@@ -133,8 +138,8 @@ export function LiveGauges() {
         <LiveGauge label="Spark timing" value={live.live ? live.live.timing : '—'} unit="°" warn={!!(live.live && (live.ecu ? live.ecu.knockNow : live.live.knock))} />
       </div>
       <div className={styles.gaugeRow}>
-        <LiveGauge label="Injector pulse" value={live.live ? live.live.pw : '—'} unit="ms" />
-        <LiveGauge label="Injector duty" value={live.live ? live.live.duty : '—'} unit="%" warn={!!(live.live && live.live.duty > 90)} />
+        <LiveGauge label="Injector pulse" value={busiest ? busiest.pw : '—'} unit="ms" />
+        <LiveGauge label="Injector duty" value={busiest ? busiest.duty : '—'} unit="%" warn={!!busiest && busiest.duty > 90} />
         <LiveGauge label="Idle air" value={engineOff ? '—' : Math.round(live.idleTrim)} unit={engineOff ? '' : '%'} />
         <LiveGauge label="Fuel" value={engineOff ? 'off' : live.fuelCut ? 'cut' : 'on'} unit="" color={engineOff ? 'var(--ink2)' : live.fuelCut ? T.warn : T.ok} />
       </div>
