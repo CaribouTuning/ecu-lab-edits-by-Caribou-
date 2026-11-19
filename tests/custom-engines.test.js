@@ -113,6 +113,23 @@ function built(seed) {
   return B(st, 'mods', { ...st.build.mods, ...b.mods });
 }
 
+describe('a factory engine with more boost, through the guide', { timeout: 240000 }, () => {
+  // An EA888 GTI at 4 psi over its factory curve. Its 220 kPa cell at 1,450 RPM ran clean on
+  // the pull, and the 205 kPa cell under it was graded on the static estimate alone and called
+  // past anything spark could fix (-10°) on a pull with no knock at all (advisors.js
+  // `measuredAbove`: knock only gets likelier with pressure).
+  it('ends with nothing on TUNE that the pull does not back', () => {
+    const base = reducer(makeInitialState(), { type: ACTIONS.APPLY_PRESET, preset: S.applyPreset(S.presetById('ea888-gti')) });
+    const more = B(base, 'boostCurve', base.build.boostCurve.map((b) => (b > 0 ? b + 4 : b)));
+    let { st } = followTheGuide(more);
+    for (let k = 0; k < 15; k += 1) { const r = round(st); if (!r.did.length) break; st = r.st; }
+    const p = pull(st);
+    const a = advice(st, p);
+    expect(p.events.filter((e) => FAULTS.includes(e.type) && !e.gridBound).map((e) => e.type)).toEqual([]);
+    expect([...a.overAdvanced, ...a.pastMbt, ...a.underAdvanced, ...a.wrongMix].map((c) => `${c.ri},${c.ci}: ${c.current} → ${c.suggested}`)).toEqual([]);
+  });
+});
+
 describe('engines of the player\'s own tune clean from the guide, the log and TUNE', { timeout: 240000 }, () => {
   for (const seed of [12, 17, 21, 26]) {
     it(`custom #${seed}`, () => {

@@ -582,12 +582,25 @@ export function calibrationAdvice({
     if (!top || mapKpa <= top.map + PULL_CEILING_KPA || mapKpa > top.map + COEFF.KNOCK_CARRY_MAX_KPA) return null;
     return limitOf(top) - (COEFF.KNOCK_LIMIT_DEG_PER_PSI / PSI_TO_KPA) * (mapKpa - top.map);
   };
+  // Knock only gets likelier with pressure, so a limit the pull measured at this speed at a
+  // higher pressure is a floor under the limit here. Without it, a gap between two rows the pull
+  // ran above was graded on the static estimate alone: an EA888 with 4 psi more boost, its
+  // 220 kPa cell clean on the pull at 1,450 RPM, had the 205 kPa cell under it called past
+  // anything spark could fix (-10°) on a pull with no knock at all.
+  const measuredAbove = (rpm, mapKpa) => {
+    let near = null;
+    for (const q of pull?.points ?? []) {
+      if (!offSpray(q) || !Number.isFinite(q.threshold) || q.map < mapKpa || Math.abs(q.rpm - rpm) > PULL_CEILING_RPM) continue;
+      if (!near || Math.abs(q.rpm - rpm) < Math.abs(near.rpm - rpm)) near = q;
+    }
+    return near ? limitOf(near) : -Infinity;
+  };
   const ceilingAt = (rpm, mapKpa) => {
     const carried = carriedAt(rpm, mapKpa);
     if (carried != null) return carried;
     const p = pullNear(rpm, mapKpa);
     const est = staticCeilingAt(rpm, mapKpa);
-    return p ? est + (limitOf(p) - staticCeilingAt(p.rpm, p.map)) : est;
+    return Math.max(p ? est + (limitOf(p) - staticCeilingAt(p.rpm, p.map)) : est, measuredAbove(rpm, mapKpa));
   };
   const staticCeilingAt = (rpm, mapKpa) => {
     const key = `${rpm}|${mapKpa}`;
