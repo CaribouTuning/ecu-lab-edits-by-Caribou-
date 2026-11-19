@@ -60,6 +60,7 @@ export const FACTORY_KNOCK_MARGIN_DEG = 2;
  * @typedef {object} Preset
  * @property {string} id
  * @property {string|null} [fuelPlanId] the factory engine whose fuel strategy this one runs, when it is not itself one (stockCalibrationFor)
+ * @property {string|null} [stockOfId] the factory engine this calibration is the stock one of, when it is not itself that preset: RESET ALL TO STOCK (stockCalibrationFor)
  * @property {string} name
  * @property {string} manufacturer
  * @property {string} years
@@ -939,7 +940,7 @@ export function factoryCalibration(preset, layout = null) {
   // tuner finds. Read at each cell's own air per cylinder, between GM's 0.60 and 0.80 g rows (held
   // at the nearer row outside them). Only the stock engine: a base map for a changed one is a
   // tuner's, written to the physics.
-  const gmWot = COEFF.GM_STOCK_WOT_SPARK[/** @type {'ls6'} */ (preset.id)];
+  const gmWot = COEFF.GM_STOCK_WOT_SPARK[/** @type {'ls6'} */ (preset.stockOfId ?? preset.id)];
   if (Array.isArray(gmWot)) {
     const G = COEFF.GM_STOCK_WOT_SPARK;
     T.load.forEach((v, ri) => T.rpm.forEach((rpm, ci) => {
@@ -1363,10 +1364,15 @@ export function stockCalibrationFor(build, layout = null) {
   const induction = f
     ? { turboOn: !!f.turboOn, turbineIdx: f.turbineIdx, turbineCount: f.turbineCount ?? 1, compressorIdx: f.compressorIdx, boost: f.boostCurve }
     : { turboOn: false, turbineIdx: build.turbineIdx, turbineCount: 1, compressorIdx: build.compressorIdx, boost: build.boostCurve.map(() => 0) };
+  // The factory engine it is, when it is one: RESET gives back what that engine's own calibration
+  // holds, its maker's full-load spark (GM_STOCK_WOT_SPARK) and its torque limit included, the
+  // same tables and limit choosing the engine wrote. (Reset by its hardware alone, an LS6 came
+  // back with best-power spark where its preset carries GM's, and TUNE marked the difference.)
+  const origin = build.presetId ? ENGINE_PRESETS.find((x) => x.id === build.presetId) ?? null : null;
   /** @type {Preset} */
   const hardware = {
     id: 'stock', name: 'Stock', manufacturer: '', years: '', blurb: '',
-    factory: {},
+    factory: origin?.factory ?? {},
     engine: /** @type {any} */ (build.engineConfig),
     induction,
     parts: { injectorIdx: build.injIdx, exhaustDiaIdx: build.exhaustDiaIdx, octaneIdx: build.octaneIdx },
@@ -1374,6 +1380,7 @@ export function stockCalibrationFor(build, layout = null) {
     fuel: tankFuel(/** @type {any} */ (build)),
     // The factory engine it started as, for that engine's own fuel strategy (factoryFuel.js).
     fuelPlanId: build.presetId ?? null,
+    stockOfId: origin?.id ?? null,
   };
   return factoryCalibration(hardware, layout);
 }

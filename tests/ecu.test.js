@@ -243,9 +243,11 @@ describe('ignition: knock control acts on what the sensor hears', () => {
   it('lets knock run unheard when the threshold is far above the signal', () => {
     // A naturally aspirated engine: lower cylinder pressure, a quieter knock ring, so a
     // threshold set for a much louder engine misses it.
+    // 18 degrees over the stock table: with the knock limit anchored to real calibrations the
+    // default V6 on 91 has 10-15 degrees in hand at full throttle (14 once knocked by 2).
     const deafEng = makeEngine({ cal: { 'ignition.knockThreshold': S.curve(S.RPM, () => 2) } });
     const heardEng = makeEngine();
-    const hot = deafEng.tables.timing.map((row) => row.map((v) => v + 14));
+    const hot = deafEng.tables.timing.map((row) => row.map((v) => v + 18));
     deafEng.tables.timing = hot;
     heardEng.tables.timing = hot;
     const deaf = deafEng.pull();

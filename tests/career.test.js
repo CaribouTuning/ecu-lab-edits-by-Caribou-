@@ -34,6 +34,22 @@ describe.each(JOBS.map((j) => [j.id, j]))('%s', (_id, job) => {
   });
 });
 
+describe('the shop\'s books', () => {
+  it('reports the reputation change that happened: never below zero, never shown as more', () => {
+    const c0 = { ...shop.newCareer(), rep: 0 };
+    const job = jobById('intake-maf');
+    const v = evaluateJob(job, customerCar(job.car));
+    expect(v.rep).toBeLessThan(0);
+    const c1 = shop.deliver(shop.accept(c0, job.id), job.id, v);
+    expect(c1.rep).toBe(0);
+    expect(c1.last.repChange).toBe(0);
+    expect(c1.history[0].repChange).toBe(0);
+    const c2 = shop.giveUp(shop.accept({ ...c0, rep: 1 }, job.id), job.id);
+    expect(c2.rep).toBe(0);
+    expect(c2.history[0].repChange).toBe(-1);
+  });
+});
+
 describe('grading', () => {
   it('judges the idle once it has settled after a warm restart, not the start-up flare', () => {
     // A player reported failing "Still idles smoothly" on a car that never idled rough in

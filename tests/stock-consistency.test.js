@@ -98,6 +98,15 @@ describe('RESET ALL TO STOCK', () => {
     expect(logged(eng)).toEqual([]);
   });
 
+  it.each(['n54', 'b58-m1', 'ea888-gti'])('%s: gives back the factory torque limit with the tables', (id) => {
+    // Reset by its hardware alone, a factory turbo engine came back without the engine computer's
+    // torque limit its preset carries (presets.js factoryTorqueLimit), and made more than stock.
+    const p = S.applyPreset(S.presetById(id));
+    const stock = S.stockCalibrationFor({ ...p });
+    expect(stock.ecu.torque.method).toBe(p.ecu.torque.method);
+    expect(stock.ecu.torque.limitByRpm.z).toEqual(p.ecu.torque.limitByRpm.z);
+  });
+
   it('writes no boost cells for a turbo the factory never fitted', () => {
     // A VQ35DE with a turbo bolted on: its stock is the factory NA calibration, on axes that
     // stop at full throttle without boost. Calculating the boost cells would tune them for

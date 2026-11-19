@@ -242,7 +242,29 @@ export function guidedSteps({ build, tune, target, samples, advice = null }) {
       id: 'mixture', title: 'Choose the fuel mixture', short: 'Fuel mixture', go: 'fuel',
       text: (() => {
         const what = `Open FUEL. This table is the mixture the computer aims for, as an air-fuel ratio (AFR) on petrol's scale: 14.7 is the mixture that burns completely (lambda 1.00), and a lower number is richer (more fuel).${Math.abs(fuelStoich - 14.7) > 0.5 ? ` That holds on ${fuelName(fuel)} too: it burns completely at about ${fuelStoich.toFixed(1)} parts air to 1 of fuel, and the computer converts the table to that itself, so 14.7 still means lambda 1.00 and 12.5 still means lambda 0.85.` : ''}`;
-        const wants = [naAfr && naAfr < stoich * 0.95 ? `full throttle about ${naAfr.toFixed(1)}` : null, boosted && boostAfr ? `full boost about ${boostAfr.toFixed(1)}` : null].filter(Boolean).join(' and ');
+        // The numbers the step is checked against, across the speeds it is checked at: one middle
+        // figure, typed everywhere, failed the check where the target richens toward the top (a turbo
+        // V6's boost rows run 12.6 at 1500 RPM to 11.6 at 7500, and "about 12.0" left 12.0 typed in
+        // cells that had to be 11.9 or richer).
+        const span = (list, mid, label) => {
+          if (!list.length || mid == null) return null;
+          const byRpm = [...list].sort((a, b) => a.rpm - b.rpm);
+          const lo = byRpm[0]; const hi = byRpm[byRpm.length - 1];
+          const a = theirs('afr', lo); const z = theirs('afr', hi);
+          return Math.abs(a - z) >= GUIDE_TOLERANCE.afr
+            ? `${label} about ${a.toFixed(1)} at ${lo.rpm.toLocaleString('en-US')} RPM down to ${z.toFixed(1)} at ${hi.rpm.toLocaleString('en-US')} (or richer)`
+            : `${label} about ${mid.toFixed(1)}`;
+        };
+        // On a pressure axis the boost rows' own numbers, column by column, as the safe base map
+        // holds them: what the step is checked against, and what a tuner copies.
+        const afrAx = layoutById(target.layout).afr;
+        const boostRows = afrAx.loadUnit === 'kPa' ? afrAx.load.map((l, ri) => [l, ri]).filter(([l]) => l > 101) : [];
+        const sameRows = boostRows.length > 0 && boostRows.every(([, ri]) => target.afr[ri].every((v, ci) => Math.abs(v - target.afr[boostRows[0][1]][ci]) < 0.05));
+        const boostCols = sameRows ? afrAx.rpm.map((rpm, ci) => [rpm, target.afr[boostRows[0][1]][ci]]).filter(([rpm]) => rpm > IDLE_COLUMN_MAX_RPM && rpm <= (build.engineConfig?.redline ?? Infinity) + 500) : [];
+        const boostText = boostCols.length && boostCols.some(([, v]) => Math.abs(v - boostCols[0][1]) >= GUIDE_TOLERANCE.afr)
+          ? `the ${boostRows.map(([l]) => Math.round(l)).join(' and ')} kPa rows (full boost) ${boostCols.map(([rpm, v]) => `${v.toFixed(1)} at ${rpm.toLocaleString('en-US')}`).join(', ')} RPM, or richer`
+          : null;
+        const wants = [naAfr && naAfr < stoich * 0.95 ? span(full.filter((q) => q.map <= 105), naAfr, 'full throttle') : null, boosted && boostAfr ? (boostText ?? span(boostPts, boostAfr, 'full boost')) : null].filter(Boolean).join(' and ');
         const why = boosted ? `Boost packs more air into each cylinder, so it gets hotter: the extra fuel cools it and holds knock off, so${noCooler ? ' with no intercooler (hotter air still)' : ''} the boost rows run richer than full throttle without boost.` : 'Under load the extra fuel cools the cylinder and protects the engine.';
         const done = full.length > 0 && full.every((q) => mine('afr', q) <= theirs('afr', q) + GUIDE_TOLERANCE.afr) && !leanCells.length;
         if (done) return `${what} ${wants ? `This build wants ${wants}` : 'This build wants the full-throttle cells richer than cruise'}, and your table is already there: nothing to change. ${why}`;

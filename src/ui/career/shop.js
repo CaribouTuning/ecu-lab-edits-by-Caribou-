@@ -284,16 +284,20 @@ export function deliver(c, jobId, v, extra = {}) {
   const leaves = v.verdict !== 'fail';
   const tip = v.verdict === 'pass' && c.owned.includes('lounge') ? Math.round(v.pay * 0.1) : 0;
   const paid = v.pay + tip - v.repair;
+  // Reputation never goes under zero: the change shown and kept is the one that happened (a new
+  // shop at 0 told "Reputation -2" while its reputation stayed at 0).
+  const rep = Math.max(0, c.rep + v.rep);
+  const repChange = rep - c.rep;
   const next = {
     ...c,
     money: c.money + paid,
-    rep: Math.max(0, c.rep + v.rep),
+    rep,
     done: v.verdict === 'pass' && !job.generated ? { ...c.done, [jobId]: c.day } : c.done,
     lifts: leaves ? c.lifts.filter((l) => l.jobId !== jobId) : c.lifts,
     working: leaves ? null : c.working,
-    history: [{ day: c.day, jobId, verdict: v.verdict, paid, repChange: v.rep, boosted: !!extra.boosted, built: !!job.build && v.verdict === 'pass', peakHp: Math.round(v.peakHp) }, ...c.history].slice(0, 60),
+    history: [{ day: c.day, jobId, verdict: v.verdict, paid, repChange, boosted: !!extra.boosted, built: !!job.build && v.verdict === 'pass', peakHp: Math.round(v.peakHp) }, ...c.history].slice(0, 60),
     last: {
-      jobId, verdict: v.verdict, paid, repChange: v.rep, repair: v.repair, line: v.line, leaves,
+      jobId, verdict: v.verdict, paid, repChange, repair: v.repair, line: v.line, leaves,
       results: v.results.map((x) => ({ label: x.check.label, kind: x.check.kind, type: x.check.type, pass: x.pass, measured: x.measured })),
       seq: (c.last?.seq ?? 0) + 1,
     },
@@ -309,12 +313,13 @@ export function deliver(c, jobId, v, extra = {}) {
  * @returns {Career}
  */
 export function giveUp(c, jobId) {
+  const rep = Math.max(0, c.rep - 2);
   return advanceDay({
     ...c,
-    rep: Math.max(0, c.rep - 2),
+    rep,
     lifts: c.lifts.filter((l) => l.jobId !== jobId),
     working: c.working === jobId ? null : c.working,
-    history: [{ day: c.day, jobId, verdict: /** @type {'fail'} */ ('fail'), paid: 0, repChange: -2, boosted: false, peakHp: 0 }, ...c.history].slice(0, 60),
+    history: [{ day: c.day, jobId, verdict: /** @type {'fail'} */ ('fail'), paid: 0, repChange: rep - c.rep, boosted: false, peakHp: 0 }, ...c.history].slice(0, 60),
   });
 }
 

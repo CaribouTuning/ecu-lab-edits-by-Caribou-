@@ -635,7 +635,11 @@ export function EcuLabApp({ startWith = null, startShown = false } = {}) {
     dispatch({
       type: ACTIONS.RESET_TO_STOCK, ve: stock.ve, timing: stock.timing, afr: stock.afr, mafScalar: stock.mafScalar,
       layout: stock.layout,
-      ecu: { ...defaultEcuCalibration({ derived: engineDerived, gate: ecuHw.gate, axes: stock.layout.timing }), vvt: stock.ecu.vvt },
+      // The engine computer's defaults for these parts, with the cam schedule the tables were
+      // written for and the factory torque limit a factory turbo engine left with (reset to the
+      // defaults alone, an N54 lost its limit, made more than stock, and its TORQUE page said
+      // "changed from factory").
+      ecu: { ...defaultEcuCalibration({ derived: engineDerived, gate: ecuHw.gate, axes: stock.layout.timing }), vvt: stock.ecu.vvt, torque: stock.ecu.torque },
     });
   };
   // The REPAIR button's only handler. Drop it and the button goes inert with nothing
