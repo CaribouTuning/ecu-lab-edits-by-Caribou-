@@ -8,7 +8,6 @@
 
 import React from 'react';
 
-import { Zap } from 'lucide-react';
 
 import { SPARK_MAX_DEG, SPARK_MIN_DEG, layoutById } from '../../../sim/index.js';
 import { AdvisorPanel } from '../../components/AdvisorPanel.jsx';
@@ -21,7 +20,7 @@ import { TuningGrid, advisedMarks } from '../../components/TuningGrid.jsx';
 import { GridOrSurface } from '../../components/surface/GridOrSurface.jsx';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
 import { UndoControls } from '../../components/UndoControls.jsx';
-import { Eyebrow } from '../../primitives/Eyebrow.jsx';
+import { Panel } from '../../primitives/Panel.jsx';
 import { ACTIONS } from '../../state/reducer.js';
 import { useUnreached } from '../../state/reach.js';
 import { useTune } from '../../state/StoreProvider.jsx';
@@ -74,19 +73,17 @@ export function SparkScreen({ calAdvice, children }) {
     <>
       <div className={styles.wrap}>
         <div className={styles.main}>
-          <div className={styles.gridHead}>
-            <Eyebrow icon={Zap}>Ignition Timing</Eyebrow>
-            <UndoControls />
-          </div>
-          <div className={styles.intro}>Degrees of spark advance before top dead center (° BTDC).</div>
-          {/* One toolbar, as a table editor has: the axes, how a tap selects, what the cells show. */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 6, margin: '8px 0 10px' }}>
-            <LayoutSwitch />
-            <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} diffView={diffView} setDiffView={setDiffView} dims={dims} />
-          </div>
-          <GridOrSurface data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} unit="°" title="Ignition timing" commanded={{ label: 'Spark the ECU commanded', read: (p) => p.commandedTiming }} axes={axes}>
-            <TuningGrid data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.timing} diffView={diffView} diffScale={6} axes={axes} untuned={tune.untuned?.timing ?? null} unreached={unreached} marks={advisedMarks(calAdvice.overAdvanced)} />
-          </GridOrSurface>
+          <Panel title="Ignition Timing" tools={<UndoControls />} className={styles.tablePanel}>
+            <div className={styles.intro}>Degrees of spark advance before top dead center (° BTDC).</div>
+            {/* One toolbar, as a table editor has: the axes, how a tap selects, what the cells show. */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 6, margin: '8px 0 10px' }}>
+              <LayoutSwitch />
+              <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} diffView={diffView} setDiffView={setDiffView} dims={dims} />
+            </div>
+            <GridOrSurface data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} unit="°" title="Ignition timing" commanded={{ label: 'Spark the ECU commanded', read: (p) => p.commandedTiming }} axes={axes}>
+              <TuningGrid data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.timing} diffView={diffView} diffScale={6} axes={axes} untuned={tune.untuned?.timing ?? null} unreached={unreached} marks={advisedMarks(calAdvice.overAdvanced)} />
+            </GridOrSurface>
+          </Panel>
           {/* The advisor reads this table: right under it, where the eye is, not after the settings. */}
           <AdvisorPanel headline={report.headline} tone={report.tone}>
             <TuneAdvisory kind="timing" report={report} />

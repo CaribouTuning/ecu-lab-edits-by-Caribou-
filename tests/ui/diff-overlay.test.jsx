@@ -46,7 +46,19 @@ describe('the CHANGES view', () => {
   it('starts on VALUES, showing values', () => {
     mountAir();
     expect(screen.getByRole('button', { name: 'Values' }).getAttribute('aria-pressed')).toBe('true');
+    // A table holding any fraction prints every cell to a tenth (TuningGrid's fmt).
+    const ve = store.tune.ve;
+    const fractional = ve.some((row) => row.some((v) => Math.abs(v - Math.round(v)) >= 0.05));
+    expect(cell(1500, 150).textContent).toBe(fractional ? ve[1][1].toFixed(1) : String(Math.round(ve[1][1])));
+  });
+
+  it('prints a whole-number table in whole numbers, and every cell to a tenth once one cell holds a fraction', () => {
+    mountAir();
+    writeVe((v) => Math.round(v));
     expect(cell(1500, 150).textContent).toBe(String(Math.round(store.tune.ve[1][1])));
+    writeVe((v, ri, ci) => (ri === 0 && ci === 0 ? v + 0.5 : v));
+    expect(cell(1500, 150).textContent).toBe(store.tune.ve[1][1].toFixed(1));
+    expect(cell(800, 200).textContent).toBe(store.tune.ve[0][0].toFixed(1));
   });
 
   it('prints each cell’s signed change, and a dot where nothing moved', () => {

@@ -4,12 +4,15 @@
  * a value on one line; a slider is a thin rule with a blade for a thumb.
  */
 
-/* ---- group: a heading ruled out across the page ---- */
+/* ---- group: its name in a title strip, as a technical panel's ---- */
 .group { margin: 0 0 22px; }
-.groupHead { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-.groupHead::after { content: ''; order: 1; flex: 1; height: 1px; background: var(--line-hi); }
-.groupTitle { order: 0; margin: 0; font-size: 12px; font-weight: 700; color: var(--ink2); }
-.groupAside { order: 2; font-family: var(--sans); font-variant-numeric: tabular-nums; font-size: 11px; color: var(--ink2); white-space: nowrap; }
+.groupHead {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px;
+  min-height: 26px; padding: 0 10px; border-radius: 8px;
+  background: linear-gradient(var(--strip-hi), var(--strip-lo)); box-shadow: inset 0 0 0 1px var(--glass-edge);
+}
+.groupTitle { margin: 0; font-size: 12px; font-weight: 600; color: var(--ink); }
+.groupAside { font-family: var(--sans); font-variant-numeric: tabular-nums; font-size: 11px; color: var(--ink2); white-space: nowrap; }
 .groupBody { display: flex; flex-direction: column; gap: 16px; }
 
 /* ---- a figure: name left, value right ---- */
@@ -42,9 +45,9 @@
 .rangeFoot { display: flex; justify-content: space-between; gap: 8px; font-family: var(--sans); font-variant-numeric: tabular-nums; font-size: 10.5px; color: var(--ink2); }
 .stock { color: var(--ink-soft); }
 
-/* ---- known facts: a ruled table ---- */
-.table { margin: 0 0 22px; border-top: 1px solid var(--line-hi); }
-.tableRow { display: grid; grid-template-columns: minmax(96px, 34%) 1fr; gap: 12px; align-items: baseline; padding: 9px 0; border-bottom: 1px solid var(--line); }
+/* ---- known facts: a stat table, each row its own band ---- */
+.table { margin: 0 0 22px; display: grid; gap: 2px; border-radius: 10px; overflow: hidden; }
+.tableRow { display: grid; grid-template-columns: minmax(96px, 34%) 1fr; gap: 12px; align-items: baseline; padding: 8px 10px; background: var(--glass-soft); }
 .tableRow dt { font-size: 12.5px; color: var(--ink2); }
 .tableRow dd { margin: 0; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .tableValue { font-family: var(--sans); font-variant-numeric: tabular-nums; font-size: 14px; font-weight: 600; color: var(--ink); }

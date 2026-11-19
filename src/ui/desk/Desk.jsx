@@ -155,6 +155,7 @@ function Clock() {
 function NextStrip({ next, place }) {
   return (
     <div className={styles.next} data-place={place} role="status" aria-label="Next step">
+      <span className={styles.nextTile} aria-hidden="true"><Gauge size={14} strokeWidth={2.2} /></span>
       <span className={styles.nextTag}>Next</span>
       <span className={styles.nextText}>{next.text}</span>
       {!next.here && (

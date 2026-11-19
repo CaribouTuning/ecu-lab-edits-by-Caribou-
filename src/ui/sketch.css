@@ -18,9 +18,10 @@ html, body { background: var(--bg); }
 /* Numbers keep their width as they change (rpm, pressures, money): tabular figures everywhere. */
 body { font-family: var(--sans); font-variant-numeric: tabular-nums; }
 
-/* No machine polish: no glows, no frosted glass, no text shadows. */
+/* No glows and no text shadows. Frosted glass is the chrome's (DESIGN.md, direction 8): the
+   menu bar, the next step, a window, the stations' bars. Never under data. */
 [class*='glow' i]:not([data-plain] *) { display: none; }
-* { backdrop-filter: none !important; text-shadow: none !important; }
+* { text-shadow: none !important; }
 
 /*
  * The frame of a physical device (the laptop's lid and base, the phone): a plain bezel line.
@@ -44,11 +45,12 @@ body { font-family: var(--sans); font-variant-numeric: tabular-nums; }
 input[type='range'], input[type='checkbox'], input[type='radio'] { accent-color: var(--acc); }
 
 /*
- * Anything selected or current is drawn as a Mac draws it with the Graphite accent: a
- * lighter grey chip with white text. The table's own cells keep their heat colours.
+ * Anything selected or current is a lighter chip with white text, as a segmented control's
+ * glass thumb is drawn. The table's own cells keep their heat colours.
  */
 :is([aria-pressed='true'], [aria-current='page'], [aria-selected='true']):not([data-plain] *):not([role='gridcell']):not([data-cell]) {
   background: var(--mac-selected) !important; color: var(--mac-sel-ink) !important; border-color: var(--mac-selected) !important;
+  box-shadow: inset 0 1px 0 var(--glass-hi), 0 1px 3px var(--glass-shade);
 }
 :is([aria-pressed='true'], [aria-current='page'], [aria-selected='true']):not([data-plain] *) svg { color: inherit; }
 

@@ -7,7 +7,6 @@
 
 import React from 'react';
 
-import { Droplets } from 'lucide-react';
 
 import { layoutById } from '../../../sim/index.js';
 import { AdvisorPanel } from '../../components/AdvisorPanel.jsx';
@@ -20,7 +19,7 @@ import { TuningGrid, advisedMarks } from '../../components/TuningGrid.jsx';
 import { GridOrSurface } from '../../components/surface/GridOrSurface.jsx';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
 import { UndoControls } from '../../components/UndoControls.jsx';
-import { Eyebrow } from '../../primitives/Eyebrow.jsx';
+import { Panel } from '../../primitives/Panel.jsx';
 import { ACTIONS } from '../../state/reducer.js';
 import { useUnreached } from '../../state/reach.js';
 import { useTune } from '../../state/StoreProvider.jsx';
@@ -64,19 +63,17 @@ export function FuelScreen({ calAdvice, children }) {
     <>
       <div className={styles.wrap}>
         <div className={styles.main}>
-          <div className={styles.gridHead}>
-            <Eyebrow icon={Droplets}>Air-Fuel Ratio Target</Eyebrow>
-            <UndoControls />
-          </div>
-          <div className={styles.intro}>Target air:fuel ratio the ECU aims for. Divide by 14.7 to read it as lambda.</div>
-          {/* One toolbar, as a table editor has: the axes, how a tap selects, what the cells show. */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 6, margin: '8px 0 10px' }}>
-            <LayoutSwitch />
-            <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} diffView={diffView} setDiffView={setDiffView} dims={dims} />
-          </div>
-          <GridOrSurface data={afr} min={10} max={18} decimals={1} unit="AFR" title="Target air-fuel ratio" commanded={{ label: 'AFR the ECU commanded', read: (p) => p.afrCommanded }} axes={axes}>
-            <TuningGrid data={afr} min={10} max={18} decimals={1} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.afr} diffView={diffView} diffScale={1} axes={axes} untuned={tune.untuned?.afr ?? null} unreached={unreached} marks={advisedMarks(calAdvice.wrongMix)} />
-          </GridOrSurface>
+          <Panel title="Air-Fuel Ratio Target" tools={<UndoControls />} className={styles.tablePanel}>
+            <div className={styles.intro}>Target air:fuel ratio the ECU aims for. Divide by 14.7 to read it as lambda.</div>
+            {/* One toolbar, as a table editor has: the axes, how a tap selects, what the cells show. */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 6, margin: '8px 0 10px' }}>
+              <LayoutSwitch />
+              <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} diffView={diffView} setDiffView={setDiffView} dims={dims} />
+            </div>
+            <GridOrSurface data={afr} min={10} max={18} decimals={1} unit="AFR" title="Target air-fuel ratio" commanded={{ label: 'AFR the ECU commanded', read: (p) => p.afrCommanded }} axes={axes}>
+              <TuningGrid data={afr} min={10} max={18} decimals={1} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.afr} diffView={diffView} diffScale={1} axes={axes} untuned={tune.untuned?.afr ?? null} unreached={unreached} marks={advisedMarks(calAdvice.wrongMix)} />
+            </GridOrSurface>
+          </Panel>
           {/* The advisor reads this table: right under it, where the eye is, not after the settings. */}
           <AdvisorPanel headline={report.headline} tone={report.tone}>
             <TuneAdvisory kind="afr" report={report} />

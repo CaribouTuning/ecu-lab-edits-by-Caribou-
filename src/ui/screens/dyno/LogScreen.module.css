@@ -14,8 +14,9 @@
   font-size: 12.5px;
   color: var(--ok);
   background: var(--ok-bg);
-  border: 1px solid var(--ok-line);
-  border-radius: 10px;
+  border: 0;
+  box-shadow: inset 0 0 0 1px var(--ok-line);
+  border-radius: 12px;
   padding: 12px;
 }
 
@@ -24,8 +25,10 @@
   font-size: 12px;
   line-height: 1.5;
   color: var(--ink2);
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  border: 0;
+  box-shadow: inset 0 0 0 1px var(--glass-edge);
+  background: var(--glass-soft);
+  border-radius: 12px;
   padding: 10px 12px;
 }
 
@@ -37,9 +40,9 @@
 
 .event {
   padding: 11px 12px;
-  border-radius: 10px;
-  background: var(--panel2);
-  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--glass-soft);
+  border: 1px solid var(--glass-edge);
 }
 .event[data-tone='danger'] { background: var(--danger-bg); border-color: var(--danger-line); }
 .event[data-tone='warn'] { background: var(--warn-bg); border-color: var(--warn-line); }

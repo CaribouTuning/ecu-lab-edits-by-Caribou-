@@ -10,12 +10,13 @@
 .grid[data-dense] { --cw-min: 42px; --ch: 28px; }
 /* The cells share out the width the table has, as a tuning program's grid fills its pane,
    from the narrowest a value reads at to where a wider cell only spreads the numbers apart. */
-.table { --cw: clamp(var(--cw-min), calc((100cqw - var(--head-w) - (var(--cols, 8) + 3) * 1px) / var(--cols, 8)), 112px); }
+/* Each column costs its cell and a 2px gap, and the tray its 2px padding either side. */
+.table { --cw: clamp(var(--cw-min), calc((100cqw - var(--head-w) - (var(--cols, 8) + 3) * 2px - 4px) / var(--cols, 8)), 112px); }
 /* On a phone the cells share out the width, down to 36px, so the game's 8 × 6 table is all on
    screen: at a fixed 50px a 390px phone showed six of its eight columns, with nothing to say
    the top of the rev range was off to the side. A bigger table still scrolls. */
 @container (max-width: 470px) {
-  .table { --head-w: 46px; --cw: max(36px, calc((100cqw - var(--head-w) - (var(--cols, 8) + 3) * 1px) / var(--cols, 8))); }
+  .table { --head-w: 40px; --cw: max(34px, calc((100cqw - var(--head-w) - (var(--cols, 8) + 3) * 2px - 4px) / var(--cols, 8))); }
 }
 .grid:focus-visible .scroll { outline: 2px solid var(--focus); outline-offset: 2px; }
 
@@ -24,16 +25,20 @@
 .scroll {
   overflow-x: auto; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch;
   width: fit-content; max-width: 100%;
-  border: 1px solid var(--line); border-radius: var(--r-md); background: var(--line);
+  /* A tray the cells sit in, each cell its own tile with a gap round it (a car designer's
+     stat grids are drawn so). */
+  border: 0; border-radius: 10px; padding: 2px; background: var(--glass-well); box-shadow: inset 0 0 0 1px var(--glass-edge);
   scrollbar-width: thin; scrollbar-color: var(--line-hi) transparent;
   /* The pinned axes and the selected cell layer over the cells, never over the edit panel. */
   isolation: isolate;
 }
-.table { border-collapse: separate; border-spacing: 1px; margin: -1px; }
+.table { border-collapse: separate; border-spacing: 2px; margin: -2px; }
 .table th, .table td { padding: 0; }
 
-/* The axes: the load down the left, the speed along the top, both quieter than the data. */
-.corner, .colHead, .rowHead { background: var(--panel); }
+/* The axes: the load down the left, the speed along the top, each heading its own strip,
+   quieter than the data. */
+.corner, .colHead, .rowHead { background: var(--mac-titlebar); border-radius: 3px; }
+.colHead button, .rowHead button { border-radius: 3px; }
 .corner {
   position: sticky; left: 0; z-index: 3; width: var(--head-w); min-width: var(--head-w);
   padding: 3px 6px; vertical-align: bottom; text-align: left;
@@ -58,8 +63,9 @@
 /* A cell: its value, centred, in figures that line up down a column. */
 .cell {
   position: relative; display: block; width: var(--cw); height: var(--ch); padding: 0; border: 0;
-  background: var(--panel2); color: var(--ink);
-  font-family: var(--sans); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
+  background: var(--panel2); color: var(--ink); border-radius: 3px;
+  box-shadow: inset 0 1px 0 var(--glass-hi), inset 0 -1px 0 var(--glass-shade);
+  font-family: var(--sans); font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em; cursor: cell; user-select: none; -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent; touch-action: manipulation;
   transition: box-shadow 0.1s ease, filter 0.1s ease;
@@ -68,7 +74,7 @@
 .cell:hover { filter: brightness(1.18); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 55%, transparent); }
 /* Selected: a white edge inside the cell, so nothing shifts; the anchor a range grows from
    in the accent. */
-.cell[aria-pressed='true'] { z-index: 1; filter: brightness(1.12); box-shadow: inset 0 0 0 2px var(--ink); }
+.cell[aria-pressed='true'] { z-index: 1; filter: brightness(1.12); box-shadow: inset 0 0 0 2px var(--ink), 0 0 0 1px var(--glass-shade); }
 .cell[data-anchor] { box-shadow: inset 0 0 0 2px var(--acc), inset 0 0 0 3px var(--bg); }
 .cell[data-untuned] { background: var(--panel2); color: var(--ink2); box-shadow: inset 0 0 0 1px var(--panel2); outline: 1px dashed var(--ink2); outline-offset: -4px; }
 .cell[data-unchanged] { color: var(--ink2); font-weight: 500; }
@@ -91,7 +97,7 @@
   display: flex; align-items: center; gap: 8px; margin-top: 8px;
   font-size: var(--fs-xs); color: var(--ink2); font-variant-numeric: tabular-nums;
 }
-.ramp { width: 96px; height: 6px; border-radius: 3px; }
+.ramp { width: 110px; height: 7px; border-radius: 4px; box-shadow: inset 0 1px 0 var(--glass-hi); }
 .keyNote { margin-left: 4px; }
 .note { margin: 8px 0 0; font-size: 12px; line-height: 1.5; color: var(--ink2); }
 

@@ -1539,7 +1539,9 @@ export function EcuLabApp({ startWith = null, startShown = false } = {}) {
                       title={flagged ? `${flagged} ${flagged === 1 ? 'entry' : 'entries'} in the last pull's log point here` : undefined}
                       aria-label={locked ? `${name}, locked until the shop trains for it`
                         : flagged ? `${name}, named by ${flagged} ${flagged === 1 ? 'entry' : 'entries'} in the last pull's log` : undefined}>
-                      {locked ? <Lock size={13} aria-hidden="true" /> : <Icon size={13} aria-hidden="true" />}
+                      <span className={deskApps.tuneTile} data-page={locked ? 'locked' : v.id} aria-hidden="true">
+                        {locked ? <Lock size={12} strokeWidth={2.2} /> : <Icon size={12} strokeWidth={2.2} />}
+                      </span>
                       <span className={deskApps.tuneTabName}>{name}</span>
                       {flagged > 0 && <span aria-hidden="true" className={deskApps.tuneFlag}>{flagged}</span>}
                     </button>

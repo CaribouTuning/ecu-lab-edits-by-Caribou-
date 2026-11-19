@@ -204,8 +204,7 @@ export function ResultScreen({ chartData, engineDerived, ghostLabel, bands = [],
 
   return (
     <>
-      <Panel tight className={styles.panel} data-tour="dyno-power">
-        <div className={styles.chartLabel}>Power and torque against rpm</div>
+      <Panel tight title="Power and torque against rpm" className={styles.panel} data-tour="dyno-power">
         {at && (
           <div className={styles.cursorRead} aria-live="polite" data-testid="dyno-cursor">
             <span className={styles.cursorRpm}>{at.rpm.toLocaleString('en-US')} <small>rpm</small></span>
@@ -249,8 +248,7 @@ export function ResultScreen({ chartData, engineDerived, ghostLabel, bands = [],
         )}
       </Panel>
 
-      <Panel tight className={styles.panel} data-tour="dyno-afr-timing">
-        <div className={styles.chartLabel}>Air-fuel ratio, asked for and measured, and spark timing</div>
+      <Panel tight title="Air-fuel ratio, asked for and measured, and spark timing" className={styles.panel} data-tour="dyno-afr-timing">
         {at && Number.isFinite(at.afr) && (
           <div className={styles.cursorRead}>
             <span className={styles.cursorRpm}>{at.rpm.toLocaleString('en-US')} <small>rpm</small></span>

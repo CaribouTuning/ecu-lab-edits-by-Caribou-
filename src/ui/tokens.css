@@ -79,8 +79,56 @@
   --mac-box: #0d1421;
   --mac-control: #1a2333;
   --mac-control-hi: #273449;
-  --mac-selected: #334155;
+  --mac-selected: #2b3850;
   --mac-row-sel: #13233f;
+  /* The software's finish (DESIGN.md, direction 8): Apple glass for the chrome, Automation's technical panels for the data. Translucent fills sit over the darker navy wallpaper; an edge is a faint inner line and a top highlight, never a border. */
+  --glass: rgba(17, 27, 46, 0.72);
+  --glass-soft: rgba(255, 255, 255, 0.045);
+  --glass-chip: rgba(255, 255, 255, 0.08);
+  --glass-thumb: rgba(255, 255, 255, 0.15);
+  --glass-hi: rgba(255, 255, 255, 0.13);
+  --glass-edge: rgba(190, 215, 255, 0.10);
+  --glass-well: rgba(0, 0, 0, 0.30);
+  --glass-shade: rgba(0, 0, 0, 0.38);
+  /* A technical panel's title strip (Automation's), a step lighter than the panel under it. */
+  --strip-hi: rgba(255, 255, 255, 0.075);
+  --strip-lo: rgba(255, 255, 255, 0.03);
+  /* The laptop's and the stations' wallpaper: deep navy, lit faintly from one corner. */
+  --screen-top: #0e1c33;
+  --screen-mid: #09121f;
+  --screen-bot: #050912;
+  --screen-glow: rgba(59, 130, 246, 0.20);
+  --screen-glow2: rgba(20, 184, 166, 0.08);
+  /* The primary capsule: the accent, a step deeper so it does not glare. */
+  --pill-hi: #2d64c4;
+  --pill-lo: #234f9e;
+  /* A check cell in a stat table (Automation's): good, borderline, bad. Dark enough for white text. */
+  --cell-good: #1f5a2c;
+  --cell-mid: #5c581b;
+  --cell-bad: #6e2020;
+  /* Each ECU page's icon tile, a top-to-bottom pair as the apps' are. */
+  --tile-air-hi: #5aa2ff;
+  --tile-air-lo: #2a6ae6;
+  --tile-spark-hi: #ffb340;
+  --tile-spark-lo: #e07f00;
+  --tile-fuel-hi: #4cd964;
+  --tile-fuel-lo: #1c9e44;
+  --tile-inj-hi: #5ad1e8;
+  --tile-inj-lo: #1d8fb5;
+  --tile-sens-hi: #c08bff;
+  --tile-sens-lo: #8a52e8;
+  --tile-boost-hi: #ff6b5e;
+  --tile-boost-lo: #d6352b;
+  --tile-cam-hi: #7f86ff;
+  --tile-cam-lo: #4b52e0;
+  --tile-idle-hi: #a3adbb;
+  --tile-idle-lo: #646f7e;
+  --tile-prot-hi: #ffd84a;
+  --tile-prot-lo: #d99a00;
+  --tile-torq-hi: #ff7aa8;
+  --tile-torq-lo: #d93f75;
+  --tile-nos-hi: #64d2ff;
+  --tile-nos-lo: #0a72c8;
   --mac-separator: #1e293b;
   --mac-label: #f8fafc;
   --mac-label2: #94a3b8;

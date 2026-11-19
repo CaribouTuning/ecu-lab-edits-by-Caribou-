@@ -5,11 +5,16 @@
   /* A Mac inspector: a quiet well beside the table. The verdict's tone is a small dot by
      the headline, not a coloured stripe down the side. */
   --advisor-accent: var(--ink2);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel2);
-  padding: 10px 12px;
+  --advisor-hi: var(--tile-idle-hi);
+  --advisor-lo: var(--tile-idle-lo);
+  /* A technical panel: its name in a title strip, the verdict under it with its tile. */
+  border: 0;
+  border-radius: 14px;
+  background: var(--glass-soft);
+  box-shadow: inset 0 0 0 1px var(--glass-edge);
+  padding: 0 12px 12px;
   margin: 10px 0 12px;
+  overflow: hidden;
 }
 
 .head {
@@ -36,9 +41,15 @@
 }
 
 .eyebrow {
-  font-size: 11px;
+  display: block;
+  margin: 0 -12px 10px;
+  padding: 6px 12px;
+  background: linear-gradient(var(--strip-hi), var(--strip-lo));
+  box-shadow: inset 0 -1px 0 var(--glass-edge);
+  text-align: center;
+  font-size: 12.5px;
   font-weight: 600;
-  color: var(--ink2);
+  color: var(--ink);
 }
 
 .headline {
@@ -50,14 +61,25 @@
   font-weight: 600;
   color: var(--ink);
 }
+/* The verdict's tile, in its tone, as a notification carries its app's. */
 .headline::before {
   content: '';
   flex: none;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--advisor-accent);
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: linear-gradient(var(--advisor-hi), var(--advisor-lo));
+  box-shadow: inset 0 1px 0 var(--glass-hi);
+  color: var(--app-glyph);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
 }
+.panel[data-tone='ok'] .headline::before { content: '✓'; }
+.panel[data-tone='warn'] .headline::before, .panel[data-tone='danger'] .headline::before { content: '!'; }
+.panel[data-tone='info'] .headline::before { content: 'i'; }
 
 .head { flex-wrap: wrap; }
 
@@ -85,14 +107,20 @@
 
 .panel[data-tone='danger'] {
   --advisor-accent: var(--danger);
+  --advisor-hi: var(--tile-boost-hi);
+  --advisor-lo: var(--tile-boost-lo);
 }
 
 .panel[data-tone='warn'] {
   --advisor-accent: var(--warn);
+  --advisor-hi: var(--tile-prot-hi);
+  --advisor-lo: var(--tile-prot-lo);
 }
 
 .panel[data-tone='ok'] {
   --advisor-accent: var(--ok);
+  --advisor-hi: var(--tile-fuel-hi);
+  --advisor-lo: var(--tile-fuel-lo);
 }
 
 .panel[data-tone='info'] {

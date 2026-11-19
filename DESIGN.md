@@ -97,6 +97,26 @@ direction 5 and the separate Mac greys, so the shop's pages and the laptop's app
 the same colours. A selection stays a lighter slate key (`--mac-selected`), so blue is
 left to actions and data.
 
+### Direction 8: Apple's glass for the chrome, a car designer's panels for the data
+
+Players still read the screens as generated (November 2026). The owner sent references: Apple's
+current interface (glass panes, capsule controls, coloured icon tiles) and the technical
+screens of a car-company game (titled panels, dense stat tables, cells coloured by state). The
+rule is to give each kind of thing the look it has in the world it comes from:
+
+- **Chrome is Apple's.** The menu bar, the next step, a window and the stations' bars are panes
+  of glass (`--glass`, a blur, a top highlight `--glass-hi` and a hairline `--glass-edge`)
+  floating on a deep navy wallpaper (`--screen-*`). Buttons, segmented controls and pop-ups
+  are capsules. A list of places (TUNE's tables, the build's parts) is an inset group, each row
+  with its own coloured tile (`--tile-*`), as Settings lists them. The action is the accent,
+  a step deep (`--pill-*`); everything else is glass.
+- **Data is technical.** A panel that holds working (a table, a chart, a group of settings, the
+  advisor, a score) is named in a title strip across its top (`--strip-*`; `Panel`'s `title`,
+  `Eyebrow`, `SpecGroup`). A table's cells are tiles in a dark tray with a gap round each; a
+  set of figures is a stat table, each figure on its own band. Heat and status colours are
+  unchanged.
+- The blue stays the same blue, kept dark: the owner turned down a brighter wallpaper.
+
 ## Typography
 
 - **One sans, the system's** (`--sans`: -apple-system, Segoe UI, Roboto). It is what
@@ -123,7 +143,10 @@ remapping in Desk.module.css changes nothing visible).
 | `--line`, `--line-hi` | #1e293b, #334155 | Rules, and a stronger rule for a control's edge |
 | `--ink`, `--ink-soft`, `--ink2`, `--ink3` | #f8fafc, #cbd5e1, #94a3b8, #64748b | Text, from primary to quiet |
 | `--acc` / `--acc-on` | #3b82f6 / #ffffff | The thing to do: a primary button, the next step |
-| `--mac-selected` | #334155 | A selected segment or chip |
+| `--mac-selected` | #2b3850 | A selected segment or chip: the glass thumb |
+| `--glass`, `--glass-soft`, `--glass-chip` | translucent navy and whites | A pane, a group on it, a control on it |
+| `--strip-hi`, `--strip-lo` | translucent whites | A technical panel's title strip |
+| `--tile-*-hi`, `--tile-*-lo` | one pair per ECU page | A list row's icon tile |
 | `--focus` | #ffffff | The keyboard focus ring, 2 px |
 | `--ok`, `--warn`, `--danger` | #10b981, #f59e0b, #ef4444 | Status only, never decoration |
 | `--cyan` | #38d9f0 | The torque curve, and the second series in a chart |
@@ -139,27 +162,30 @@ colours out of components, keep the accent from being a status colour, and keep
 - **Phone, portrait**: one column. On the start screen the badge sits beside the name and
   the ways in follow as one list.
 - **Phone, landscape** (height under 520 px): two columns again, with the blurbs dropped.
-- Spacing comes from `--sp-*` (3 to 24 px). Software corners are 6 to 8 px, as a Mac's.
+- Spacing comes from `--sp-*` (3 to 24 px). Corners: a pane 14 to 18 px, a tile 6 px, a
+  table cell 3 px; a control is a capsule.
 - Left-aligned. Nothing is centred for effect, the start screen included: the stations' page
   bar, then what ECU Lab is on the left and the ways in on the right, as one list.
 
 ## Components
 
-- **Keys** (`Seg`): Mac segmented controls. The state is `aria-pressed`, so the style and
-  the meaning are one attribute. The dyno's console keys (`Consoles.module.css .key`) are
+- **Keys** (`Seg`): capsule segmented controls, the chosen one a glass thumb. The state is
+  `aria-pressed`, so the style and the meaning are one attribute. The dyno's console keys (`Consoles.module.css .key`) are
   physical and keep their own look.
-- **Sidebar rows**: a small monochrome glyph and the name, as a Mac source list has. A
-  locked table shows a padlock instead, and its name says so to a screen reader ("…,
+- **Sidebar rows**: an inset group, each row a coloured tile with a white glyph and the
+  name, as Settings lists its panes. A locked table shows a padlock instead, and its name says so to a screen reader ("…,
   locked until the shop trains for it"). A count beside a row is how many log entries
   point there, as Mail counts unread mail.
 - **Tables**: heat colours on cells, green for low values through yellow to red for high,
   as tuning software shades a table (RomRaider's editor blends its hue from a blue minimum
   to a red maximum, through green and yellow; `heat` in theme.js has the sources). The
   selection is drawn as an outline over them, so a selected cell keeps its value's colour.
+  Each cell is its own tile in a dark tray, the axes in strips. Once any cell holds a
+  fraction every cell shows its tenth, so a column reads 94.0 over 97.5.
 - **Charts**: one-pixel grid, mono ticks, power in `--ink`, torque in `--cyan`, and a
   previous run dashed at half opacity.
-- **The advisor**: an inspector. The verdict's tone is a small dot by its headline,
-  not a stripe. Arithmetic sits behind a disclosure ("How the correction is worked out").
+- **The advisor**: a technical panel named in its strip. The verdict carries a tile in its
+  tone (a tick, or ! for a warning), not a stripe; a cell's figures are a stat table. Arithmetic sits behind a disclosure ("How the correction is worked out").
 - **Machine consoles** (dyno, engine stand): physical controls drawn as such. They have
   a big round button whose colour is its state (green go, red stop), latching keys and a
   hold-to-open lever.
@@ -185,7 +211,9 @@ codebase at least once.
 - A centred hero with three icon cards under it.
 - Middle dots as separators (`A · B · C`). Write a sentence or use a list.
 - Coloured left stripes on cards, unless the stripe is a state.
-- An icon on every tab or button.
+- An icon on every tab or button. (A list of places has its tiles, as Settings does; a
+  button does not.)
 - A paragraph explaining a control, placed above the control.
 - Accent colour on things that are not selected.
+- Glass under data. The blur is for the chrome; a table or chart sits on a still pane.
 - Hand-drawn wobble on software controls.

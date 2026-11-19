@@ -11,20 +11,19 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 26px;
-  border: 1px solid var(--line);
-  /* 7px is not on the radius scale: --r-sm's 6px looked flush against this
-     button's 1px border at 30x26px, --r-md's 9px looked closer to a pill
-     than a square icon button. Left raw. */
-  border-radius: 7px;
-  background: var(--panel2);
+  width: 24px;
+  height: 24px;
+  border: 0;
+  /* A round glass key, as a toolbar's icon buttons are drawn now. */
+  border-radius: 50%;
+  background: var(--glass-chip);
+  box-shadow: inset 0 1px 0 var(--glass-hi), inset 0 0 0 1px var(--glass-edge);
   color: var(--ink2);
   cursor: pointer;
 }
 
 .btn:hover:not(:disabled) {
-  border-color: var(--line-hi);
+  background: var(--glass-thumb);
   color: var(--ink);
 }
 

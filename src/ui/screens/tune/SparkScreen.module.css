@@ -53,3 +53,7 @@
    their own emphasis) moved into TuneAdvisory.module.css along with the
    markup — see TuneAdvisory.jsx. */
 .emInk { color: var(--ink); }
+
+/* The table, its toolbar and its key in one technical panel, its name in the strip. */
+.tablePanel { margin-bottom: 10px; }
+.tablePanel .intro { margin-bottom: 4px; }

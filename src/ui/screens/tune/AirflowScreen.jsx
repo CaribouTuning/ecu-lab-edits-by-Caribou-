@@ -8,7 +8,6 @@
 
 import React from 'react';
 
-import { Grid3x3 } from 'lucide-react';
 
 import { AdvisorPanel } from '../../components/AdvisorPanel.jsx';
 import { veLogReport } from '../../components/advisorReports.js';
@@ -20,7 +19,7 @@ import { GridOrSurface } from '../../components/surface/GridOrSurface.jsx';
 import { VeLogCorrection } from '../../components/VeLogCorrection.jsx';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
 import { UndoControls } from '../../components/UndoControls.jsx';
-import { Eyebrow } from '../../primitives/Eyebrow.jsx';
+import { Panel } from '../../primitives/Panel.jsx';
 import { layoutById, mafErrorPct, veCorrections } from '../../../sim/index.js';
 import { LayoutSwitch } from '../../components/LayoutSwitch.jsx';
 import { ACTIONS } from '../../state/reducer.js';
@@ -81,19 +80,17 @@ export function AirflowScreen({ children, veLog }) {
     <>
       <div className={styles.wrap}>
         <div className={styles.main}>
-          <div className={styles.gridHead}>
-            <Eyebrow icon={Grid3x3}>Volumetric Efficiency</Eyebrow>
-            <UndoControls />
-          </div>
-          <div className={styles.intro}>How full each cylinder gets, by rpm (columns) and manifold kPa (rows; 100 is wide open). Tap a cell for its numbers.</div>
-          {/* One toolbar, as a table editor has: the axes, how a tap selects, what the cells show. */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 6, margin: '8px 0 10px' }}>
-            <LayoutSwitch />
-            <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} diffView={diffView} setDiffView={setDiffView} dims={dims} />
-          </div>
-          <GridOrSurface data={ve} min={10} max={130} decimals={0} unit="%" title="Volumetric efficiency" axes={axes}>
-            <TuningGrid data={ve} min={10} max={130} decimals={0} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.ve} diffView={diffView} diffScale={10} axes={axes} untuned={tune.untuned?.ve ?? null} unreached={unreached} />
-          </GridOrSurface>
+          <Panel title="Volumetric Efficiency" tools={<UndoControls />} className={styles.tablePanel}>
+            <div className={styles.intro}>How full each cylinder gets, by rpm (columns) and manifold kPa (rows; 100 is wide open). Tap a cell for its numbers.</div>
+            {/* One toolbar, as a table editor has: the axes, how a tap selects, what the cells show. */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 6, margin: '8px 0 10px' }}>
+              <LayoutSwitch />
+              <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} diffView={diffView} setDiffView={setDiffView} dims={dims} />
+            </div>
+            <GridOrSurface data={ve} min={10} max={130} decimals={0} unit="%" title="Volumetric efficiency" axes={axes}>
+              <TuningGrid data={ve} min={10} max={130} decimals={0} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.ve} diffView={diffView} diffScale={10} axes={axes} untuned={tune.untuned?.ve ?? null} unreached={unreached} />
+            </GridOrSurface>
+          </Panel>
           {/* The advisor reads this table: right under it, where the eye is, not after the settings. */}
           <AdvisorPanel headline={report.headline} tone={report.tone}>
             <TuneAdvisory kind="ve" report={report} />

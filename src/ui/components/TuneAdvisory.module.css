@@ -68,16 +68,21 @@
 .ok { color: var(--ok); }
 
 .cellStats {
+  /* A stat table, as a car designer's are drawn: each figure its own band, the value right. */
   margin: 6px 0 8px;
   display: grid;
-  grid-template-columns: auto auto;
-  column-gap: var(--sp-sm);
-  row-gap: 2px;
+  grid-template-columns: minmax(0, max-content) minmax(72px, max-content);
+  gap: 2px;
+  width: fit-content;
+  max-width: 100%;
+  border-radius: 8px;
+  overflow: hidden;
   font-size: var(--fs-sm);
 }
 
+.cellStats dt, .cellStats dd { padding: 4px 10px; background: var(--glass-soft); }
 .cellStats dt { color: var(--ink2); }
-.cellStats dd { margin: 0; color: var(--ink); font-family: var(--sans); font-variant-numeric: tabular-nums; }
+.cellStats dd { margin: 0; color: var(--ink); font-weight: 600; text-align: right; font-family: var(--sans); font-variant-numeric: tabular-nums; }
 
 /* AIRFLOW's stale-VE recommendations, carried over unchanged from
    AirflowScreen.module.css's own .staleBody/.rec/.recTitle/.recText/
