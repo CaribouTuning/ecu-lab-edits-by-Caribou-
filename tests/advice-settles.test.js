@@ -43,6 +43,21 @@ const withCell = (st, table, ri, ci, v) => {
   return { ...st, tune: { ...st.tune, [table]: t } };
 };
 
+describe('the idle column at full throttle', () => {
+  it('is never marked when no pull ran it: the dyno sweeps from 1500 RPM, and the log says nothing there either', () => {
+    // From a play test: a turbo VQ35DE's 100 kPa cell at 800 RPM was marked down to -1 degrees,
+    // charged for the 150 kPa cell above it. Full throttle at idle speed is a tip-in.
+    const { st } = turboRevUp(5, 550);
+    const axes = S.layoutById(st.tune.layout).timing;
+    const ri = axes.load.indexOf(100); const ci = axes.rpm.indexOf(800);
+    const hot = withCell(st, 'timing', ri, ci, 40);
+    const p = pull(hot);
+    const a = advice(hot, p);
+    expect(a.overAdvanced.some((c) => c.ri === ri && c.ci === ci)).toBe(false);
+    expect(p.points.every((q) => q.rpm >= 1500)).toBe(true);
+  }, 300_000);
+});
+
 describe('following the advice settles', () => {
   it('a marked cell keeps its number when typed, is never asked for more when typed lower, and drops off the list', () => {
     const { st } = turboRevUp(5, 550);

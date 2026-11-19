@@ -87,18 +87,19 @@ describe('EngineScreen', () => {
 });
 
 describe('InductionScreen', () => {
-  it('reveals the boost editor off the store once the turbo switch is on', () => {
+  it('reveals the turbo hardware once the turbo switch is on, and points to TUNE → BOOST for the target', () => {
     const { container } = mount(<InductionScreen active onToggle={noop} />);
     expect(screen.getByText('Not installed')).toBeTruthy();
-    // The boost-columns block is always mounted and hidden with CSS (`data-open`),
-    // the same hide-not-unmount contract BuildSection uses — so the buttons already
-    // exist pre-click. Assert on `data-open` itself, which is what actually flips
-    // with `turboOn`, rather than on button presence, which does not.
+    // The turbo block is always mounted and hidden with CSS (`data-open`), the same
+    // hide-not-unmount contract BuildSection uses. Assert on `data-open` itself, which is
+    // what actually flips with `turboOn`.
     const subPanel = container.querySelector('[data-open]');
     expect(subPanel.getAttribute('data-open')).toBe('false');
     fireEvent.click(within(screen.getByRole('group', { name: 'Forced induction' })).getByRole('button', { name: 'Turbocharger' }));
     expect(subPanel.getAttribute('data-open')).toBe('true');
-    expect(within(screen.getByTestId('boost-columns')).getAllByRole('button')).toHaveLength(8);
+    // The boost target is the tune's: BUILD names where it is set and holds no editor for it.
+    expect(screen.getByTestId('boost-target-pointer').textContent).toMatch(/TUNE → BOOST/);
+    expect(screen.queryByTestId('boost-columns')).toBeNull();
   });
 
   it('reports which section it is when its header is clicked', () => {

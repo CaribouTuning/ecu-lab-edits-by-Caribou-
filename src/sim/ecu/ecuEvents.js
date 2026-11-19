@@ -86,7 +86,7 @@ export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm, intercooled =
       type: 'boostctl', severity: 1, impact: imp(6, run), ...span(run),
       msg: `Boost cannot be held down to target across ${label(run)} — the wastegate spring is stiffer than the target`,
       cause: `A pneumatic gate stays shut until boost reaches its spring pressure (${hw.gate?.springPsi} psi). The solenoid can only raise that, never lower it, so at ${peak.rpm} RPM a ${peak.boostTarget} psi target is unreachable from below.`,
-      fix: `On BUILD → INDUCTION, fit a softer wastegate spring or an electronic actuator, or raise the boost target to at least the ${hw.gate?.springPsi} psi spring pressure.`,
+      fix: `On BUILD → INDUCTION, fit a softer wastegate spring or an electronic actuator, or raise the boost target on TUNE → BOOST to at least the ${hw.gate?.springPsi} psi spring pressure.`,
     });
   });
   groupRuns(points, (p) => p.gateLimited === 'duty').forEach((run) => {
@@ -94,7 +94,7 @@ export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm, intercooled =
       type: 'boostctl', severity: 1, impact: imp(6, run), ...span(run),
       msg: `Wastegate at maximum duty across ${label(run)} — the target is beyond what the actuator can hold`,
       cause: `At ${cal.boost.maxDuty}% duty the gate still opens below the target. More duty is not available, so boost stops where the gate lets it.`,
-      fix: 'On TUNE → BOOST, raise Maximum duty; or fit a stiffer wastegate spring on BUILD → INDUCTION; or lower the boost target there.',
+      fix: 'On TUNE → BOOST, raise Maximum duty; or fit a stiffer wastegate spring on BUILD → INDUCTION; or lower the boost target on TUNE → BOOST.',
     });
   });
 
@@ -247,8 +247,8 @@ export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm, intercooled =
       cause: `Hot intake air knocks sooner, so the ECU takes ${cal.protect.iatRetardPerC}° of timing out for every degree over the limit — about ${pulled.toFixed(1)}° here, whatever the SPARK table says.`,
       // An intercooler already fitted cannot be fitted again: the boost there is the lever.
       fix: intercooled
-        ? `The intercooler is already doing its work: the charge comes out of the compressor too hot for it at this boost. Lower the boost target across ${label(run)} on BUILD → INDUCTION (Boost Target Curve), or run better fuel, which takes the heat with less retard. Raising the IAT limit on TUNE → PROTECT only removes the safety net.`
-        : 'Cool the charge: fit an intercooler on BUILD → INDUCTION, or lower the boost target there. Raising the IAT limit on TUNE → PROTECT only removes the safety net.',
+        ? `The intercooler is already doing its work: the charge comes out of the compressor too hot for it at this boost. Lower the boost target across ${label(run)} on TUNE → BOOST (Boost Target Curve), or run better fuel, which takes the heat with less retard. Raising the IAT limit on TUNE → PROTECT only removes the safety net.`
+        : 'Cool the charge: fit an intercooler on BUILD → INDUCTION, or lower the boost target on TUNE → BOOST. Raising the IAT limit on TUNE → PROTECT only removes the safety net.',
     });
   });
 
@@ -274,7 +274,7 @@ export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm, intercooled =
       msg: `Knock protection cut boost across ${label(run)}`,
       cause: `Knock control was pulling more than ${cal.protect.knockRetardDeg}° — running that much retard is hot and inefficient, so the ECU took ${cal.protect.knockBoostCutPsi} psi out as well.`,
       fix: source.length || !hiddenKnock(run)
-        ? `This follows from ${source.length ? source.join(' and ') : 'the knock entry in this log (AFR target, then timing, in those cells on TUNE → FUEL and TUNE → SPARK)'}: fix ${source.length > 1 ? 'those' : 'that'} and this goes away. Lowering the boost target there on BUILD → INDUCTION also works. With the boost cut, this pull never reached the boost rows above here at these speeds: once it stays in, the next pull runs them for the first time and may find their limits too, so expect to set a few more cells then.`
+        ? `This follows from ${source.length ? source.join(' and ') : 'the knock entry in this log (AFR target, then timing, in those cells on TUNE → FUEL and TUNE → SPARK)'}: fix ${source.length > 1 ? 'those' : 'that'} and this goes away. Lowering the boost target there on TUNE → BOOST also works. With the boost cut, this pull never reached the boost rows above here at these speeds: once it stays in, the next pull runs them for the first time and may find their limits too, so expect to set a few more cells then.`
         : hiddenKnock(run),
     });
   });
@@ -284,7 +284,7 @@ export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm, intercooled =
       type: 'dutyprot', severity: 2, impact: imp(8, run), ...span(run),
       msg: `Injector duty protection cut boost across ${label(run)}`,
       cause: `Duty passed ${cal.protect.dutyLimitPct}%. Beyond it the injectors cannot add fuel as boost adds air.`,
-      fix: 'On BUILD → FUEL SYSTEM, fit larger injectors — sized to run about 80–85% duty at peak — and enter their flow rate on TUNE → INJECTORS. Or lower the boost target on BUILD → INDUCTION.',
+      fix: 'On BUILD → FUEL SYSTEM, fit larger injectors — sized to run about 80–85% duty at peak — and enter their flow rate on TUNE → INJECTORS. Or lower the boost target on TUNE → BOOST.',
     });
   });
 
@@ -373,7 +373,7 @@ export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm, intercooled =
         const fits = Object.values(LINEAR_SCALES.map).filter((m) => m.max >= top * 1.05).sort((a, b) => a.max - b.max)[0];
         return fits
           ? `On BUILD → INDUCTION, fit a MAP sensor that reads past the ${Math.round(top)} kPa this engine makes — the ${fits.label.split(' (')[0]} — then set the matching MAP scaling on TUNE → SENSORS.`
-          : `This engine makes ${Math.round(top)} kPa, past every MAP sensor offered: lower the boost target on BUILD → INDUCTION until a 4 bar sensor reads it, and set the matching MAP scaling on TUNE → SENSORS.`;
+          : `This engine makes ${Math.round(top)} kPa, past every MAP sensor offered: lower the boost target on TUNE → BOOST until a 4 bar sensor reads it, and set the matching MAP scaling on TUNE → SENSORS.`;
       })(),
     });
   });

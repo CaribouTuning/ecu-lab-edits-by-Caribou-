@@ -10,6 +10,7 @@
 import React from 'react';
 
 import { VVT_OPTS } from '../../../sim/index.js';
+import { BoostTargetEditor } from '../../components/BoostTargetEditor.jsx';
 import { EcuSection } from '../../components/ecu/EcuSection.jsx';
 import { Note } from '../../primitives/Note.jsx';
 import { StatTile } from '../../primitives/StatTile.jsx';
@@ -75,8 +76,9 @@ export function EcuControlScreen({ section, title, icon, liveVars }) {
       {section === 'boost' && !build.turboOn && (
         <div className={styles.note}><Note>{build.blowerId
           ? 'A supercharger has no wastegate for these settings to drive: its boost is set by its pulley, on BUILD → INDUCTION. Overboost protection works against the wastegate target too, so it does not act on a supercharger; knock control and the rev limiter still do.'
-          : 'No turbo fitted — these settings take effect once one is, on BUILD → INDUCTION.'}</Note></div>
+          : 'No turbo fitted. Fit one on BUILD → INDUCTION, and its boost target and these settings appear here.'}</Note></div>
       )}
+      {section === 'boost' && build.turboOn && <div className={styles.note}><BoostTargetEditor /></div>}
       {section === 'nitrous' && !build.nitrous && (
         <div className={styles.note}><Note>No nitrous kit fitted — these settings take effect once one is, on BUILD → INDUCTION.</Note></div>
       )}

@@ -42,7 +42,7 @@
    its screens as tabs along the same line, a lamp and the live reading at the right. */
 .titleBar {
   container-type: inline-size;
-  position: relative; flex: none; display: flex; align-items: stretch; gap: 14px;
+  position: relative; flex: none; display: flex; flex-wrap: wrap; align-items: stretch; gap: 0 14px;
   min-height: 34px; padding: 0 10px; background: var(--mac-titlebar);
   border-bottom: 1px solid var(--mac-separator); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ink) 6%, transparent);
 }
@@ -60,9 +60,10 @@
 .titleStatus [data-led='busy'] { background: var(--warn); }
 .titleStatus [data-led='on'] { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
 /* The screens: tabs on the toolbar, the open one underlined in the text's own colour. */
-.menu { flex: 1 1 auto; min-width: 0; display: flex; align-items: stretch; gap: 2px; }
+.menu { flex: 1 1 auto; min-width: 0; display: flex; align-items: stretch; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+.menu::-webkit-scrollbar { display: none; }
 .menuItem {
-  position: relative; padding: 0 10px; border: 0; background: transparent;
+  position: relative; flex: none; min-height: 34px; padding: 0 10px; border: 0; background: transparent; white-space: nowrap;
   color: var(--mac-label2); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
 }
 .menuItem:hover { color: var(--mac-label); }
@@ -81,6 +82,11 @@
 @media (prefers-reduced-motion: reduce) { .face * { transition: none !important; } }
 
 @container (max-width: 420px) { .appName { font-size: 0; gap: 0; } .menuItem { padding: 0 7px; } }
+/* On a phone the tabs take the toolbar's whole line and the live reading drops under them:
+   side by side, "History" ran into "Peak 297 whp, 280 lb-ft" and "Pull log" wrapped. */
+@container (max-width: 560px) {
+  .titleStatus { flex-basis: 100%; margin-left: 0; padding: 0 0 6px; }
+}
 
 /*
  * A phone on its side: 390 px of height cannot hold a screen and a console docked under it

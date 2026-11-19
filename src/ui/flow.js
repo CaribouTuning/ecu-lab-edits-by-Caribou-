@@ -79,9 +79,18 @@ export function nextStep(f) {
     const g = f.guide;
     return { id: 'guide', text: `Base map guide, step ${g.n} of ${g.of}: ${g.title}.`, label: g.go === 'dyno' ? 'Dyno' : g.go.startsWith('build') ? 'Build bench' : 'Open it', go: g.go === 'dyno' ? 'dyno' : g.go.startsWith('build') ? 'build' : `tune:${g.go}` };
   }
-  if (!f.heard && !f.fresh && !f.atDyno) return { id: 'hear', text: 'Start it on the stand and listen to it.', label: 'Run it', go: 'live' };
-  if (!f.fresh) return { id: 'pull', text: !f.pulled ? 'Put it on the dyno and run a pull.' : f.changed === false ? 'Run the pull again to bring its curves and log back up.' : 'It has changed since the last pull. Pull it again to see what that did.', label: 'Dyno', go: 'dyno' };
+  // Past the steps the game checks, the guide's pulls go on: the bar keeps naming its step, so it
+  // never seems to have dropped the guide (it once jumped from "step 4 of 7" to "Start it on the
+  // stand", then to "a clean pull: build more" with the boost steps still to do).
+  const g = f.guide && !f.guide.checkable ? f.guide : null;
+  const inGuide = g ? `Base map guide, step ${g.n} of ${g.of}: ${g.title}. ` : '';
+  if (!f.heard && !f.fresh && !f.atDyno) return { id: 'hear', text: `${inGuide}${g ? 'First start' : 'Start'} it on the stand and listen to it.`, label: 'Run it', go: 'live' };
+  if (!f.fresh) return { id: 'pull', text: `${inGuide}${!f.pulled ? 'Put it on the dyno and run a pull.' : f.changed === false ? 'Run the pull again to bring its curves and log back up.' : 'It has changed since the last pull. Pull it again to see what that did.'}`, label: 'Dyno', go: 'dyno' };
   if (f.attention.length) return fixStep(f.attention[0]);
+  // A clean pull with a guide step still open after it (its boost steps): that step, on its page.
+  if (g && g.n < g.of) {
+    return { id: 'guide', text: `A clean pull${f.peakHp ? `, ${Math.round(f.peakHp)} whp` : ''}. ${inGuide.trim()}`, label: g.go === 'dyno' ? 'Dyno' : 'Open it', go: g.go === 'dyno' ? 'dyno' : `tune:${g.go}` };
+  }
   return {
     id: 'more',
     text: `A clean pull${f.peakHp ? `, ${Math.round(f.peakHp)} whp` : ''}. Build more into it on the bench, or tune for more in TUNE.`,

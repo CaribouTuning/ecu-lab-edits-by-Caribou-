@@ -5,6 +5,7 @@ import { Check, ChevronDown, ChevronRight, Circle, Gauge, ListChecks, Wrench, X 
 
 import { Button } from '../primitives/Button.jsx';
 import { warm } from '../sim/warm.js';
+import { ACTIONS } from '../state/reducer.js';
 import { safeBaseMap } from '../state/safeBaseMap.js';
 import { buildChanges, buildSignature, guideStepNow, guidedSteps, offersTuneStart, publishGuideStep, useTuneStartChoice, writeTuneStart } from '../state/tuneStart.js';
 import { useBuild, useSession, useTune } from '../state/StoreProvider.jsx';
@@ -177,6 +178,13 @@ function BaseMapResult({ made, onClose }) {
  */
 function Guide({ sig, made, build, tune, advice, page = null, onGo, onClose }) {
   const [open, setOpen] = React.useState(false);
+  const [, dispatchTune] = useTune();
+  // Opening the steps closes the cell editor: its sheet docks over the page, and left open it
+  // covered the list the player had just asked to read.
+  const toggle = () => {
+    if (!open) dispatchTune({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value: null });
+    setOpen(!open);
+  };
   const steps = guidedSteps({ build, tune, target: made.action, samples: made.samples, advice: advice?.overAdvanced ? advice : null });
   const done = steps.filter((s) => s.done).length;
   const changes = buildChanges(build);
@@ -195,7 +203,7 @@ function Guide({ sig, made, build, tune, advice, page = null, onGo, onClose }) {
           {here && <span className={styles.barMeta}> · this page</span>}
         </span>
         {!here && <Button size="sm" variant="ghost" onClick={() => onGo(now.go)}>{now.go === 'dyno' ? 'Dyno' : 'Go'}</Button>}
-        <button type="button" className={styles.barToggle} aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        <button type="button" className={styles.barToggle} aria-expanded={open} onClick={toggle}>
           {open ? 'Hide' : 'All steps'} <ChevronDown size={14} aria-hidden="true" className={styles.chev} data-open={open ? 'true' : 'false'} />
         </button>
         <button type="button" className={styles.barClose} aria-label="Close the guide" onClick={onClose}><X size={14} aria-hidden="true" /></button>

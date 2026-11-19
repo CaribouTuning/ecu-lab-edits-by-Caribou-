@@ -106,7 +106,9 @@ describe('moving the boost-curve cursor', () => {
     // the wrong reason.
     expect(preset).not.toMatch(/^\d\.\dL /);
 
-    buildPart('Induction');
+    // The boost target is set on TUNE → BOOST.
+    goTo('TUNE');
+    fireEvent.click(screen.getByRole('button', { name: 'Boost' }));
     const columns = within(screen.getByTestId('boost-columns')).getAllByRole('button');
     // The selected RPM appears in the editor's readout under the bars. Reading it
     // before and after proves the click actually MOVED the cursor — without that, a
@@ -498,7 +500,9 @@ describe('the injector-duty preview call site', () => {
     fireEvent.click(screen.getByText('Induction'));
     fireEvent.click(chooseFor('Turbocharger'));
 
-    buildPart('Induction');
+    // The boost target is the tune's, on TUNE → BOOST.
+    goTo('TUNE');
+    fireEvent.click(screen.getByRole('button', { name: 'Boost' }));
     const columns = within(screen.getByTestId('boost-columns')).getAllByRole('button');
     fireEvent.click(columns[RPM.indexOf(6500)]);
     // Every collapsed BuildSection stays mounted (its content is hidden with
@@ -513,6 +517,7 @@ describe('the injector-duty preview call site', () => {
     // table from the CURRENT hardware (hwForVe, which reads turboOn and boostCurve),
     // which is what lets dutyPreview's own VE lookup see the boosted cylinder filling
     // instead of the naturally-aspirated baseline it started on.
+    goTo('BUILD');
     buildPart('Engine');
     fireEvent.click(screen.getByRole('button', { name: /RESET ALL TO STOCK/ }));
 

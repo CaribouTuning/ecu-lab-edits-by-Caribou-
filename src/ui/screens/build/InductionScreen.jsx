@@ -2,10 +2,9 @@
  * BUILD > Induction.
  *
  * One choice of what forces the air in (none, turbo, supercharger), then only that
- * kit's settings, each group saying what it changes: turbine and compressor sizing, intercooler, the boost target
- * curve editor (eight RPM columns as bar buttons, tap one to select it, then edit it
- * below with full-width controls), the supercharger; then nitrous and the MAP sensor in
- * their own groups. The bolt-ons (cold air
+ * kit's settings, each group saying what it changes: turbine and compressor sizing, intercooler
+ * and wastegate (the boost target itself is the tune's, on TUNE → BOOST: BoostTargetEditor),
+ * the supercharger; then nitrous and the MAP sensor in their own groups. The bolt-ons (cold air
  * intake, headers, cat-back) are on BoltonsScreen.
  */
 
@@ -13,7 +12,7 @@ import { Wind } from 'lucide-react';
 import React from 'react';
 
 import {
-  BLOWER_OPTS, COEFF, COMPRESSOR_OPTS, DEFAULT_ECU_HW, ECU_COEFF, KELVIN_OFFSET, LINEAR_SCALES, RPM,
+  BLOWER_OPTS, COEFF, COMPRESSOR_OPTS, DEFAULT_ECU_HW, ECU_COEFF, KELVIN_OFFSET, LINEAR_SCALES,
   TURBINE_OPTS, WASTEGATE_OPTS, blowerCurve, blowerOf, bottlePressurePsi, clamp, compressorWithCount, deriveEngine,
   envFrom, starterRatio, tankFuel, turboAirflowNeedKgS,
 } from '../../../sim/index.js';
@@ -62,7 +61,7 @@ export function InductionScreen({ active, onToggle }) {
   const U = useUnits();
   const [session] = useSession();
   const {
-    turboOn, boostCurve, boostSel, turbineIdx, turbineCount, compressorIdx, mods, nitrous,
+    turboOn, boostCurve, turbineIdx, turbineCount, compressorIdx, mods, nitrous,
   } = build;
   const set = (field, value) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field, value });
 
@@ -93,14 +92,6 @@ export function InductionScreen({ active, onToggle }) {
   const bottlePsi = Math.round(bottlePressurePsi(nitrous?.heater ? ECU_COEFF.N2O_HEATER_SET_K : dayK));
   const jetShare = Math.round(Math.sqrt(Math.max(0, bottlePsi) / COEFF.N2O_REF_BOTTLE_PSI) * 100);
 
-  // Every boost-curve write goes through here. Rebuilding from the RPM axis makes it
-  // structurally impossible for the curve to be the wrong length or to contain a
-  // non-number, which is what previously let a single edit poison the whole sim.
-  const setBoostAt = (i, value) => dispatch({
-    type: ACTIONS.SET_BUILD_FIELD,
-    field: 'boostCurve',
-    value: RPM.map((_, idx) => clamp(Number(idx === i ? value : boostCurve[idx]) || 0, 0, 25)),
-  });
 
 
   const ceiling = COMPRESSOR_OPTS[compressorIdx].boostCeiling;
@@ -115,8 +106,6 @@ export function InductionScreen({ active, onToggle }) {
   const gate = build.wastegate ?? DEFAULT_ECU_HW.gate;
   const sensorHw = build.sensorHw ?? DEFAULT_ECU_HW.sensorHw;
   const setGate = (patch) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'wastegate', value: { ...gate, ...patch } });
-  const peakOverCeiling = Math.max(...boostCurve) > ceiling;
-  const selectedOverCeiling = boostCurve[boostSel] > ceiling;
 
   return (
     <BuildSection
@@ -136,7 +125,7 @@ export function InductionScreen({ active, onToggle }) {
         <div className={styles.subPanelInner}>
           {turboOn && Math.max(...boostCurve) <= 0 && (
             <Note>
-              The boost target is 0 psi everywhere, so the turbo only restricts the exhaust and the engine makes less power, not more. Set a boost curve under Boost Target Curve below; 6–8 psi is a sensible first step, with timing taken out of the boost rows on TUNE › SPARK before you pull.
+              The boost target is 0 psi everywhere, so the turbo only restricts the exhaust and the engine makes less power, not more. Set a boost target on TUNE → BOOST; 6–8 psi is a sensible first step, with timing taken out of the boost rows on TUNE › SPARK before you pull.
             </Note>
           )}
           <div className={styles.subhead}>The turbo <span>sets how fast it spools and how much air it can pass</span></div>
@@ -182,83 +171,12 @@ export function InductionScreen({ active, onToggle }) {
             </div>
           )}
 
-          <div className={styles.subhead}>Boost target <span>what the boost controller aims for at each speed</span></div>
-          <div className={styles.boostLabel}>Boost Target Curve</div>
-
-          <Panel tight style={{ marginBottom: 10 }}>
-            {/* Tap a bar to select that RPM point, then edit it below with full-width controls. */}
-            <div data-testid="boost-columns" className={styles.columns}>
-              {RPM.map((r, i) => {
-                const on = boostSel === i;
-                const over = boostCurve[i] > ceiling;
-                return (
-                  <button
-                    key={r} onClick={() => dispatch({ type: ACTIONS.SET_BOOST_SEL, value: i })}
-                    className={styles.col} data-selected={on ? 'true' : 'false'}
-                  >
-                    <div className={styles.colValue} data-selected={on ? 'true' : 'false'} data-over={over ? 'true' : 'false'}>
-                      {U.metric ? U.boost(boostCurve[i]).toFixed(2) : boostCurve[i]}
-                    </div>
-                    <div
-                      className={styles.colFill} data-selected={on ? 'true' : 'false'} data-over={over ? 'true' : 'false'}
-                      style={{ height: `${(boostCurve[i] / 25) * 72}%`, minHeight: boostCurve[i] > 0 ? 3 : 0 }}
-                    />
-                    <div className={styles.colRpm} data-selected={on ? 'true' : 'false'}>
-                      {r >= 1000 ? (r / 1000).toFixed(1) + 'k' : r}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </Panel>
-
-          <Panel tight style={{ marginBottom: 10 }}>
-            <div className={styles.editorHead}>
-              <span className={styles.editorRpm}>{RPM[boostSel]} RPM</span>
-              <span className={styles.editorValue} data-over={selectedOverCeiling ? 'true' : 'false'}>
-                {U.metric ? U.boost(boostCurve[boostSel]).toFixed(2) : boostCurve[boostSel]}<span className={styles.editorUnit}>{U.boostUnit}</span>
-              </span>
-            </div>
-            <input type="range" min={0} max={25} step={1} value={boostCurve[boostSel]}
-              onChange={(e) => setBoostAt(boostSel, Number(e.target.value))}
-              className={styles.slider} />
-            <div className={styles.stepRow}>
-              {[-5, -1, 1, 5].map((d) => (
-                <button key={d} onClick={() => setBoostAt(boostSel, (boostCurve[boostSel] ?? 0) + d)}
-                  className={styles.stepButton}>
-                  {/* The curve is held in whole psi; metric labels each step by what it adds. */}
-                  {d > 0 ? '+' : ''}{U.metric ? U.boost(d).toFixed(2) : d}
-                </button>
-              ))}
-            </div>
-            <div className={styles.presetRow}>
-              <Button variant="ghost" size="sm" style={{ flex: 1 }}
-                onClick={() => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: RPM.map(() => clamp(Number(boostCurve[boostSel]) || 0, 0, 25)) })}>
-                FLAT ACROSS ALL
-              </Button>
-              <Button variant="ghost" size="sm" style={{ flex: 1 }}
-                onClick={() => { const peak = boostCurve[boostSel]; dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: RPM.map((r) => Math.round(peak * clamp((r - 1500) / 2600, 0, 1))) }); }}>
-                SPOOL RAMP
-              </Button>
-              {/* Built from RPM so the curve can never be shorter than the
-                  axis. A hand-written literal previously had seven entries
-                  for eight breakpoints, and the next edit put NaN through
-                  the entire simulation. */}
-              <Button variant="ghost" size="sm" style={{ flex: 1 }}
-                onClick={() => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: RPM.map(() => 0) })}>
-                ZERO
-              </Button>
-            </div>
-            <div className={styles.ceilingWarning} data-over={peakOverCeiling ? 'true' : 'false'}>
-              Compressor efficient to ~{U.fmtBoost(ceiling, U.metric ? 2 : 0)}{peakOverCeiling ? ' — you are past it, expect hot inefficient air' : ''}
-            </div>
-          </Panel>
-
-          <Note tone="warn">Stock calibrations have no real tuning above ~101 kPa. Adding boost without retarding SPARK and richening FUEL in the high-MAP rows will knock hard — run a pull and read the log.</Note>
-
-          <ExpandableInfo title="Why boost costs you timing">
-            Boost packs more air and fuel into the same cylinder volume before combustion starts, raising peak pressure and temperature for a given amount of spark advance. The same timing that was safe with no boost becomes knock-prone at 8-10 psi through the same head and pistons — which is why boosted tunes run less initial timing than a naturally aspirated tune, and why timing has to come out further as boost climbs. Set your target here, then dial in TIMING and AFR to match.
-          </ExpandableInfo>
+          {/* The boost target is the engine computer's, not a part: it is set on TUNE → BOOST, as a
+              tuner sets it in the calibration. BUILD keeps the hardware that makes it. */}
+          <div className={styles.subhead}>Boost target <span>set in the tune, on TUNE → BOOST</span></div>
+          <p className={styles.hint} data-testid="boost-target-pointer">
+            The turbo above makes the boost; how much it is asked for at each speed is the engine computer&apos;s boost target, set on TUNE → BOOST. Now asking for up to {U.fmtBoost(Math.max(...boostCurve), U.metric ? 2 : 0)}.
+          </p>
         </div>
       </div>
 

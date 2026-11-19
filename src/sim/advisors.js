@@ -1216,7 +1216,11 @@ function judgeAgainstPull(spark, pull, inForce, timing) {
     if (c.bracketOnly) continue;
     // As without a pull: an idle-column cell no spark the table holds would protect is a
     // full-throttle tip-in at idle speed, shown with `sparkCannotFix`, not a danger verdict.
-    if (c.current - c.knockCeiling > ADVANCE_TOLERANCE_DEG) { if (!(c.sparkCannotFix && c.rpm <= IDLE_COLUMN_MAX_RPM)) overAdvanced.push(c); }
+    // Nor a full-load cell in the idle column that no pull ran: the dyno sweeps from 1500 RPM, so
+    // the log can never say a word about it, and graded against its neighbours it was charged for
+    // the boost row's advance above it (a turbo VQ35DE's 100 kPa cell at 800 RPM marked down to
+    // -1 degrees under a 150 kPa cell left at 12). Full throttle at idle speed is a tip-in.
+    if (c.current - c.knockCeiling > ADVANCE_TOLERANCE_DEG) { if (c.rpm > IDLE_COLUMN_MAX_RPM || c.map < OPEN_LOOP_KPA) overAdvanced.push(c); }
     else if (c.current - c.mbt > PAST_MBT_TOLERANCE_DEG) pastMbt.push(c);
     else if (c.suggested > c.current) {
       // Room to add timing is something only a log shows: a cell this pull did not run is not

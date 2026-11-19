@@ -445,7 +445,7 @@ export function simulateSweep({
    *  turbo's base target is the BUILD curve; TUNE → BOOST only trims it. */
   const lessBoost = blower
     ? 'fit a larger blower pulley (a lower drive ratio) on BUILD → INDUCTION'
-    : 'lower the boost target there on BUILD → INDUCTION (Boost Target Curve)';
+    : 'lower the boost target there on TUNE → BOOST (Boost Target Curve)';
   /**
    * Why the engine got less fuel than the table asked for, and the page that fixes it, in
    * the order a tuner checks: the injectors at their limit, the pump, the injector flow the
@@ -608,7 +608,7 @@ export function simulateSweep({
       rpmStart: run[0].rpm, rpmEnd: run[run.length - 1].rpm,
       msg: `Peak cylinder pressure past what the bottom end takes across ${rangeLabel(run)} — up to ${peak.peakPressure.toFixed(0)} bar near ${peak.rpm} RPM`,
       cause: `${derived.compression.toFixed(1)}:1 static compression multiplies whatever the manifold sends it, and it is being sent ${Math.round(peak.map)} kPa at ${peak.ve.toFixed(0)}% VE${peak.boostPsi >= 1 ? ` (${peak.boostPsi.toFixed(1)} psi of boost)` : ''}${spraying(peak) ? `, with a ${nitrous.shotHp} shot of nitrous adding the oxygen for about ${Math.round(peak.nitrousLbMin * N2O_AIR_EQUIV)} lb/min more air on top` : ''} — about ${peak.peakPressure.toFixed(0)} bar at the top of the stroke, against about ${limitBar} bar that ${limitBar >= COEFF.PEAK_PRESSURE_LIMIT_BAR_FORGED ? 'forged pistons and rods' : limitBar >= COEFF.PEAK_PRESSURE_LIMIT_BAR_BOOST_RATED ? 'this factory turbo engine\'s pistons and rods' : 'cast pistons and production rods'} are built for. This is not detonation: the mixture is burning normally and the ECU has nothing to detect. It is simply more force than the parts are built to pass, on every firing stroke, for ${Math.round(rangeFrac(run) * 100)}% of the sweep.`,
-      fix: `Take cylinder pressure out: ${peak.boostPsi >= 1 ? `${blower ? 'fit a larger blower pulley on BUILD → INDUCTION' : 'lower the boost target on BUILD → INDUCTION'}, ` : ''}${spraying(peak) ? 'run a smaller shot or start it later on TUNE → NITROUS, ' : ''}or lower static compression on BUILD → SHORT BLOCK. Less timing also lowers peak pressure, at a cost in power. More octane will NOT help: it raises the knock limit, not what the pistons and rods can carry. ${limitBar >= COEFF.PEAK_PRESSURE_LIMIT_BAR_FORGED ? 'These are already forged parts: the pressure itself has to come down.' : `Forged pistons and rods (BUILD → SHORT BLOCK) are built for about ${COEFF.PEAK_PRESSURE_LIMIT_BAR_FORGED} bar.`}`,
+      fix: `Take cylinder pressure out: ${peak.boostPsi >= 1 ? `${blower ? 'fit a larger blower pulley on BUILD → INDUCTION' : 'lower the boost target on TUNE → BOOST'}, ` : ''}${spraying(peak) ? 'run a smaller shot or start it later on TUNE → NITROUS, ' : ''}or lower static compression on BUILD → SHORT BLOCK. Less timing also lowers peak pressure, at a cost in power. More octane will NOT help: it raises the knock limit, not what the pistons and rods can carry. ${limitBar >= COEFF.PEAK_PRESSURE_LIMIT_BAR_FORGED ? 'These are already forged parts: the pressure itself has to come down.' : `Forged pistons and rods (BUILD → SHORT BLOCK) are built for about ${COEFF.PEAK_PRESSURE_LIMIT_BAR_FORGED} bar.`}`,
     });
   });
 
@@ -620,7 +620,7 @@ export function simulateSweep({
       rpmStart: run[0].rpm, rpmEnd: run[run.length - 1].rpm,
       msg: `Injectors maxed across ${rangeLabel(run)} (up to ${peak.duty}% duty) — mixture leaned to ${peak.afr.toFixed(1)}:1`,
       cause: `Required pulse width (${peak.pw} ms) exceeds 90% of the ${(120000 / peak.rpm).toFixed(1)} ms available per engine cycle at ${peak.rpm} RPM, so the ${injectorLabel} injectors physically cannot deliver the commanded fuel.${fuel.stoich < 12 ? ` ${octaneLabel} needs roughly ${(14.7 / fuel.stoich).toFixed(2)}× the fuel volume of gasoline at the same lambda — a big part of why you ran out here.` : ''}`,
-      fix: `On BUILD → FUEL SYSTEM, fit larger injectors — size them to run about 80–85% duty at peak — then enter their flow rate on TUNE → INJECTORS. Or ${turboOn || blower ? `${blower ? 'fit a larger blower pulley' : 'lower the boost target'} in this range on BUILD → INDUCTION` : 'lower the rev limit'} so demand fits the injectors you have.${fuel.stoich < 12 ? ` ${octaneLabel} needs about ${(14.7 / fuel.stoich).toFixed(1)}× gasoline's fuel volume; gasoline would fit these injectors, but gives up knock margin.` : ''}`,
+      fix: `On BUILD → FUEL SYSTEM, fit larger injectors — size them to run about 80–85% duty at peak — then enter their flow rate on TUNE → INJECTORS. Or ${turboOn || blower ? `${blower ? 'fit a larger blower pulley in this range on BUILD → INDUCTION' : 'lower the boost target in this range on TUNE → BOOST'}` : 'lower the rev limit'} so demand fits the injectors you have.${fuel.stoich < 12 ? ` ${octaneLabel} needs about ${(14.7 / fuel.stoich).toFixed(1)}× gasoline's fuel volume; gasoline would fit these injectors, but gives up knock margin.` : ''}`,
     });
   });
 
@@ -685,7 +685,7 @@ export function simulateSweep({
       // The target only where the target is the fault: an engine that misses a right target is
       // fixed in its fuelling, never by asking a richer number to make up for it.
       fix: peak.fuelLimited
-        ? `On BUILD → FUEL SYSTEM, fit larger injectors (and set TUNE → INJECTORS to match), or lower the boost in this range on BUILD → INDUCTION so demand fits the injectors you have.`
+        ? `On BUILD → FUEL SYSTEM, fit larger injectors (and set TUNE → INJECTORS to match), or lower the boost in this range on TUNE → BOOST so demand fits the injectors you have.`
         : missedTarget(peak)
           ? `${deliveryFix(peak, run, peak.afr - peak.afrCommanded)}${targetNote(peak)}`
           : `The engine is getting the mixture its table asks for, so the target is too lean for this boost.${targetNote(peak) || ` On TUNE → FUEL, richen the boost AFR target in this range to about ${bestPowerAfr(peak.boostPsi).toFixed(1)}:1 on gasoline's scale: it asks for ${peak.afrCommanded.toFixed(1)}:1.`}${!mods.intercooler && peak.boostPsi > 3 ? ' An intercooler on BUILD → INDUCTION also takes heat out of the charge.' : ''}`,
@@ -773,7 +773,7 @@ export function simulateSweep({
         rpmStart: run[0].rpm, rpmEnd: run[run.length - 1].rpm,
         msg: `Boost falls short of target across ${rangeLabel(run)} (${worst.boostPsi.toFixed(1)} of ${worst.boostTarget.toFixed(1)} psi at ${worst.rpm} RPM)`,
         cause: `The turbo cannot make this much boost here. With the wastegate shut, boost settles where the turbine's power meets what the compressor needs: a compressor too small runs out of flow, and a turbine too small chokes the exhaust and cannot drive it. Asking for more does not help — it only makes the target further away.`,
-        fix: `On BUILD → INDUCTION, fit a larger compressor, a larger turbine or twin turbos — the airflow line under the Turbos picker shows what this engine needs against what the turbo flows. Or lower the boost target up top to what this turbo holds (about ${worst.boostPsi.toFixed(0)} psi at ${worst.rpm} RPM).`,
+        fix: `On BUILD → INDUCTION, fit a larger compressor, a larger turbine or twin turbos — the airflow line under the Turbos picker shows what this engine needs against what the turbo flows. Or lower the boost target up top on TUNE → BOOST to what this turbo holds (about ${worst.boostPsi.toFixed(0)} psi at ${worst.rpm} RPM).`,
       });
     });
   }
@@ -804,7 +804,7 @@ export function simulateSweep({
       rpmStart: run[0].rpm, rpmEnd: run[run.length - 1].rpm,
       msg: `Compressor pushed past its efficient range across ${rangeLabel(run)} (target up to ${peak.boostPsi.toFixed(1)} psi)`,
       cause: `This compressor's practical ceiling is lower than the boost you're asking for here — beyond it, the compressor is working outside its efficient map. That air leaves hotter, less dense and more knock-prone, so this pull's charge temperature already carries the cost.`,
-      fix: `On BUILD → INDUCTION, keep the boost target at or under this compressor's ~${compressor?.boostCeiling ?? peak.boostPsi} psi ceiling in this range, or fit a larger compressor.`,
+      fix: `On TUNE → BOOST, keep the boost target at or under this compressor's ~${compressor?.boostCeiling ?? peak.boostPsi} psi ceiling in this range, or fit a larger compressor on BUILD → INDUCTION.`,
     });
   });
 
@@ -892,7 +892,7 @@ export function simulateSweep({
   const bearingEventBar = derived.bearingEventBar ?? COEFF.BEARING_EVENT_BAR;
   if (avgPeakPressure > bearingEventBar) {
     const bearingLevers = [
-      turboOn ? 'Lower the boost target on BUILD → INDUCTION' : blower ? 'Fit a larger blower pulley on BUILD → INDUCTION' : null,
+      turboOn ? 'Lower the boost target on TUNE → BOOST' : blower ? 'Fit a larger blower pulley on BUILD → INDUCTION' : null,
       points.some(spraying) ? `${turboOn || blower ? 'spray' : 'Spray'} a smaller shot` : null,
     ].filter(Boolean);
     const impact = Math.round(clamp((avgPeakPressure - bearingEventBar) * 0.25, 3, 9));
