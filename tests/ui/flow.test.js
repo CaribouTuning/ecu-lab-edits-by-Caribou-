@@ -48,7 +48,8 @@ describe('SANDBOX, step by step', () => {
   it('asks how to start the tune of a new build before it is started, and the Next bar says what the card offers', () => {
     const s = sandbox({ startTune: true });
     expect(s).toMatchObject({ id: 'start-tune', label: 'Start the tune', go: 'tune:airflow' });
-    expect(s.text).toMatch(/safe base map.*guide.*advice/);
+    // The three starts by the names the card gives them.
+    expect(s.text).toMatch(/safe base map.*with the guide.*tune it yourself/);
     // Chosen: on to the stand as before.
     expect(sandbox({ startTune: false }).go).toBe('live');
   });

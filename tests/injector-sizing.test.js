@@ -11,7 +11,7 @@
 import { describe, expect, it } from 'vitest';
 
 import * as S from '../src/sim/index.js';
-import { makeEngine, runLive } from './ecuHarness.js';
+import { makeEngine, pullAtKpa, runLive } from './ecuHarness.js';
 
 const idx = (cc) => S.INJECTOR_OPTS.findIndex((o) => o.cc === cc);
 const E85 = S.OCTANE_OPTS.findIndex((o) => o.stoich < 12);
@@ -62,15 +62,18 @@ describe('idle cost of oversized injectors (T1–T5)', () => {
     }
   });
 
+  // Measured against the same engine on 315 cc: the injector's cost, apart from how close the
+  // engine's own open-loop idle sits to its target (a factory B58 idles a few percent rich of it
+  // with the trims off, on any injector).
   it('T2: runs 1300 cc carrying idle on a six at least 4% lean untuned', () => {
     for (const preset of ['vq35hr', 'b58-m1']) {
-      expect(idleLambda({ preset, cc: 1300 }), preset).toBeGreaterThan(1.04);
+      expect(idleLambda({ preset, cc: 1300 }) / idleLambda({ preset, cc: 315 }), preset).toBeGreaterThan(1.04);
     }
   });
 
   it('T3: brings it back within the trim limit with the minimum pulse set', () => {
     for (const preset of ['vq35hr', 'b58-m1']) {
-      const lam = idleLambda({ preset, cc: 1300, cal: { 'injector.minEffPwMs': S.ballisticFromMs(1300) } });
+      const lam = idleLambda({ preset, cc: 1300, cal: { 'injector.minEffPwMs': S.ballisticFromMs(1300) } }) / idleLambda({ preset, cc: 315 });
       expect(lam, preset).toBeLessThan(1);
       expect(lam, preset).toBeGreaterThan(1 / 1.25);
     }
@@ -93,14 +96,14 @@ describe('idle cost of oversized injectors (T1–T5)', () => {
 
 describe('the pull log reports it', () => {
   // The brief's 30 kPa is not light enough: at 1500 RPM a 1300 cc injector opens for 0.50 ms,
-  // above its 0.43 ms threshold. 25 kPa (0.39 ms there) is inside the region and still a
-  // load that is not so light the pull also reports misfires.
+  // above its 0.43 ms threshold. 25 kPa (0.39 ms there) is inside the region. A pull's load is
+  // a throttle opening, so `pullAtKpa` finds the one that holds its first point there.
   const LIGHT_KPA = 25;
   const ballisticEvents = (pull) => pull.events.filter((e) => e.type === 'ballistic');
 
   it('reports a light-load pull on 1300 cc, with cause and fix', () => {
     const eng = makeEngine({ preset: 'vq35hr', build: { injIdx: idx(1300), ecuInjectorCc: 1300 } });
-    const [ev] = ballisticEvents(eng.pull(LIGHT_KPA));
+    const [ev] = ballisticEvents(pullAtKpa(eng, LIGHT_KPA));
     expect(ev).toBeTruthy();
     expect(ev.msg).toMatch(/1300cc/);
     expect(ev.cause.length).toBeGreaterThan(40);
@@ -108,29 +111,29 @@ describe('the pull log reports it', () => {
   });
 
   it('says nothing on the stock injectors, or once the minimum pulse is set', () => {
-    expect(ballisticEvents(makeEngine({ preset: 'vq35hr' }).pull(LIGHT_KPA))).toHaveLength(0);
+    expect(ballisticEvents(pullAtKpa(makeEngine({ preset: 'vq35hr' }), LIGHT_KPA))).toHaveLength(0);
     const tuned = makeEngine({
       preset: 'vq35hr', build: { injIdx: idx(1300), ecuInjectorCc: 1300 },
       cal: { 'injector.minEffPwMs': S.ballisticFromMs(1300) },
     });
-    expect(ballisticEvents(tuned.pull(LIGHT_KPA))).toHaveLength(0);
+    expect(ballisticEvents(pullAtKpa(tuned, LIGHT_KPA))).toHaveLength(0);
   });
 
   it('names a minimum pulse that clears the event when typed in exactly', () => {
     const build = { injIdx: idx(1300), ecuInjectorCc: 1300 };
-    const [ev] = ballisticEvents(makeEngine({ preset: 'vq35hr', build }).pull(LIGHT_KPA));
+    const [ev] = ballisticEvents(pullAtKpa(makeEngine({ preset: 'vq35hr', build }), LIGHT_KPA));
     const named = Number(ev.fix.match(/minimum effective pulse to about ([\d.]+) ms/)[1]);
     // A value the field can hold (its own step), and not short of the threshold.
     const step = S.ECU_META.find((m) => m.path === 'injector.minEffPwMs').step;
     expect(Math.abs(named / step - Math.round(named / step))).toBeLessThan(1e-9);
     expect(named).toBeGreaterThanOrEqual(S.ballisticFromMs(1300));
     const tuned = makeEngine({ preset: 'vq35hr', build, cal: { 'injector.minEffPwMs': named } });
-    expect(ballisticEvents(tuned.pull(LIGHT_KPA))).toHaveLength(0);
+    expect(ballisticEvents(pullAtKpa(tuned, LIGHT_KPA))).toHaveLength(0);
   });
 
   it('offers a port injection kit only to a direct engine that has none', () => {
     const build = { injIdx: idx(1300), ecuInjectorCc: 1300 };
-    const fixOf = (patch) => ballisticEvents(makeEngine({ preset: 'b58-m1', build: { ...build, ...patch } }).pull(LIGHT_KPA))[0].fix;
+    const fixOf = (patch) => ballisticEvents(pullAtKpa(makeEngine({ preset: 'b58-m1', build: { ...build, ...patch } }), LIGHT_KPA))[0].fix;
     expect(fixOf({})).toMatch(/add a port injection kit/);
     // Fitted, on factory staging: the direct injectors still carry this load, and the
     // event is theirs, but there is no kit left to suggest.
