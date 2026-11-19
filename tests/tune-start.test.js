@@ -127,6 +127,27 @@ describe('the guide on a turbo VQ35DE on 550 cc injectors (a player found it stu
     expect(step).toMatchObject({ id: 'guide', go: 'tune:fuel' });
     expect(step.text).toMatch(/step 3 of \d+: Mixture targets/);
   }, 300_000);
+
+  it('ticks the fuel step when its own numbers are typed, exactly as it gives them', () => {
+    // It once said "full boost about 12.0" while it checked the boost rows against the safe base
+    // map's, which richen toward the top (12.6 at 1500 RPM to 11.6 at 7500): typed as written,
+    // the step never ticked.
+    let st = preset('vq35de-revup');
+    st = set(set(st, 'turboOn', true), 'boostCurve', st.build.boostCurve.map((b, i) => (i >= 2 ? 6 : b)));
+    st = set(st, 'injIdx', S.INJECTOR_OPTS.findIndex((o) => o.cc === 550));
+    const m = safeBaseMap(st);
+    const steps = (s) => guidedSteps({ build: s.build, tune: s.tune, target: m.action, samples: m.samples });
+    const mix = steps(st).find((x) => x.id === 'mixture');
+    expect(mix.done).toBe(false);
+    const pairs = [...mix.text.matchAll(/([0-9]+\.[0-9]) at (\d{1,2},\d{3}|\d+)/g)].map((x) => [Number(x[2].replace(/,/g, '')), Number(x[1])]);
+    expect(pairs.length).toBeGreaterThan(3);
+    const ax = S.layoutById(st.tune.layout).afr;
+    const afr = st.tune.afr.map((row, ri) => row.map((v, ci) => {
+      const hit = pairs.find(([rpm]) => rpm === ax.rpm[ci]);
+      return ax.load[ri] > 101 && hit ? hit[1] : v;
+    }));
+    expect(steps({ ...st, tune: { ...st.tune, afr } }).find((x) => x.id === 'mixture').done).toBe(true);
+  }, 300_000);
 });
 
 describe('the guide is this build\'s, not a generic one', () => {

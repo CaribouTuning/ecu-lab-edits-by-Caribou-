@@ -68,13 +68,13 @@ describe('docs/accuracy.md: the presets table is what the model does', () => {
 });
 
 describe('the known approximations are the size the pages say', () => {
-  it('fuel per horsepower: presets 0.38-0.51 lb/hp·h, 9.9-11.5 hp per lb/min of air', () => {
+  it('fuel per horsepower: presets 0.36-0.52 lb/hp·h, 9.4-11.9 hp per lb/min of air', () => {
     const [lo, hi] = span(PRESETS.map((r) => r.peak.bsfc));
-    expect(lo).toBeGreaterThanOrEqual(0.375);
-    expect(hi).toBeLessThan(0.515);
+    expect(lo).toBeGreaterThanOrEqual(0.355);
+    expect(hi).toBeLessThan(0.525);
     const [alo, ahi] = span(PRESETS.map((r) => (r.peak.hp / S.DRIVETRAIN_EFF) / ((r.peak.maf * 60) / 453.6)));
-    expect(alo).toBeGreaterThanOrEqual(9.75);
-    expect(ahi).toBeLessThan(11.55);
+    expect(alo).toBeGreaterThanOrEqual(9.35);
+    expect(ahi).toBeLessThan(11.95);
   });
 
   it('turbo spool: from 1% over to 24% under the rated torque at 1500-2000 RPM, where the real engine makes it', () => {
@@ -95,26 +95,22 @@ describe('the known approximations are the size the pages say', () => {
     expect(hi).toBeLessThanOrEqual(0.245);
   });
 
-  it('peak torque: the turbo presets within 0-6% of their rating, the N54 about 10% over and the GTI about 7% under', () => {
+  it('peak torque: the turbo presets on their rating, held there by their engine computers\' torque limit', () => {
     for (const { preset, pull, boosted } of PRESETS) {
       if (!boosted) continue;
       const over = crank(pull.peakTq) / preset.factory.crankTq - 1;
-      if (preset.id === 'ea888-gti') expect(over).toBeCloseTo(-0.07, 1);
-      else if (preset.id === 'n54') expect(over).toBeCloseTo(0.10, 1);
-      else {
-        expect(Math.abs(over)).toBeLessThanOrEqual(0.06);
-      }
+      expect(Math.abs(over), preset.id).toBeLessThanOrEqual(0.01);
     }
   });
 
-  it('exhaust temperature at peak power: about 725-760 °C NA, 760-825 °C boosted', () => {
+  it('exhaust temperature at peak power: about 735-785 °C NA, 750-790 °C boosted', () => {
     for (const { peak, boosted } of PRESETS) {
       if (boosted) {
-        expect(peak.egt).toBeGreaterThanOrEqual(758);
-        expect(peak.egt).toBeLessThanOrEqual(827);
+        expect(peak.egt).toBeGreaterThanOrEqual(748);
+        expect(peak.egt).toBeLessThanOrEqual(792);
       } else {
-        expect(peak.egt).toBeGreaterThanOrEqual(720);
-        expect(peak.egt).toBeLessThanOrEqual(762);
+        expect(peak.egt).toBeGreaterThanOrEqual(733);
+        expect(peak.egt).toBeLessThanOrEqual(787);
       }
     }
   });
@@ -217,15 +213,15 @@ describe('the known approximations are the size the pages say', () => {
     expect(offsets[offsets.length - 1]).toBeLessThanOrEqual(15);
   });
 
-  it('peak cylinder pressure: about 51-66 bar on the NA presets, 69-82 bar on the turbo presets', () => {
+  it('peak cylinder pressure: about 43-75 bar on the NA presets, 78-101 bar on the turbo presets', () => {
     for (const { peak, peakTq, boosted } of PRESETS) {
       const pmax = Math.max(peak.peakPressure, peakTq.peakPressure);
       if (boosted) {
-        expect(pmax).toBeGreaterThanOrEqual(68.5);
-        expect(pmax).toBeLessThanOrEqual(82.5);
+        expect(pmax).toBeGreaterThanOrEqual(77.5);
+        expect(pmax).toBeLessThanOrEqual(102);
       } else {
-        expect(pmax).toBeGreaterThanOrEqual(50.5);
-        expect(pmax).toBeLessThanOrEqual(66.0);
+        expect(pmax).toBeGreaterThanOrEqual(42);
+        expect(pmax).toBeLessThanOrEqual(76);
       }
     }
     expect(S.COEFF.PEAK_PRESSURE_LIMIT_BAR).toBe(105);
@@ -250,7 +246,7 @@ describe('the known approximations are the size the pages say', () => {
     expect(S.DRIVETRAIN_EFF).toBe(0.85);
   });
 
-  it('boost: 20 psi with an intercooler is about 1.8× the NA engine on a turbine sized for it, about 1.65× on one too small; a generic turbo build burns 0.54-0.68 lb/hp·h', () => {
+  it('boost: 20 psi with an intercooler is about 1.95× the NA engine on a turbine sized for it, about 1.83× on one too small; a generic turbo build burns 0.51-0.57 lb/hp·h', () => {
     const cfg = { ...S.DEFAULT_ENGINE_CONFIG, compression: 9.0 };
     const derived = S.deriveEngine(cfg);
     const fuel = S.OCTANE_OPTS.find((o) => o.label === '93');
@@ -272,14 +268,14 @@ describe('the known approximations are the size the pages say', () => {
     // The Large passes this 3.5 L engine's exhaust at 20 psi; the Medium holds the drive
     // pressure at about 1.7x the boost and takes power back through it.
     const sized = powerAt(20, true, 2).hp / na;
-    expect(sized).toBeGreaterThanOrEqual(1.77);
-    expect(sized).toBeLessThan(1.83);
+    expect(sized).toBeGreaterThanOrEqual(1.93);
+    expect(sized).toBeLessThan(2.0);
     const small = powerAt(20, true, 1).hp / na;
-    expect(small).toBeGreaterThanOrEqual(1.61);
-    expect(small).toBeLessThan(1.68);
+    expect(small).toBeGreaterThanOrEqual(1.8);
+    expect(small).toBeLessThan(1.86);
     const [lo, hi] = span([powerAt(10, true), powerAt(20, true), powerAt(10, false), powerAt(20, false)].map((p) => p.bsfc));
-    expect(lo).toBeGreaterThanOrEqual(0.535);
-    expect(hi).toBeLessThan(0.685);
+    expect(lo).toBeGreaterThanOrEqual(0.5);
+    expect(hi).toBeLessThan(0.575);
   });
 
   it('exhaust backpressure at rated power: 1.0-1.5× the boost pressure on the turbo presets', () => {
