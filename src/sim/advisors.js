@@ -20,6 +20,7 @@ import { evaluatePoint, portKitBlend } from './point.js';
 import { wearEffects } from './damage.js';
 import { bestPowerAfr, reachableKpa } from './manifold.js';
 import { inductionAtMap } from './turbo.js';
+import { veCorrections, veSamplesFromPull } from './veLearn.js';
 import { throttleBoreM, throttledMapKpa } from './throttle.js';
 import {
   GAME_LAYOUT, kpaForLoad, layoutById, loadForKpa, needsAirmass, readEcuTable, sameAxes, truthReader,
@@ -865,6 +866,9 @@ export function calibrationAdvice({
   if (pull) {
     // Where the engine did not get what the table asks for: the table is not the fault there,
     // so the mixture advice says so and points at the fuelling (the same test as the log).
+    // Where Correct VE from logs has done all it can (`veSettledFor`), the miss is marked
+    // settled: the pull log calls it as close as the breakpoints allow, and FUEL says the same.
+    const veDone = veSettledFor(pull.points, L.ve, derived.redline ?? Infinity, offSpray);
     /** @type {any[]} */
     const missedMix = pull.points
       .filter((p) => p.map >= OPEN_LOOP_KPA && offSpray(p) && missesTarget(p));
@@ -874,7 +878,8 @@ export function calibrationAdvice({
       .concat(groupRuns(pull.points, (p) => missedMix.includes(p) && p.afr <= p.afrCommanded));
     const causeOf = new Map();
     for (const run of runs) { const c = missedMixCause(run, { injectorCc, ecuInjectorCc }); for (const p of run) causeOf.set(p, c); }
-    for (const p of missedMix.splice(0)) missedMix.push({ rpm: p.rpm, map: p.map, afr: p.afr, afrCommanded: p.afrCommanded, lean: p.afr > p.afrCommanded, cause: causeOf.get(p) ?? 've' });
+    // `settled`: Correct VE from logs has done all it can there; the log says so and so does FUEL.
+    for (const p of missedMix.splice(0)) missedMix.push({ rpm: p.rpm, map: p.map, afr: p.afr, afrCommanded: p.afrCommanded, lean: p.afr > p.afrCommanded, cause: causeOf.get(p) ?? 've', ...(causeOf.get(p) === 've' && veDone.settled(p) ? { settled: true } : {}) });
     // What the pull met while the nitrous sprayed, which the base tables are never judged on:
     // TUNE → NITROUS answers it (its retard and its fuel), and TUNE's pages say so.
     const sprayPts = pull.points.filter((p) => !offSpray(p));
@@ -914,6 +919,79 @@ export function calibrationAdvice({
 
 /** A cell carrying less than this share of a point's timing is not "in force" there. */
 export const IN_FORCE_WEIGHT = 0.15;
+
+/**
+ * Where Correct VE from logs has done all a VE table on these breakpoints can, read the same
+ * way by the pull log and by FUEL's advisor so the two never disagree.
+ *
+ * `gridBound(p)`: every VE cell in force at the point fits the pull within half the mixture
+ * tolerance, so correcting from the log changes nothing there. `unloggedAbove(p)`: the
+ * column just above the point when it is past the redline (a pull cannot log it) and carries
+ * a real share of the blend there; the log asks for it by hand. `settled(p)`: grid-bound, and
+ * no hand edit of that column helps either: there is none, or the misses read through it pull
+ * it both ways (lean below it on one side of a bend, rich on the other), and moving it only
+ * trades one for the other. A playtest's custom I4 was told to raise its 6,500 RPM column for
+ * the lean at 6,400 and lower it for the rich at 5,900, pull after pull. The same holds for a
+ * cell the pull crossed too briefly to fit (`thinConflicted`): told by one miss to go up and by
+ * the next to come down, a custom V6's 90 kPa cell at 2,350 RPM got both in one round.
+ *
+ * @param {object[]} points a pull's points
+ * @param {import('./layouts.js').TableAxes|null|undefined} veAxes the VE table's breakpoints
+ * @param {number} endRpm the speed the pull ends at (the redline)
+ * @param {(p: object) => boolean} [counts] which missed points count (off the nitrous spray)
+ */
+export function veSettledFor(points, veAxes, endRpm, counts = () => true) {
+  const axes = veAxes ?? GAME_LAYOUT.ve;
+  const fit = axes.loadUnit === 'kPa' ? veCorrections(veSamplesFromPull(points), axes) : null;
+  const loadOf = (p) => p.ecuLoad ?? p.sensedMap ?? p.map;
+  const gridBound = (p) => {
+    if (!fit) return false;
+    const cells = cellsInForce(p.rpm, loadOf(p), axes).filter((c) => c.w >= IN_FORCE_WEIGHT);
+    return cells.length > 0 && cells.every(({ ri, ci }) => {
+      const r = fit.ratio[ri]?.[ci];
+      return r != null && Math.abs(r - 1) * 100 < MIXTURE_TOLERANCE_PCT / 2;
+    });
+  };
+  /** @returns {number|null} */
+  const unloggedAbove = (p) => {
+    const cols = axes.rpm;
+    const above = cols.find((r) => r > p.rpm);
+    const at = [...cols].reverse().find((r) => r <= p.rpm);
+    const share = above != null && at != null ? (p.rpm - at) / (above - at) : 0;
+    return above != null && above > endRpm && share >= IN_FORCE_WEIGHT ? above : null;
+  };
+  const inForce = (p) => cellsInForce(p.rpm, loadOf(p), axes).filter((c) => c.w >= IN_FORCE_WEIGHT);
+  // Which ways the misses read through each column past the redline, and through each cell the
+  // pull crossed too briefly for the fit (no ratio): lean one side and rich the other means no
+  // single hand edit of it helps.
+  const ways = new Map();
+  const thinWays = new Map();
+  const add = (m, k, sign) => { if (!m.has(k)) m.set(k, new Set()); m.get(k).add(sign); };
+  for (const q of points) {
+    if (!(q.map >= OPEN_LOOP_KPA) || !counts(q) || !missesTarget(q)) continue;
+    const sign = Math.sign(q.afr - q.afrCommanded);
+    const col = unloggedAbove(q);
+    if (col != null) add(ways, col, sign);
+    if (fit) for (const c of inForce(q)) if (fit.ratio[c.ri]?.[c.ci] == null) add(thinWays, `${c.ri}|${c.ci}`, sign);
+  }
+  /** Cells in force at the point the fit has no ratio for, and misses pull both ways. */
+  const thinConflicted = (p) => (fit ? inForce(p).filter((c) => fit.ratio[c.ri]?.[c.ci] == null && (thinWays.get(`${c.ri}|${c.ci}`)?.size ?? 0) > 1) : []);
+  const settled = (p) => {
+    // A dangerous lean is never "as close as it goes": it is the fuelling to fix, whatever the grid.
+    if (!fit || p.leanRisk) return false;
+    const cells = inForce(p);
+    const conflicted = new Set(thinConflicted(p).map((c) => `${c.ri}|${c.ci}`));
+    // Every cell is either fitted within the band or one no edit can settle.
+    const done = cells.length > 0 && cells.every(({ ri, ci }) => {
+      const r = fit.ratio[ri]?.[ci];
+      return r != null ? Math.abs(r - 1) * 100 < MIXTURE_TOLERANCE_PCT / 2 : conflicted.has(`${ri}|${ci}`);
+    });
+    if (!done) return false;
+    const col = unloggedAbove(p);
+    return col == null || (ways.get(col)?.size ?? 0) > 1;
+  };
+  return { fit, gridBound, unloggedAbove, thinConflicted, settled };
+}
 /**
  * The share of a point a cell must carry somewhere in a pull before the pull says how much
  * timing it has room for: the pull ran the cell's own row there, not a blend leaning on the row

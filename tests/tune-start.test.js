@@ -46,6 +46,18 @@ describe('when the start is offered', () => {
 });
 
 describe('the safe base map', () => {
+  // A raised limiter on an LR4 read "not clean" with nothing to do: the log's only lean-side
+  // entry was a miss it calls as close as the breakpoints allow, and the pistons past their
+  // rated speed were in neither list. The miss is not unsafe, and the bottom end is a part.
+  it('is clean when all that is left is a miss the breakpoints set, and names an over-revved bottom end as a part', () => {
+    const lr4 = preset('lr4');
+    const st = reducer(lr4, { type: ACTIONS.SET_ENGINE_CONFIG_PATCH, patch: { redline: lr4.build.engineConfig.redline + 500 } });
+    const m = safeBaseMap(st);
+    expect(m.clean).toBe(true);
+    expect(m.left).toEqual([]);
+    expect(m.parts.map((e) => e.type)).toContain('bottomEnd');
+  }, 300_000);
+
   it('runs a naturally aspirated build clean with power left to find', () => {
     const st = boltOns(preset('vq35de-revup'));
     const m = safeBaseMap(st);

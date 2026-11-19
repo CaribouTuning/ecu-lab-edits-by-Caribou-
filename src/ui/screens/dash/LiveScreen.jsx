@@ -123,7 +123,7 @@ export function liveStatus(live, build) {
   if (live.ecu?.knockNow) return `Knock. Your spark table asks for more advance than the engine tolerates at this speed and boost. The ECU is pulling ${(live.ecu.knockRetard ?? 0).toFixed(1)}° to protect it; take timing out of that part of the table.`;
   if ((live.ecu?.knockRetard ?? 0) > 0.5) return `Nothing is knocking now. The ECU is still giving back ${live.ecu.knockRetard.toFixed(1)}° it pulled for knock a moment ago, a little each second.`;
   const hunt = live.running ? idleHunt(live.ecu?.log) : null;
-  if (hunt) return `The idle is hunting: ${hunt.lo.toLocaleString('en-US')}–${hunt.hi.toLocaleString('en-US')} rpm around its ${hunt.target} rpm target. The idle controller is overshooting: on TUNE → IDLE raise Damping (under Advanced settings) and lower the Air gain settings until it settles within a few tens of rpm.`;
+  if (hunt) return `The idle is hunting: ${hunt.lo.toLocaleString('en-US')}–${hunt.hi.toLocaleString('en-US')} rpm around its ${hunt.target} rpm target. The idle controller is overshooting: on TUNE → IDLE raise Damping and lower both Air gain settings until it settles within a few tens of rpm (Damping and the above-target gain are under Advanced settings).`;
   // Read off the warm-up curve the ECU is running, not a fixed temperature: the player can
   // reshape it on TUNE → FUEL.
   const warm = live.ecu?.log?.[live.ecu.log.length - 1]?.warm ?? 0;

@@ -98,7 +98,7 @@ const useWide = () => useMedia('(min-width: 1100px)');
  * @param {number} [props.rpm] the engine's speed when it is running on the stand
  * @param {React.ReactNode} props.children the open part's options
  * @param {(() => void)|null} [props.onTune] SANDBOX: open TUNE to start the tune of the engine just built
- * @param {(() => void)|null} [props.onBaseMap] load a base start-up map for the parts fitted,
+ * @param {(() => void)|null} [props.onBaseMap] load a safe base map for the parts fitted,
  *   offered on a factory engine with parts changed (null: not offered)
  * @param {boolean} [props.full] full screen (the bench's own page) rather than inside a
  *   monitor: the engine turns at the head of the parts list, always in view
@@ -181,8 +181,8 @@ export function BuildBench({ part, onPart, preset, onStock, onRun, derived, rpm 
             {origin === 'stock' && <p><b>Stock {preset.name}.</b> Every part is as the factory built it, and so is the calibration. Change any part to make it your own build of it.</p>}
             {origin === 'modified' && (
               <>
-                <p><b>Modified {preset.name}.</b> Changed from stock: {BENCH_PARTS.filter((p) => changed.has(p.id)).map((p) => p.label).join(', ')}. The calibration is still the factory&apos;s, so log and tune what you changed{onBaseMap ? <>, or load a base start-up map: what a tuner would start from for these parts, safe and conservative, not tuned. It replaces your tables; Undo brings them back</> : null}.</p>
-                {onBaseMap && <button type="button" className={styles.originBtn} onClick={onBaseMap}>Load a base start-up map</button>}
+                <p><b>Modified {preset.name}.</b> Changed from stock: {BENCH_PARTS.filter((p) => changed.has(p.id)).map((p) => p.label).join(', ')}. The calibration is still the factory&apos;s, so log and tune what you changed{onBaseMap ? <>, or load a safe base map: what a tuner would start from for these parts, safe and conservative, not tuned. It replaces your tables; Undo brings them back</> : null}.</p>
+                {onBaseMap && <button type="button" className={styles.originBtn} onClick={onBaseMap}>Load a safe base map</button>}
                 <button type="button" className={styles.originBtn} onClick={() => onStock(preset)}>Return to stock</button>
               </>
             )}

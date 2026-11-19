@@ -180,6 +180,17 @@ describe('fuelReport, no selection', () => {
     expect(r.headline).toBe('2 high-load cells off best power');
   });
 
+  // The pull log calls a miss Correct VE from logs has done all it can for "as close as its
+  // breakpoints allow"; FUEL said "the engine runs leaner than this table asks for" about the
+  // same miss, and a custom I4 was sent round the two for fifteen pulls.
+  it('says a settled miss as the log does, and still leads with one left to fix', () => {
+    const settled = { rpm: 6400, map: 100, afr: 12.8, afrCommanded: 12.4, lean: true, cause: 've', settled: true };
+    const r = fuelReport({ ...fuelAdvice(), missedMix: [settled] }, null);
+    expect(r).toMatchObject({ state: 'table-settled', tone: 'ok', headline: 'As close as these breakpoints allow' });
+    const open = { rpm: 3000, map: 100, afr: 13.4, afrCommanded: 12.6, lean: true, cause: 've' };
+    expect(fuelReport({ ...fuelAdvice(), missedMix: [settled, open] }, null)).toMatchObject({ state: 'table-missed', detail: { worst: open } });
+  });
+
   it('is clean when wrongMix is empty', () => {
     const r = fuelReport(fuelAdvice(), null);
     expect(r.state).toBe('table-clean');

@@ -14,7 +14,15 @@ import { pullInputs } from './pullInputs.js';
 /** Log entries a base map must not leave: the engine is hurt, or about to be. */
 const UNSAFE = new Set(['knock', 'unheardknock', 'knockprot', 'lean', 'leanprot', 'missedmix', 'egtprot']);
 /** Entries a map cannot fix: a part is the limit. The base map names them instead. */
-const PARTS = new Set(['fuel', 'dutyprot', 'rail', 'valve', 'float', 'backpressure', 'underboost', 'boostctl', 'pressure', 'bearing', 'cam', 'iatprot']);
+const PARTS = new Set(['fuel', 'dutyprot', 'rail', 'valve', 'float', 'backpressure', 'underboost', 'boostctl', 'pressure', 'bearing', 'bottomEnd', 'cam', 'iatprot']);
+/**
+ * An entry that leaves the map unsafe. A miss the pull log calls as close as the breakpoints
+ * allow (`gridBound`: Correct VE from logs has nothing left there) is not one: the log says
+ * so itself, and counting it left a raised-limiter LR4's base map "not clean" with nothing a
+ * player could do about it.
+ * @param {{type: string, gridBound?: boolean}} e
+ */
+const unsafe = (e) => UNSAFE.has(e.type) && !e.gridBound;
 /** Spark taken past what the advisor asks for in a cell that knocked: a tuner's margin. */
 export const SAFE_KNOCK_MARGIN_DEG = 2;
 /** Mixture a lean cell is set richer than the advisor's target by, AFR. */
@@ -243,7 +251,7 @@ function stillUnsafe(p) {
 
 /** Whether a pull is safe to make again: no knock, and no lean the map could have fixed. */
 const isClean = (p) => !p.points.some((q) => realKnock(q) > KNOCK_SEEN_DEG)
-  && !p.events.some((e) => UNSAFE.has(e.type) && !(e.type !== 'knock' && p.points.some((q) => q.fuelLimited)));
+  && !p.events.some((e) => unsafe(e) && !(e.type !== 'knock' && p.points.some((q) => q.fuelLimited)));
 
 /** How far off target the VE must read before a correction is made, as a share. */
 const VE_SETTLED = 0.02;
@@ -419,7 +427,7 @@ export function safeBaseMap(state) {
   // Clean means the log shows no knock and no lean at all. A lean the injectors or the pump
   // cannot answer is not the map's to fix (the check stops there), but the card must not
   // call it safe: it says so and names the part.
-  const clean = isClean(p) && !p.events.some((e) => UNSAFE.has(e.type));
+  const clean = isClean(p) && !p.events.some(unsafe);
   const entry = (e) => ({ type: e.type, msg: String(e.msg), fix: String(e.fix ?? '') });
   return {
     action: { ...base, ecuInjectorCc: fittedCc, ve: st.tune.ve, timing: st.tune.timing, afr: st.tune.afr, ecu: st.tune.ecu },
@@ -428,7 +436,7 @@ export function safeBaseMap(state) {
     steps,
     cleanAt,
     clean,
-    left: p.events.filter((e) => UNSAFE.has(e.type)).map(entry),
+    left: p.events.filter(unsafe).map(entry),
     parts: p.events.filter((e) => PARTS.has(e.type)).map(entry),
     samples: p.points.map((q) => ({ rpm: q.rpm, map: q.map, airCharge: q.airCharge ?? 0 })),
   };

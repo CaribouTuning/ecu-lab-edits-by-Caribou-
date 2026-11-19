@@ -116,7 +116,7 @@ export function VeLogCorrection({ corr, pullCount, liveCount, pullInfo, mafPct, 
             <Button size="sm" variant="ghost" onClick={() => onApply(1)} disabled={inSync}>Apply all</Button>
           </div>
           <div className={styles.hint}>
-            <Info label="How to apply a VE correction" text="Tuners apply about half, log again and repeat until every cell is within 1–2%. Only cells with data change; applying also resets the fuel trims, which had been covering the same error. A pull is used only while it matches the tune on screen.">
+            <Info label="How to apply a VE correction" text={`Tuners apply about half, log again and repeat until every cell is within ${VE_LOG_GOOD_PCT}%, where the pull log stops pointing at it. Only cells with data change; applying also resets the fuel trims, which had been covering the same error. A pull is used only while it matches the tune on screen.`}>
               <span>Apply half, log again, repeat</span>
             </Info>
           </div>

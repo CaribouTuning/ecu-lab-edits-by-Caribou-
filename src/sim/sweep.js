@@ -16,7 +16,7 @@ import { solveInduction } from './turbo.js';
 import { chargeTempK, INDUCTION_REF_EXHAUST_K } from './thermo.js';
 import { evaluatePoint } from './point.js';
 import {
-  IN_FORCE_WEIGHT, KNOCK_SAFETY_DEG, cellsInForce, missedMixCause, missesTarget,
+  IN_FORCE_WEIGHT, KNOCK_SAFETY_DEG, cellsInForce, missedMixCause, missesTarget, veSettledFor,
   afrTargetVerdict, pullCellLimits, pullSparkCells, pullTableCells, reachKpaAt, sparkForLimit,
 } from './advisors.js';
 import { bestPowerAfr } from './manifold.js';
@@ -28,7 +28,6 @@ import { ecuSweepEvents } from './ecu/ecuEvents.js';
 import { ECU_COEFF } from './ecu/ecuCoefficients.js';
 import { ecuDemandPoint, ecuSteadyPoint } from './ecu/strategy.js';
 import { N2O_AIR_EQUIV, stepBottle, wetKitFuelKgS } from './nitrous.js';
-import { veCorrections, veSamplesFromPull } from './veLearn.js';
 
 /** Exhaust over intake pressure past which a turbo engine's turbine is logged as choking it. */
 const BACKPRESSURE_RATIO_LIMIT = 1.8;
@@ -460,23 +459,19 @@ export function simulateSweep({
   // what is left is the engine's VE bending between breakpoints faster than the straight line
   // the ECU reads between them.
   const veAxes = layout?.ve ?? { rpm: RPM, load: LOAD, loadUnit: 'kPa' };
-  const veFit = veAxes.loadUnit === 'kPa' ? veCorrections(veSamplesFromPull(points), veAxes) : null;
-  const gridBound = (p) => {
-    if (!veFit) return false;
-    const cells = cellsInForce(p.rpm, p.ecuLoad ?? p.sensedMap ?? p.map, veAxes).filter((c) => c.w >= IN_FORCE_WEIGHT);
-    return cells.length > 0 && cells.every(({ ri, ci }) => {
-      const r = veFit.ratio[ri]?.[ci];
-      return r != null && Math.abs(r - 1) * 100 < MIXTURE_TOLERANCE_PCT / 2;
-    });
-  };
+  // One reading with FUEL's advisor (`veSettledFor`), so the two never disagree.
+  const veDone = veSettledFor(points, veAxes, endRpm, (p) => !spraying(p));
+  const veFit = veDone.fit;
   // Cells the pull crossed too briefly for Correct VE from logs to trust (a boost rise climbs
   // through a row in one or two speeds): it leaves them as they are, so the log must not send
   // the player back to it for them.
+  // A thin cell that misses either side pull opposite ways is left out: no hand edit of it helps.
+  const cellName = ({ ri, ci }) => `the ${Math.round(veAxes.load[ri])} kPa cell at ${veAxes.rpm[ci]} RPM`;
   const thinCells = (p) => {
     if (!veFit) return [];
     const cells = cellsInForce(p.rpm, p.ecuLoad ?? p.sensedMap ?? p.map, veAxes).filter((c) => c.w >= IN_FORCE_WEIGHT);
-    return cells.filter(({ ri, ci }) => veFit.ratio[ri]?.[ci] == null)
-      .map(({ ri, ci }) => `the ${Math.round(veAxes.load[ri])} kPa cell at ${veAxes.rpm[ci]} RPM`);
+    const both = new Set(veDone.thinConflicted(p).map((c) => `${c.ri}|${c.ci}`));
+    return cells.filter(({ ri, ci }) => veFit.ratio[ri]?.[ci] == null && !both.has(`${ri}|${ci}`)).map(cellName);
   };
   const deliveryFix = (peak, run, deliveryLean) => {
     const lean = deliveryLean > 0;
@@ -498,9 +493,15 @@ export function simulateSweep({
         // one, the column above is not what it reads.
         const share = above != null && at != null ? (peak.rpm - at) / (above - at) : 0;
         const unlogged = above != null && above > endRpm && share >= IN_FORCE_WEIGHT;
-        if (!unlogged && gridBound(peak)) {
+        // Settled: Correct VE from logs has nothing left, and no hand edit of a column past the
+        // redline helps (the misses read through it pull it both ways).
+        if (veDone.settled(peak)) {
           const below = at;
-          return `The VE table already matches this pull as closely as its breakpoints allow: Correct VE from logs finds less than ${MIXTURE_TOLERANCE_PCT / 2}% to change in any cell around ${peak.rpm} RPM. This engine's air flow bends ${below != null && above != null ? `between the ${below} and ${above} RPM columns` : 'here'} faster than the straight line the ECU reads between them, so the speeds between miss (${pct}% ${lean ? 'lean' : 'rich'} at ${peak.rpm} RPM), and moving a cell by hand only moves the miss to the speed beside it. ${layout?.id === 'engine' ? 'These are already the Sized 16 × 16 breakpoints, the finest this ECU offers: this is as close as they go, within what a tuner accepts at full throttle, and it costs the score next to nothing.' : 'On TUNE, set the Table layout to Sized, 16 × 16, whose breakpoints sit closer together, then use Correct VE from logs again. A CAREER shop\'s tables keep their breakpoints: there this is as close as they go, and a job does not count it against you.'}`;
+          const both = veDone.thinConflicted(peak);
+          if (both.length) {
+            return `Correct VE from logs has done what this pull can around ${peak.rpm} RPM. ${both.length === 1 ? 'One cell the engine reads here' : 'The cells the engine reads here that it could not fit'} (${both.map(cellName).join(' and ')}) ${both.length === 1 ? 'was' : 'were'} crossed too briefly to fit, and the misses either side pull ${both.length === 1 ? 'it' : 'them'} opposite ways (lean one side, rich the other), so a hand edit only trades one miss for the other. What is left (${pct}% ${lean ? 'lean' : 'rich'} at ${peak.rpm} RPM) is inside what a tuner accepts at full throttle and costs the score next to nothing. To take it further, log ${both.length === 1 ? 'that cell' : 'those cells'} on LIVE, holding the engine at that speed and load, and use Correct VE from logs again.`;
+          }
+          return `The VE table already matches this pull as closely as its breakpoints allow: Correct VE from logs finds less than ${MIXTURE_TOLERANCE_PCT / 2}% to change in any cell around ${peak.rpm} RPM. This engine's air flow bends ${below != null && above != null && below !== peak.rpm ? `between the ${below} and ${above} RPM columns` : `around the ${below ?? peak.rpm} RPM column`} faster than the straight lines the ECU reads between its breakpoints, so the speeds between miss (${pct}% ${lean ? 'lean' : 'rich'} at ${peak.rpm} RPM), and moving a cell by hand only moves the miss to the speed beside it. ${layout?.id === 'engine' ? 'These are already the Sized 16 × 16 breakpoints, the finest this ECU offers: this is as close as they go, within what a tuner accepts at full throttle, and it costs the score next to nothing.' : 'On TUNE, set the Table layout to Sized, 16 × 16, whose breakpoints sit closer together, then use Correct VE from logs again. A CAREER shop\'s tables keep their breakpoints: there this is as close as they go, and a job does not count it against you.'}`;
         }
         const thin = unlogged ? [] : thinCells(peak);
         // The column past the redline carries only `share` of the blend at this speed, so it
@@ -675,7 +676,7 @@ export function simulateSweep({
       const peak = run.reduce((a, b) => (Math.abs(b.afr - b.afrCommanded) > Math.abs(a.afr - a.afrCommanded) ? b : a));
       const miss = peak.afr - peak.afrCommanded;
       // Grid-bound: as well tuned as these breakpoints can be, so it costs the score little.
-      const grid = gridBound(peak);
+      const grid = veDone.settled(peak);
       events.push({
         type: 'missedmix', severity: Math.abs(miss / peak.afrCommanded) > 0.06 ? 2 : 1,
         impact: grid ? 1 : Math.max(2, Math.round((Math.abs(miss / peak.afrCommanded) > 0.06 ? 8 : 4) * (0.3 + 0.7 * rangeFrac(run)))),

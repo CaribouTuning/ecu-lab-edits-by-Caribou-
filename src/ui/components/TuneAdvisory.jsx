@@ -17,6 +17,7 @@ import React from 'react';
 
 import { KNOCK_SAFETY_DEG } from '../../sim/index.js';
 
+import { VE_LOG_GOOD_PCT } from './advisorReports.js';
 import styles from './TuneAdvisory.module.css';
 
 /** @typedef {import('./advisorReports.js').AdvisorReport} AdvisorReport */
@@ -279,6 +280,15 @@ function AfrAdvisory({ report }) {
         </div>
       );
     }
+    case 'table-settled': {
+      const w = detail.worst;
+      const pct = Math.round(Math.abs(w.afr / w.afrCommanded - 1) * 100);
+      return (
+        <div className={`${styles.prose} ${styles.ok}`}>
+          The AFR table sits on best power for this hardware. Between {detail.from.toLocaleString('en-US')} and {detail.to.toLocaleString('en-US')} RPM the engine still misses it by up to {pct}% ({w.afr.toFixed(1)}:1 against {w.afrCommanded.toFixed(1)}:1 at {w.rpm.toLocaleString('en-US')} RPM), and Correct VE from logs has done all these breakpoints and this pull can there: the pull log says so too. It is inside what a tuner accepts at full throttle.
+        </div>
+      );
+    }
     case 'table-clean':
       return <div className={`${styles.prose} ${styles.ok}`}>AFR table sits on best power at every high-load cell for this hardware, and the engine gets what it asks for.</div>;
 
@@ -400,7 +410,7 @@ function VeAdvisory({ report }) {
           <div className={styles.acceptNote}>
             {state === 'log-sync'
               ? 'Within what a wideband and fuel trims can resolve. Nothing to correct here.'
-              : 'Apply half with CORRECT VE FROM LOGS under the table, log again, and repeat until every cell you use is within 1–2%.'}
+              : `Apply half with Correct VE from logs under the table, log again, and repeat until every cell you use is within ${VE_LOG_GOOD_PCT}%, where the pull log stops pointing here.`}
           </div>
         </>
       );

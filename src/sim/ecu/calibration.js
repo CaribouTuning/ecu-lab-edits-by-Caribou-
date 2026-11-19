@@ -483,7 +483,7 @@ export const ECU_META = [
     options: [{ id: 'closed', label: 'Closed loop (target + PI)' }, { id: 'open', label: 'Open loop (duty table only)' }],
     help: 'Open loop, the wastegate gets the duty in the table and boost is whatever that holds. Closed loop, the ECU compares boost to target and corrects the duty.' },
   { path: 'boost.throttleScale', section: 'boost', group: 'Target', label: 'Target by throttle', kind: 'curve', unit: '%', xLabel: 'Throttle %', min: 0, max: 100, step: 1,
-    help: 'How much of the BUILD boost target is requested at each throttle opening.' },
+    help: 'How much of the Boost target curve (at the top of this page) is requested at each throttle opening.' },
   { path: 'boost.gearLimit', section: 'boost', group: 'Target', label: 'Boost limit by gear', kind: 'curve', unit: 'psi', xLabel: 'Gear', min: 0, max: 40, step: 0.5, decimals: 1,
     help: 'Most boost allowed in each gear. First and second are traction-limited: torque the tyre cannot use is just wheelspin. The dyno pulls in 4th.' },
   { path: 'boost.iatComp', section: 'boost', group: 'Target', label: 'Intake temperature compensation', kind: 'curve', unit: 'psi', xLabel: 'IAT °C', min: -15, max: 5, step: 0.5, decimals: 1,

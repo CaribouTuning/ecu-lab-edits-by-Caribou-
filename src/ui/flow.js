@@ -73,7 +73,7 @@ export function nextStep(f) {
   }
 
   if (f.engineMissing) return { id: 'choose', text: 'No engine yet. Choose one on the build bench, or build your own.', label: 'Build bench', go: 'build' };
-  if (f.startTune && !f.fresh) return { id: 'start-tune', text: 'New build: start its tune. Load a safe base map, build one with the guide, or tune from the advice.', label: 'Start the tune', go: 'tune:airflow' };
+  if (f.startTune && !f.fresh) return { id: 'start-tune', text: 'New build: start its tune. Load a safe base map, build it with the guide, or tune it yourself.', label: 'Start the tune', go: 'tune:airflow' };
   // Following the guide: its step is the step, until it reaches the pulls the log then leads.
   if (f.guide?.checkable) {
     const g = f.guide;

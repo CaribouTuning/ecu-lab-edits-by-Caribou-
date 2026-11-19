@@ -228,7 +228,11 @@ function fuelReportOf(calAdvice, selection) {
   // because, unlike the old banner, it always renders something.
   // The engine missing what the table asks for comes first: until the fuelling delivers the
   // table, no cell of it can be judged by what the engine got (the pull log says the same).
-  const missed = calAdvice.missedMix ?? [];
+  const allMissed = calAdvice.missedMix ?? [];
+  // Misses Correct VE from logs has done all it can for are said as the log says them, after
+  // anything still to fix.
+  const missed = allMissed.filter((m) => !m.settled);
+  const settled = allMissed.filter((m) => m.settled);
   if (missed.length > 0) {
     const worst = missed.reduce((a, b) => (Math.abs(b.afr - b.afrCommanded) > Math.abs(a.afr - a.afrCommanded) ? b : a));
     return {
@@ -236,6 +240,15 @@ function fuelReportOf(calAdvice, selection) {
       headline: `The engine runs ${worst.lean ? 'leaner' : 'richer'} than this table asks for`,
       state: 'table-missed',
       detail: { worst, from: missed[0].rpm, to: missed[missed.length - 1].rpm, alsoOff: wrongMix.length },
+    };
+  }
+  if (wrongMix.length === 0 && settled.length > 0) {
+    const worst = settled.reduce((a, b) => (Math.abs(b.afr - b.afrCommanded) > Math.abs(a.afr - a.afrCommanded) ? b : a));
+    return {
+      tone: 'ok',
+      headline: 'As close as these breakpoints allow',
+      state: 'table-settled',
+      detail: { worst, from: settled[0].rpm, to: settled[settled.length - 1].rpm },
     };
   }
   if (wrongMix.length > 0) {
