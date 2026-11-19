@@ -17,7 +17,7 @@ import { buildName } from '../../state/baseMap.js';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
 import { downloadCsv, dynoSheetFilename, sweepToCsv } from '../../components/dynoCsv.js';
 import { eventBands } from '../../components/eventBands.js';
-import { initialScrubRpm, pointAt, pointGauges } from '../../components/scrubPoint.js';
+import { busiestBank, initialScrubRpm, pointAt, pointGauges } from '../../components/scrubPoint.js';
 import { useUnits } from '../../units.js';
 import { CorrectionStack } from '../../components/ecu/CorrectionStack.jsx';
 import { Button } from '../../primitives/Button.jsx';
@@ -110,6 +110,9 @@ export function DataScreen() {
   );
   const shown = pointAt(result.points, scrubRpm) ?? result.points[0];
   const gauges = pointGauges(shown);
+  // Either injector bank can be the one at its limit (a staged port kit has its own duty
+  // and pulse width), and the sentence below quotes the pulse width of the bank it names.
+  const busiest = busiestBank(shown);
 
   // Three of the eight gauges above carry their verdict ONLY through
   // StatTile's `.danger .value { color: var(--danger) }` — colour with no text
@@ -119,9 +122,9 @@ export function DataScreen() {
   // technology. Wording and thresholds are carried over verbatim from the old
   // Injectors/Heat/Pressure rows (`git show 07288c2` has them).
   const riskNotes = [
-    utilisationTone(shown.duty) === 'danger' && {
+    utilisationTone(busiest.duty) === 'danger' && {
       key: 'injectors',
-      text: `Injectors at the limit — ${shown.pw} ms of the ${(120000 / shown.rpm).toFixed(1)} ms available.`,
+      text: `${busiest.port ? 'Port injectors' : 'Injectors'} at the limit — ${busiest.pw} ms of the ${(120000 / shown.rpm).toFixed(1)} ms available.`,
     },
     shown.egtRisk && {
       key: 'heat',
@@ -138,7 +141,7 @@ export function DataScreen() {
   // readout's border, and they have always been different numbers. Swapping one for the
   // other here would change when the panel goes amber, which is a behaviour change
   // nobody asked for hiding inside a refactor.
-  const warn = !bad && (shown.duty > 85 || shown.egtRisk);
+  const warn = !bad && (busiest.duty > 85 || shown.egtRisk);
   const tone = bad ? 'danger' : warn ? 'warn' : 'ok';
 
   // From the DATA, never from SWEEP_START_RPM/SWEEP_END_RPM: a low-redline build makes

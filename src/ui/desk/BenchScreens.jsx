@@ -9,6 +9,7 @@ import React from 'react';
 import { KELVIN_OFFSET, R_AIR, airDensityKgM3, measuredVePct } from '../../sim/index.js';
 import { useBuild, useSession } from '../state/StoreProvider.jsx';
 import { liveStatus } from '../screens/dash/LiveScreen.jsx';
+import { busiestBank } from '../components/scrubPoint.js';
 
 import styles from './BenchScreens.module.css';
 import { fixed as f } from '../format.js';
@@ -83,7 +84,9 @@ export function LiveBars({ fullScaleRpm, redline }) {
   const off = !live.running && !live.cranking;
   const lam = off ? NaN : live.sensedLambda;
   const timing = live.live ? Number(live.live.timing) : NaN;
-  const duty = live.live ? Number(live.live.duty) : NaN;
+  // The busier bank: a staged port kit has its own duty, and can be at its limit while the
+  // direct injectors are not.
+  const duty = live.live ? Number(busiestBank(live.live).duty) : NaN;
   /** @type {Meter[]} */
   const meters = [
     { label: 'MAP', value: f(live.sensedMap, 0), unit: ' kPa', pct: live.sensedMap / 250 },

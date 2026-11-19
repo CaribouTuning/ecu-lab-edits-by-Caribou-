@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 
 import {
-  COMPRESSOR_OPTS, FUEL_CHOICES, SWEEP_START_RPM, compressorWithCount, EXHAUST_DIA_OPTS, INJECTOR_OPTS, TURBINE_OPTS, acousticDrive, blowerCurve, blowerOf, blowerSpeedRpm, calibrationAdvice, clamp, computeEngineerScore, computePullScore, computeTuningScore, applyPreset, cellsNotRunBy, stockCalibrationFor, deriveEngine, dutyPreviewRpm, evoAtdcDeg, exhaustGeometry, idealExhaustDiameter, exhaustPowerCost, injectorDutyPreview, isLocatable, layoutById, presetById, simulateSweep, turbineWithCount, failedPart, FAILURE_MODES, veRecommendations, alphaNFillAt, defaultEcuCalibration, dynoConditions, ecuHardwareOf, tankFuel, veTruthByPhaseFor, applyVeCorrections, intakeCamAt, scheduledVeAt, veCorrections, veSamplesFromLive, veSamplesFromPull, injectorLabel, stockInjectorIdx,
+  COMPRESSOR_OPTS, FUEL_CHOICES, SWEEP_START_RPM, compressorWithCount, EXHAUST_DIA_OPTS, INJECTOR_OPTS, TURBINE_OPTS, acousticDrive, blowerCurve, blowerOf, blowerSpeedRpm, calibrationAdvice, clamp, computeEngineerScore, computePullScore, computeTuningScore, applyPreset, cellsNotRunBy, stockCalibrationFor, deriveEngine, dutyPreviewRpm, evoAtdcDeg, exhaustGeometry, idealExhaustDiameter, exhaustPowerCost, injectorDutyPreview, isLocatable, layoutById, presetById, simulateSweep, turbineWithCount, failedPart, FAILURE_MODES, veRecommendations, alphaNFillAt, defaultEcuCalibration, dynoConditions, ecuHardwareOf, tankFuel, veTruthByPhaseFor, applyVeCorrections, intakeCamAt, portShareAt, scheduledVeAt, veCorrections, veSamplesFromLive, veSamplesFromPull, injectorLabel, stockInjectorIdx,
 } from '../sim/index.js';
 import {
   beepEngineAudio, createEngineAudio, setEngineAudioActive,
@@ -480,13 +480,19 @@ export function EcuLabApp({ startWith = null, startShown = false } = {}) {
   const advisorPull = advisorPullMemo.value ?? NO_PULL;
   // Judged on the tables' own breakpoints, at the cam phase the VVT calibration holds.
   const camAt = useMemo(() => intakeCamAt(engineConfig, vvtCal), [engineConfig, vvtCal]);
+  // A port kit's share of the fuel, from the calibration the advisor's pull runs, so the
+  // advisor grades the charge cooling and filling the kit really leaves the engine.
+  const kitShareAt = useMemo(
+    () => (ecuHw.portKit ? (rpm, kpa) => portShareAt(tune.ecu, rpm, kpa) : null),
+    [ecuHw.portKit, tune.ecu],
+  );
   const calAdviceMemo = useWhenWanted(advisorWanted, () => calibrationAdvice({
     ve: deferredTables.ve, veTruth, timing: deferredTables.timing, afr: deferredTables.afr, layout: deferredTables.layout,
     derived: engineDerived, octaneBonus, fuel, mods, turboOn, boostCurve,
     compressor, turbine, camAt, exhaustDia: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia,
-    injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, pull: advisorPullMemo.now(), health: advisorHealth,
+    injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, pull: advisorPullMemo.now(), health: advisorHealth, portShareAt: kitShareAt,
   }), [deferredTables, veTruth, engineDerived, octaneBonus, fuel, mods, turboOn, boostCurve,
-       compressor, turbine, camAt, exhaustDiaIdx, injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, advisorPull, advisorHealth]);
+       compressor, turbine, camAt, exhaustDiaIdx, injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, advisorPull, advisorHealth, kitShareAt]);
   const calAdvice = calAdviceMemo.value ?? NO_ADVICE;
 
   const veAdvice = useMemo(
