@@ -100,11 +100,14 @@ function loadFirstPreset() {
 describe('moving the boost-curve cursor', () => {
   it('does not stop the header claiming the factory preset', () => {
     launch();
-    const preset = loadFirstPreset();
+    // A factory turbo engine, whose boost target TUNE → BOOST edits without changing its parts.
+    const picker = presetPicker();
+    fireEvent.change(picker, { target: { value: 'n54' } });
+    const preset = headerEngineName();
     // Guard the setup rather than trusting it: if loading the preset silently failed,
     // presetId would be null before the click and the assertion below would pass for
     // the wrong reason.
-    expect(preset).not.toMatch(/^\d\.\dL /);
+    expect(preset).toMatch(/N54/);
 
     // The boost target is set on TUNE → BOOST.
     goTo('TUNE');
