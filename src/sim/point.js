@@ -415,7 +415,7 @@ export function evaluatePoint({
   // What only exists once the ECU is modelled. Kept out of the base record entirely when
   // it is not, so an ECU-less evaluation is the same record it always was, field for field.
   const ecuFields = E ? {
-    sensedMap: Number((E.sensedMapKpa ?? mapKpa).toFixed(0)),
+    sensedMap: Number((E.sensedMapKpa ?? mapKpa).toFixed(1)),
     ...(E.ecuLoadKpa != null ? { ecuLoad: Number(E.ecuLoadKpa.toFixed(1)) } : {}),
     sensedIat: Number(((E.sensedIatK ?? chargeK) - KELVIN_OFFSET).toFixed(0)),
     fuelMass: Number((deliveredFuelG * 1000).toFixed(2)),

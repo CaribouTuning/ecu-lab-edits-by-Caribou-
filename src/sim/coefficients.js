@@ -670,6 +670,23 @@ export const COEFF = {
   // the same rule of thumb, about a degree per psi. Only the split rides on it: the blend at the
   // point that knocked is held to the measured limit whatever this is.
   KNOCK_LIMIT_DEG_PER_PSI: 0.9,
+  // How far above the highest pressure a full-throttle pull measured at a speed TUNE carries that
+  // measured limit up at KNOCK_LIMIT_DEG_PER_PSI, kPa, instead of the static model's estimate:
+  // about one load row of a factory turbo table (15 kPa) plus one more boost step. Just above
+  // the measured point the static model extrapolates the turbo off its own state and ran 8°
+  // under the pull once the spool got there (an EA888 at 4 psi more boost, 220 kPa at
+  // 1,450 RPM: -4.4° modelled, 4.2° measured); further up it is the better estimate.
+  KNOCK_CARRY_MAX_KPA: 25,
+  // Correct VE from logs (veLearn.js). A sample shares itself among the four cells around it
+  // and counts in a cell from this share of it: the share TUNE calls a cell "in force" at a point
+  // (advisors.js IN_FORCE_WEIGHT), so the fit and the log mean the same cells.
+  VE_FIT_MIN_SHARE: 0.15,
+  // And a cell is corrected once its samples' weight passes this: a fifth of one sample sitting
+  // right on it. A pull that crosses a cell only briefly, between breakpoints, still says what
+  // the cell needs; at two samples those cells were left as they were, and the pull log asked
+  // for them by hand pull after pull on custom engines whose full-throttle line ran between two
+  // load rows.
+  VE_FIT_MIN_CELL_WEIGHT: 0.2,
   // Idle spark reserve. A production calibration holds spark in the idle columns below best
   // power, so idle control has torque to add by advancing it, and does not run the column's
   // lighter cells (overrun, coming off idle) at the 40-50 degrees MBT asks there. GM's Gen III
@@ -806,6 +823,11 @@ export const COEFF = {
   CAM_OVERLAP_PER_DEG: 0.55,   // overlap degrees gained per degree of duration
   FLOAT_BASE_RPM: 7950,        // float speed at stock cam and stock springs
   FLOAT_PER_SPRING_RATE: 58,
+  // How far past the limiter a builder's valve springs hold the valves on the cam, rpm: the
+  // margin a spring is sized to (presets.js for a builder's engine, the pull log's valve-float
+  // fix). Valve-train builders size springs for float a few hundred rpm over the rev limit, so
+  // a limiter overshoot or a missed shift does not float them.
+  SPRING_MARGIN_RPM: 500,
   FLOAT_PER_CAM_DEG: 14,
   FLOAT_COLLAPSE_RPM: 1100,    // RPM band over which filling collapses past float
   FLOAT_COLLAPSE_FLOOR: 0.30,

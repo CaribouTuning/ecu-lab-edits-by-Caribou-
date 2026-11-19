@@ -53,7 +53,7 @@
   background: var(--panel3);
   color: var(--ink2);
 }
-.row[data-option='base'] .rowIcon { background: var(--acc); color: var(--acc-on); }
+.row[data-option='base'] .rowIcon { background: var(--acc-fill); color: var(--acc-on); }
 .rowBody { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .rowName { font-size: var(--fs-sm); font-weight: 600; }
 .rowText { font-size: var(--fs-xs); line-height: 1.4; color: var(--ink2); }

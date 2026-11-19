@@ -78,7 +78,7 @@
   font-size: var(--fs-sm);
   font-weight: 700;
   color: var(--acc-on);
-  background: var(--acc);
+  background: var(--acc-fill);
   border: none;
   border-radius: var(--r-sm);
   padding: 6px 12px;

@@ -65,7 +65,7 @@
 .steps { display: flex; justify-content: space-between; gap: 10px; padding: 10px 16px 14px; border-top: 1px solid var(--line); margin-top: auto; }
 .stepBtn, .stepGo { height: 30px; padding: 0 12px; border-radius: 6px; font: inherit; font-size: 13px; font-weight: 600; white-space: nowrap; cursor: pointer; }
 .stepBtn { border: 1px solid var(--line-hi); background: var(--panel2); color: var(--ink); }
-.stepGo { margin-left: auto; border: 1px solid var(--acc); background: var(--acc); color: var(--acc-on); }
+.stepGo { margin-left: auto; border: 1px solid var(--acc-fill); background: var(--acc-fill); color: var(--acc-on); }
 .stepBtn:focus-visible, .stepGo:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
 /* Full screen (the bench's own page): the panes framed as one window, the engine turning at
@@ -111,7 +111,8 @@
   .railOf { font-size: 11px; font-weight: 500; color: var(--ink2); }
   .railName { grid-area: name; font-size: 14px; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .railChevron { grid-area: chev; color: var(--ink2); }
-  .ticks { grid-area: ticks; display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px; }
+  /* One column per part, however many there are (seven: six columns wrapped the last tick). */
+  .ticks { grid-area: ticks; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 3px; }
   .ticks i { display: block; height: 3px; background: var(--line-hi); }
   .ticks i[data-state='done'] { background: var(--ink2); }
   .ticks i[data-state='now'] { background: var(--ink); }

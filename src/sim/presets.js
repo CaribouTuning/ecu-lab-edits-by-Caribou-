@@ -32,9 +32,9 @@ import { mafErrorFactor } from './sweep.js';
 import { chargeHeatEff, chargeTempK, exhaustTempK } from './thermo.js';
 import { defaultEcuCalibration, portShareAt } from './ecu/calibration.js';
 import { DEFAULT_ECU_HW, factoryIntakeSchedule, intakeCamAt, portKitOf, scheduledVeAt, tankFuel } from './ecu/context.js';
-import { deriveEngine, valveFloatRpm } from './engine.js';
+import { deriveEngine, springRateFor } from './engine.js';
 import { BOTTOM_END_OPTS, DEFAULT_BOTTOM_END } from './bottomEnd.js';
-import { clamp, curveAt, interp1 } from './math.js';
+import { clamp, curveAt, interp1, solveIncreasing } from './math.js';
 import { portKitBlend } from './point.js';
 import { inductionAtFullThrottle, inductionAtMap } from './turbo.js';
 import { compressorMap } from './compressorMap.js';
@@ -855,12 +855,7 @@ export function factoryCalibration(preset, layout = null, opts = {}) {
   const kpaOf = (axes, rpm, v) => {
     if (axes.loadUnit === 'kPa') return v;
     const g = axes.loadUnit === 'mg/cyl' ? v / 1000 : v;
-    let lo = 5; let hi = 600;
-    for (let i = 0; i < 40; i += 1) {
-      const mid = (lo + hi) / 2;
-      if (airAt(rpm, mid) < g) lo = mid; else hi = mid;
-    }
-    return (lo + hi) / 2;
+    return solveIncreasing((kpa) => airAt(rpm, kpa), g, 5, 600);
   };
   const loadOf = (axes, rpm, kpa) => (axes.loadUnit === 'kPa' ? kpa : airAt(rpm, kpa) * (axes.loadUnit === 'mg/cyl' ? 1000 : 1));
   const grid = (axes, f) => axes.load.map((v) => axes.rpm.map((rpm) => f(rpm, kpaOf(axes, rpm, v))));
@@ -1187,21 +1182,6 @@ export const CUSTOM_ENGINE_LIMITS = Object.freeze({
 /** How much longer than the intake lobe a builder's exhaust lobe is taken to be when not given, degrees. */
 const EXHAUST_LOBE_LONGER_DEG = 8;
 
-/** How far past the limiter a builder's valve springs hold the valves on the cam, RPM. */
-const SPRING_MARGIN_RPM = 500;
-
-/**
- * The spring rate that floats the valves SPRING_MARGIN_RPM past a redline with this cam
- * (the inverse of `valveFloatRpm`), never below the stock 50.
- *
- * @param {number} redline
- * @param {number} camDuration
- * @returns {number}
- */
-export function springRateFor(redline, camDuration) {
-  const needed = 50 + (redline + SPRING_MARGIN_RPM - valveFloatRpm(50, camDuration)) / COEFF.FLOAT_PER_SPRING_RATE;
-  return Math.max(50, Math.ceil(needed));
-}
 
 /** The most a player's own engine's injectors are sized to be open at full throttle (85 %, the usual rule). */
 const INJECTOR_SIZING_MAX_DUTY = 0.85;
@@ -1282,7 +1262,7 @@ export function validateCustomEngine(spec) {
       headMaterial: /** @type {'Cast Iron'|'Aluminum'} */ (material(spec.headMaterial)),
       injection: spec.injection === 'direct' ? 'direct' : 'port',
       // Valve springs specified for the redline, as a builder specifies them: stiff enough
-      // to keep the valves on the cam SPRING_MARGIN_RPM past the limiter, never softer than
+      // to keep the valves on the cam COEFF.SPRING_MARGIN_RPM past the limiter, never softer than
       // the stock rate. A 9000-RPM engine on stock springs floats its valves at 8000, which
       // no one who chose that redline would build.
       camDuration, exhaustCamDuration,

@@ -1,7 +1,7 @@
 /** The simulator off the drawing thread. */
 
 import {
-  applyPreset, breathingSnapshot, calibrationAdvice, intakeCamAt, presetById, simulateSweep,
+  applyPreset, breathingSnapshot, calibrationAdvice, intakeCamAt, presetById, seedBreathing, simulateSweep,
 } from '../../sim/index.js';
 import { pullInputs } from '../state/pullInputs.js';
 import { safeBaseMap } from '../state/safeBaseMap.js';
@@ -15,8 +15,13 @@ function changedSince(before) {
 
 /** @param {{task: string, payload: any}} msg */
 function run({ task, payload }) {
-  if (task === 'preset') applyPreset(presetById(payload.id), payload.layout ?? null);
-  else if (task === 'advice') {
+  // Breathing another thread solved, or this device solved in an earlier session: the numbers
+  // this thread would compute, taken in so it does not compute them again.
+  if (task === 'seed') { seedBreathing(payload.snap, { verify: !!payload.verify }); return null; }
+  // The preset itself goes back too: the page puts it on the bench as it is, rather than
+  // working its calibration out a second time on the drawing thread.
+  if (task === 'preset') return applyPreset(presetById(payload.id), payload.layout ?? null);
+  if (task === 'advice') {
     const st = payload.state;
     const { args, veTruth, mafErrorBase } = pullInputs({ ...st, session: { ...st.session, loadKpa: 100 } });
     const pull = simulateSweep(args);
@@ -42,8 +47,8 @@ scope.onmessage = (e) => {
   const { id } = e.data;
   try {
     const before = new Map(breathingSnapshot().grids.map(([k, n]) => [k, n.length]));
-    run(e.data);
-    scope.postMessage({ id, ok: true, snap: changedSince(before) });
+    const result = run(e.data);
+    scope.postMessage({ id, ok: true, snap: changedSince(before), result: result ?? null });
   } catch (err) {
     scope.postMessage({ id, ok: false, error: String(/** @type {any} */ (err)?.message ?? err) });
   }

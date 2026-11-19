@@ -69,7 +69,7 @@
 .tab:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
 .count {
   min-width: 18px; padding: 1px 5px; border-radius: 9px;
-  background: var(--acc); color: var(--acc-on);
+  background: var(--acc-fill); color: var(--acc-on);
   font-size: var(--fs-micro); font-weight: 700; font-variant-numeric: tabular-nums; text-align: center;
 }
 

@@ -15,7 +15,7 @@ import React, { useContext, useMemo } from 'react';
 
 import {
   BOTTOM_END_OPTS, COIL_OPTS, CONFIG_OPTS, CUSTOM_ENGINE_LIMITS, CYL_COUNT, ENGINE_PRESETS, FOLLOWER_OPTS, FRICTION_LEVEL_OPTS, MATERIAL_OPTS, PRESET_GROUPS,
-  TYPICAL_INTAKE_VALVE_SHARE, VALVES_PER_CYL_OPTS, VALVETRAIN_OPTS, VVT_OPTS, applyPreset, headDefaultsOf, intakeValvesFor, layoutById, pistonMotion,
+  SPRING_RATE_MAX, TYPICAL_INTAKE_VALVE_SHARE, VALVES_PER_CYL_OPTS, VALVETRAIN_OPTS, VVT_OPTS, applyPreset, headDefaultsOf, intakeValvesFor, layoutById, pistonMotion,
 } from '../../../sim/index.js';
 import { BuildBenchMode, BuildSection } from '../../components/BuildSection.jsx';
 import { ownEnginePatch } from '../../state/ownEngine.js';
@@ -455,7 +455,7 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
           <br /><br />The two lobes are separate, as on a real cam: factory exhaust lobes usually run a few degrees longer than the intake. A longer exhaust lobe opens the valve earlier, giving up a little expansion work to empty the cylinder better at high RPM.
           <br /><br /><b className={styles.em}>Overlap</b> is the window where both valves are open together. It grows with duration, and it is why cammed engines idle lumpy, pull weak manifold vacuum, and sound the way they do.
         </ExpandableInfo>
-          <SpecSlider label="Valve spring rate" value={engineConfig.springRate} stock={stockCfg?.springRate ?? null} min={20} max={100} step={1} onChange={(v) => setCfg({ springRate: v })} aside={`float at ${Math.round(engineDerived.floatRpm)} rpm`} tone={floating ? 'warn' : undefined} lo="soft" hi="stiff" ariaLabel="Valve spring rate" />
+          <SpecSlider label="Valve spring rate" value={engineConfig.springRate} stock={stockCfg?.springRate ?? null} min={20} max={SPRING_RATE_MAX} step={1} onChange={(v) => setCfg({ springRate: v })} aside={`float at ${Math.round(engineDerived.floatRpm)} rpm`} tone={floating ? 'warn' : undefined} lo="soft" hi="stiff" ariaLabel="Valve spring rate" />
           {floating && (
           <div className={styles.floatWarning}>
             Springs float below redline — cylinder filling collapses above {Math.round(engineDerived.floatRpm)} RPM. Stiffen them or fit a milder cam.

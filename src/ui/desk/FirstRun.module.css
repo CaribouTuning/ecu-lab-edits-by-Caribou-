@@ -12,5 +12,5 @@
 .skip, .back, .go { height: 32px; padding: 0 14px; border-radius: 6px; font: inherit; font-weight: 600; cursor: pointer; }
 .skip { margin-right: auto; border: 0; background: none; color: var(--ink2); padding: 0; }
 .back { border: 1px solid var(--line-hi); background: var(--panel2); color: var(--ink); }
-.go { border: 1px solid var(--acc); background: var(--acc); color: var(--acc-on); }
+.go { border: 1px solid var(--acc-fill); background: var(--acc-fill); color: var(--acc-on); }
 .skip:focus-visible, .back:focus-visible, .go:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }

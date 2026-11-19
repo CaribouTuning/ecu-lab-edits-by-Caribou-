@@ -127,3 +127,44 @@ export function mergeNearbyRuns(runs, gapRpm) {
   }
   return out;
 }
+
+/**
+ * The x in [lo, hi] where an increasing `f` reaches `target`, by bracketed Illinois false
+ * position, to `tol` in x: the root a 40-step bisection finds, in a handful of evaluations,
+ * every one near the root, and a bisection step wherever f gives no finite number. (Bisection probed the whole bracket on its way in: finding the
+ * pressure that traps a load row's air on a B58 solved the breathing at every 2 kPa from 12 to
+ * 236 kPa in those columns.) Outside the bracket it returns the end, as bisection does.
+ * @param {(x: number) => number} f increasing
+ * @param {number} target
+ * @param {number} lo
+ * @param {number} hi
+ * @param {number} [tol]
+ * @returns {number}
+ */
+export function solveIncreasing(f, target, lo, hi, tol = 1e-9) {
+  let flo = f(lo) - target;
+  let fhi = f(hi) - target;
+  if (flo >= 0) return lo;
+  if (fhi <= 0) return hi;
+  let side = 0;
+  let prev = Infinity;
+  for (let i = 0; i < 200; i += 1) {
+    // A bisection step wherever an end of the bracket has no finite reading (f returned NaN
+    // there), which a reading that is not below the target, NaN included, sets as bisection did.
+    const x = Number.isFinite(flo) && Number.isFinite(fhi) ? (lo * fhi - hi * flo) / (fhi - flo) : (lo + hi) / 2;
+    const fx = f(x) - target;
+    if (fx === 0 || Math.abs(x - prev) < tol * 0.01) return x;
+    prev = x;
+    if (fx < 0) {
+      lo = x; flo = fx;
+      if (side === -1) fhi /= 2;
+      side = -1;
+    } else {
+      hi = x; fhi = fx;
+      if (side === 1) flo /= 2;
+      side = 1;
+    }
+    if (hi - lo < tol) return (lo + hi) / 2;
+  }
+  return (lo + hi) / 2;
+}

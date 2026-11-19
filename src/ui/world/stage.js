@@ -315,7 +315,22 @@ export function createStage(canvas, opts = {}) {
     },
 
     dispose() {
-      scene.traverse((o) => { const m = /** @type {THREE.Mesh} */ (o); if (m.geometry) m.geometry.dispose(); });
+      // Everything the scene holds on the GPU: its geometry, its materials and the textures
+      // they draw (the shop's screens and the sky are canvas textures). Left to the garbage
+      // collector, each visit to a 3D view kept the last one's textures in video memory.
+      // A material or texture shared with a later stage is simply uploaded again there.
+      const materials = new Set();
+      scene.traverse((o) => {
+        const m = /** @type {THREE.Mesh} */ (o);
+        if (m.geometry) m.geometry.dispose();
+        for (const mat of [m.material].flat()) if (mat) materials.add(mat);
+      });
+      const textures = new Set([scene.background, scene.environment].filter((t) => t instanceof THREE.Texture));
+      for (const mat of materials) {
+        for (const v of Object.values(mat)) if (v instanceof THREE.Texture) textures.add(v);
+        mat.dispose();
+      }
+      for (const t of textures) t.dispose();
       target.dispose();
       post.dispose();
       renderer.dispose();

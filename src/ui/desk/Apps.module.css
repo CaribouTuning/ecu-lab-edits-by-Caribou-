@@ -18,7 +18,7 @@
 .panelNote { margin: 0 0 10px; font-size: var(--fs-sm); color: var(--ink2); line-height: 1.5; }
 .graphBtns { display: flex; gap: 6px; margin-bottom: 8px; }
 .graphBtns button {
-  min-width: 46px; padding: 4px 10px; border: 0; border-radius: 6px; background: var(--mac-control);
+  min-width: 46px; min-height: 24px; padding: 4px 10px; border: 0; border-radius: 6px; background: var(--mac-control);
   color: var(--ink); font-weight: 500; font-size: var(--fs-sm); cursor: pointer;
 }
 .buildEngine { margin: 0 0 10px; }
@@ -100,7 +100,7 @@
   position: sticky; top: 0; align-self: stretch; display: flex; flex-direction: column; gap: 2px;
   padding: 10px 8px; background: var(--mac-sidebar); border-right: 1px solid var(--mac-separator);
 }
-.sideHead { padding: 8px 8px 4px; font-size: 11px; font-weight: 600; color: var(--mac-label3); }
+.sideHead { padding: 8px 8px 4px; font-size: 11px; font-weight: 600; color: var(--mac-label2); }
 .tuneTabs { display: flex; flex-direction: column; gap: 1px; }
 /* The phone's page tabs (PageTabs): hidden wherever the sidebar has room. */
 .tunePicker { display: none; }

@@ -33,7 +33,7 @@
 .button:disabled {
   opacity: 1;
   background: var(--mac-control);
-  color: var(--mac-label3);
+  color: var(--mac-label2);
   cursor: default;
 }
 
@@ -79,7 +79,15 @@
 
 /* --- sizes --- */
 
-.sm { padding: 3px 10px; font-size: 12px; }
+.sm { min-height: 24px; padding: 3px 10px; font-size: 12px; }
+
+/* A small button drawn 22 px tall is a small thing to hit with a finger. On a touch screen its
+   tap area reaches 44 px tall (Apple's minimum) without the button growing or moving: an
+   invisible layer over and under it that takes the tap. */
+@media (pointer: coarse) {
+  .sm { position: relative; }
+  .sm::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 44px; transform: translateY(-50%); }
+}
 .md { padding: 5px 14px; font-size: 13px; }
 /* 22px horizontal is not on the spacing scale: it is 2px from the nearest
    step (--sp-xxl, 24px), further than the ~1px this pass snaps, and moving it

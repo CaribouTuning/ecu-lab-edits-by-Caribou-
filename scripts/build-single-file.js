@@ -44,9 +44,14 @@ const js = readFileSync(join(dist, jsSrc), 'utf8')
   .replace(/<\/script/gi, '<\\/script')
   .replace(/<!--/g, '<\\!--');
 
-// The charset first, inside the first 1024 bytes where a browser looks for it: opened as a
+// The charset at the top, inside the first 1024 bytes where a browser looks for it: opened as a
 // plain file with none, Chromium guessed Latin-1 and printed "99.0 Ã— 92.0" for "99.0 × 92.0".
 const page = [
+  // Standards mode: without a doctype a browser opening the file lays it out in quirks mode
+  // (another box model, percentage heights against nothing), so the page a phone opens as a
+  // file was not the page the app is. A host that wraps the page in its own document ignores
+  // a doctype inside it.
+  '<!doctype html>',
   '<meta charset="utf-8">',
   `<title>${title}</title>`,
   // Without the viewport a phone lays the page out 980 px wide and shrinks it to fit.

@@ -39,6 +39,14 @@ export function round(st) {
   for (const e of p.events) {
     const fix = String(e.fix ?? '');
     if (e.type === 'injscale') { const m = /to (\d+) cc\/min/.exec(fix); if (m) { st = setBuild(st, { ecuInjectorCc: Number(m[1]) }); did.push(`injectors ${m[1]}cc`); } else cannot.push(e.type); }
+    else if (e.type === 'float') {
+      // Hardware, but the log gives the number: BUILD → HEADS AND CAM, the valve spring rate.
+      const m = /raise the valve spring rate to (\d+)/.exec(fix);
+      if (m && st.build.engineConfig.springRate < Number(m[1])) {
+        st = RED(st, { type: 'SET_ENGINE_CONFIG_PATCH', patch: { springRate: Number(m[1]) } });
+        did.push(`springs ${m[1]}`);
+      } else cannot.push(`${e.type}: ${fix.slice(0, 120)}`);
+    }
     else if (e.type === 'maf') { const m = /to about ([0-9.]+), which cancels/.exec(fix); if (m) { st = setBuild(st, { mafScalar: Number(m[1]) }); did.push(`MAF ${m[1]}`); } else cannot.push(e.type); }
     else if (e.type === 'nitrousknock') { const m = /retard while spraying to about (\d+)°/.exec(fix); if (m) { st = setCal(st, 'nitrous.retardDeg', Number(m[1])); did.push(`N2O retard ${m[1]}`); } else cannot.push(`${e.type}: ${fix.slice(0, 120)}`); }
     else if (['rich', 'lean'].includes(e.type) && /Fuel correction while spraying by about (\d+) points/.test(fix)) {
@@ -201,7 +209,7 @@ export function round(st) {
     for (const c of a.wrongMix) if (c.suggested != null && st.tune.afr[c.ri][c.ci] !== c.suggested) { st.tune.afr[c.ri][c.ci] = c.suggested; n++; }
   }
   if (n) did.push(`${n} TUNE cells`);
-  for (const e of p.events) if (!['injscale', 'maf', 'nitrousknock', 'falseknock', 'fuel', ...FUELLING, 'knock', 'timing', 'cam', 'bearing', 'pressure', 'piston'].includes(e.type)) cannot.push(`${e.type}: ${e.msg}`);
+  for (const e of p.events) if (!['injscale', 'maf', 'nitrousknock', 'falseknock', 'fuel', ...FUELLING, 'knock', 'timing', 'cam', 'bearing', 'pressure', 'piston', 'float'].includes(e.type)) cannot.push(`${e.type}: ${e.msg}`);
   return { st, did, cannot };
 }
 /** LIVE's advice for a hunting idle: raise damping, lower the air gains, a step at a time. */

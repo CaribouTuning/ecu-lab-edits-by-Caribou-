@@ -104,10 +104,21 @@ function tunedRunnerM(base, tuneRpm, derived = null, cyl = null) {
   search(0.1, 1.0, 0.05);
   // No length peaks that high (a speed past every length's reach): the nearest.
   if (best == null) best = nearest;
-  RUNNER_CACHE.set(key, best);
+  keepRunner(key, best);
   return best;
 }
 const RUNNER_CACHE = new Map();
+/**
+ * How many engines' tuned runners are kept, the oldest dropped first: far more than one player
+ * builds, and a bound where the same code serves many (a pull recomputed on a server), where an
+ * unbounded map would grow with every custom engine it was ever asked about.
+ */
+const RUNNERS_KEPT = 4096;
+/** @param {string} key @param {number} length */
+function keepRunner(key, length) {
+  RUNNER_CACHE.set(key, length);
+  while (RUNNER_CACHE.size > RUNNERS_KEPT) RUNNER_CACHE.delete(RUNNER_CACHE.keys().next().value);
+}
 
 /**
  * Primaries merging in each header collector: a bank's cylinders on a V or flat engine (one
@@ -250,18 +261,35 @@ export function breathingSnapshot() {
  * Takes in nodes and runner lengths another thread solved with this same code
  * (`breathingSnapshot`). They are the numbers this thread would compute, so a reading is the
  * same whichever thread solved it; only the time is saved.
- * @param {ReturnType<typeof breathingSnapshot>} snap
+ * @param {{grids?: [string, [number, number][]][], runners?: [string, number][]}} snap
+ * @param {{verify?: boolean}} [opts] `verify`: solved by an earlier session, so checked before use
  */
-export function seedBreathing(snap) {
-  for (const [k, v] of snap?.runners ?? []) if (!RUNNER_CACHE.has(k)) RUNNER_CACHE.set(k, v);
+export function seedBreathing(snap, { verify = false } = {}) {
+  if (!verify) for (const [k, v] of snap?.runners ?? []) if (!RUNNER_CACHE.has(k)) keepRunner(k, v);
   for (const [k, nodes] of snap?.grids ?? []) {
+    if (verify) {
+      // Kept apart until the grid is built, and checked then (`buildVeReader`): solved by an
+      // earlier build of this code, they may not be the numbers this one computes.
+      if (!VE_NODES.has(k) && !VE_SEEDS.has(k)) VE_UNVERIFIED.set(k, new Map(nodes));
+      continue;
+    }
     const live = VE_NODES.get(k);
     const into = live ?? VE_SEEDS.get(k) ?? new Map();
     for (const [n, v] of nodes) if (!into.has(n)) into.set(n, v);
     if (!live) VE_SEEDS.set(k, into);
   }
   while (VE_SEEDS.size > VE_READERS_KEPT) VE_SEEDS.delete(VE_SEEDS.keys().next().value);
+  while (VE_UNVERIFIED.size > VE_READERS_KEPT) VE_UNVERIFIED.delete(VE_UNVERIFIED.keys().next().value);
 }
+/**
+ * Nodes this device solved in an earlier session (`seedBreathing(…, { verify: true })`),
+ * waiting for their grid. Used only if a few of them, solved again, come out exactly the same:
+ * any change to the breathing since makes them differ, and then all of them are dropped.
+ */
+const VE_UNVERIFIED = new Map();
+/** How many saved nodes, spread evenly across the grid's speeds and pressures, are solved again
+ * to check a saved grid before it is used. */
+const VE_VERIFY_NODES = 8;
 /** How many: an engine's phases and bolt-on variants several times over, a few MB at most. */
 const VE_READERS_KEPT = 48;
 
@@ -311,6 +339,12 @@ function buildVeReader(cfg, mods, hw, key = null) {
     const key = ri * 4096 + mi;
     const hit = cache.get(key);
     if (hit != null) return hit;
+    const val = solveNode(ri, mi);
+    cache.set(key, val);
+    return val;
+  };
+  /** The gas exchange at one grid node. */
+  const solveNode = (ri, mi) => {
     const rpm = Math.max(VE_GRID_RPM, ri * VE_GRID_RPM);
     const mapKpa = Math.max(VE_GRID_KPA, mi * VE_GRID_KPA);
     const boostPsi = Math.max(0, (mapKpa - BARO_KPA) / PSI_TO_KPA);
@@ -330,10 +364,22 @@ function buildVeReader(cfg, mods, hw, key = null) {
         ? turbineBackPressureKpa(exhKgS, tex, turbine.effectiveAreaM2) + system
         : BARO_KPA + system;
     }
-    const val = finish(r.ve, rpm);
-    cache.set(key, val);
-    return val;
+    return finish(r.ve, rpm);
   };
+  // Nodes saved from an earlier session: solved again at `VE_VERIFY_NODES` of them, and used only
+  // if they come out exactly the same.
+  const saved = key != null ? VE_UNVERIFIED.get(key) : null;
+  if (saved) {
+    VE_UNVERIFIED.delete(key);
+    // In grid order (speed, then pressure), so the probes span the whole grid, not the order the
+    // nodes happened to be solved in.
+    const keys = [...saved.keys()].sort((a, b) => a - b);
+    const count = Math.min(VE_VERIFY_NODES, keys.length);
+    const probe = [...new Set(Array.from({ length: count }, (_, i) => keys[Math.round((i * (keys.length - 1)) / Math.max(1, count - 1))]))];
+    if (probe.length && probe.every((n) => solveNode(Math.floor(n / 4096), n % 4096) === saved.get(n))) {
+      for (const [n, v] of saved) if (!cache.has(n)) cache.set(n, v);
+    }
+  }
 
   // Read between grid nodes bilinearly, so the curve is smooth to any caller.
   return (rpm, mapKpa) => {

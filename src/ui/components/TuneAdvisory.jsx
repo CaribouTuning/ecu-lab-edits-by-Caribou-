@@ -36,7 +36,7 @@ export function TuneAdvisory({ kind, report }) {
 }
 
 /** Where each cause of a missed mixture is fixed, for the spark page's fuel-first note. */
-const FIX_PAGE = { injectors: 'BUILD › FUEL SYSTEM', pump: 'BUILD › FUEL SYSTEM', injscale: 'TUNE › INJECTORS', maf: 'TUNE › SENSORS', ve: 'TUNE › AIRFLOW' };
+const FIX_PAGE = { injectors: 'BUILD › FUEL SYSTEM', pump: 'BUILD › FUEL SYSTEM', injscale: 'TUNE › INJECTORS', maf: 'TUNE › SENSORS', ve: 'TUNE › AIRFLOW', float: 'BUILD › HEADS AND CAM, the valve springs' };
 
 /**
  * The nitrous's trouble, on the page a player would otherwise look at: knock or a missed
@@ -272,6 +272,7 @@ function AfrAdvisory({ report }) {
         injscale: <>The ECU is set for a different injector than the one fitted: set the flow on <b className={styles.emInk}>TUNE › INJECTORS</b> first, then pull again.</>,
         maf: <>The MAF is mis-scaled for the parts fitted: set the MAF scalar on <b className={styles.emInk}>TUNE › SENSORS</b> first, then pull again.</>,
         ve: <>The ECU&apos;s air estimate is about {pct}% {w.lean ? 'low' : 'high'} there: on <b className={styles.emInk}>TUNE › AIRFLOW</b>, use Correct VE from logs (or {w.lean ? 'raise' : 'lower'} those VE cells by about {pct}%).</>,
+        float: <>The valves float above {(w.floatRpm ?? 0).toLocaleString('en-US')} RPM (Hardware, in the pull log): the filling falls off a cliff there, more steeply than the VE table can bend between its breakpoints, so no VE edit settles it. Fix the float first, on <b className={styles.emInk}>BUILD › HEADS AND CAM</b> (the pull log gives the spring rate), then pull again.</>,
       }[w.cause ?? 've'];
       return (
         <div className={styles.prose}>

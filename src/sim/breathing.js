@@ -133,6 +133,15 @@ export function valveEvents({ ivcAbdc, durationDeg, exhaustDurationDeg = duratio
  */
 
 /**
+ * Per engine geometry, what each crank step needs that depends on the geometry alone: the step's
+ * end, the cylinder's volume there and each valve's open area at its middle. The same for every
+ * speed and pressure an engine's breathing is solved at, so worked out once per geometry rather
+ * than at every step of every one of its thousands of solves; the numbers are the same ones.
+ * @type {WeakMap<object, {step: number, evo: number, evc: number, ivo: number, ivc: number, nexts: number[], vols: number[], aEx: number[], aIn: number[]}>}
+ */
+const STEP_TABLES = new WeakMap();
+
+/**
  * One cylinder's gas exchange at a steady speed and pressures.
  *
  * Integrated from exhaust valve opening (the blowdown included) through the exhaust stroke,
@@ -190,6 +199,22 @@ export function gasExchange(g, op) {
   // Start: the exhaust valve opening, the cylinder at the pressure the expansion stroke has
   // left (the cycle's own ratio to the intake pressure, turbo.js `exhaustPulsePressureKpa`)
   // and the burned gas at the temperature that blows down to the manifold's.
+  let steps = STEP_TABLES.get(g);
+  if (!steps || steps.step !== step || steps.evo !== evo || steps.evc !== evc || steps.ivo !== ivo || steps.ivc !== ivc) {
+    const nexts = []; const vols = []; const aEx = []; const aIn = [];
+    for (let th = evo; th < ivc;) {
+      const nx = Math.min(th + step, ivc);
+      const md = (th + nx) / 2;
+      nexts.push(nx);
+      vols.push(volume(nx));
+      aEx.push(md > evo && md < evc ? valveArea(md, evo, evc, g.exhaustValves, g.exhaustValveM, exhaustRamp, g.exhaustPortAreaM2 ?? 0, g.exhaustLiftM ?? 0) : 0);
+      aIn.push(md > ivo && md < ivc ? valveArea(md, ivo, ivc, g.intakeValves, g.intakeValveM, g.events, g.intakePortAreaM2 ?? 0, g.intakeLiftM ?? 0) : 0);
+      th = nx;
+    }
+    steps = { step, evo, evc, ivo, ivc, nexts, vols, aEx, aIn };
+    STEP_TABLES.set(g, steps);
+  }
+  let k = 0;
   let theta = evo;
   let v = volume(theta);
   // Each valve's flow at the last step, where its next solve starts.
@@ -273,8 +298,8 @@ export function gasExchange(g, op) {
   const trace = op.trace ? { deg: [], cylKpa: [], exPortKpa: [], inPortKpa: [], exFlowGs: [], inFlowGs: [], exAreaMm2: [], inAreaMm2: [], freshShare: [] } : null;
 
   while (theta < ivc) {
-    const next = Math.min(theta + step, ivc);
-    const vNext = volume(next);
+    const next = steps.nexts[k];
+    const vNext = steps.vols[k];
     const p = m * R_AIR * t / v;
     const mid = (theta + next) / 2;
 
@@ -284,7 +309,7 @@ export function gasExchange(g, op) {
     // A shut valve is a closed end: the backward wave goes straight round again.
     let fwd = backwardNow();
     if (mid > evo && mid < evc) {
-      const a = valveArea(mid, evo, evc, g.exhaustValves, g.exhaustValveM, exhaustRamp, g.exhaustPortAreaM2 ?? 0, g.exhaustLiftM ?? 0);
+      const a = steps.aEx[k];
       const b = backwardNow();
       // The backward wave reflects off the valve end: a nearly shut valve is a closed end
       // (+1), a wide one passes most of it into the cylinder.
@@ -313,7 +338,7 @@ export function gasExchange(g, op) {
     let hIn = 0;
     let out = returningNow();
     if (mid > ivo && mid < ivc) {
-      const a = valveArea(mid, ivo, ivc, g.intakeValves, g.intakeValveM, g.events, g.intakePortAreaM2 ?? 0, g.intakeLiftM ?? 0);
+      const a = steps.aIn[k];
       const b = returningNow();
       const valveR = (g.runnerAreaM2 - a) / (g.runnerAreaM2 + a);
       const waveBack = b * (1 + valveR);
@@ -384,6 +409,7 @@ export function gasExchange(g, op) {
 
     theta = next;
     v = vNext;
+    k += 1;
   }
 
   const freshKg = fresh;

@@ -17,7 +17,7 @@
 import {
   BARO_KPA, ECU_LAYOUTS, GAME_LAYOUT, PSI_TO_KPA, blowerCurve, chargeTempK, deriveEngine, engineLayout,
   extendAxesTo, factoryCalibrationOn, layoutById, oemLayout, peakMapKpaOf, presetById, readTable, resampleTable,
-  tankFuel, trappedAirGrams,
+  solveIncreasing, tankFuel, trappedAirGrams,
 } from '../../sim/index.js';
 
 /**
@@ -173,14 +173,7 @@ function airmassConversion(state) {
     chargeK: chargeTempK(Math.max(0, (kpa - BARO_KPA) / PSI_TO_KPA), !!build.mods?.intercooler),
     sweptM3,
   });
-  const kpaFor = (rpm, g) => {
-    let lo = 5; let hi = 600;
-    for (let i = 0; i < 40; i += 1) {
-      const mid = (lo + hi) / 2;
-      if (airmassAt(rpm, mid) < g) lo = mid; else hi = mid;
-    }
-    return (lo + hi) / 2;
-  };
+  const kpaFor = (rpm, g) => solveIncreasing((kpa) => airmassAt(rpm, kpa), g, 5, 600);
   return { airmassAt, kpaFor };
 }
 

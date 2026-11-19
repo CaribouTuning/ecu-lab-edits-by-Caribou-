@@ -7,11 +7,11 @@
  * someone else's engine.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 import { PRESET_GROUPS, applyPreset } from '../../../sim/index.js';
 import { ownEnginePatch } from '../../state/ownEngine.js';
-import { warm } from '../../sim/warm.js';
+import { warm, warmAhead } from '../../sim/warm.js';
 import { ACTIONS } from '../../state/reducer.js';
 import { useBuild } from '../../state/StoreProvider.jsx';
 
@@ -73,10 +73,18 @@ export function EngineStart({ onCancel, onDone, replacing = false } = {}) {
   // (sim/warm.js), and putting it on the bench waits for that, not for a frozen screen.
   const [loading, setLoading] = useState(/** @type {string|null} */ (null));
   const pick = (p) => { setPicked(p); if (p) warm('preset', { id: p.id }); };
+  // Opening the factory list starts every engine on the list, in its order, on the worker for
+  // work done ahead: one the player has looked at for a moment is usually ready when they pick it.
+  useEffect(() => {
+    if (path !== 'factory') return;
+    for (const g of PRESET_GROUPS) for (const p of g.presets) warmAhead('preset', { id: p.id });
+  }, [path]);
   const load = (preset) => {
-    const put = () => { dispatch({ type: ACTIONS.APPLY_PRESET, preset: applyPreset(preset) }); setLoading(null); onDone?.(); };
+    // The worker hands back the preset it worked out: put on the bench as it is, not worked out
+    // a second time on the drawing thread (a B58's calibration held the screen for most of a second).
+    const put = (patch) => { dispatch({ type: ACTIONS.APPLY_PRESET, preset: patch ?? applyPreset(preset) }); setLoading(null); onDone?.(); };
     const ready = warm('preset', { id: preset.id });
-    if (!ready) { put(); return; }
+    if (!ready) { put(null); return; }
     setLoading(preset.id);
     ready.then(put);
   };

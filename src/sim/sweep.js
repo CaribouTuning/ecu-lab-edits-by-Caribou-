@@ -13,10 +13,11 @@ import { throttleBoreM } from './throttle.js';
 import { COEFF } from './coefficients.js';
 import { clamp, curveAt, groupRuns, mergeNearbyRuns } from './math.js';
 import { solveInduction } from './turbo.js';
+import { SPRING_RATE_MAX, springRateFor } from './engine.js';
 import { chargeTempK, INDUCTION_REF_EXHAUST_K } from './thermo.js';
 import { evaluatePoint } from './point.js';
 import {
-  IN_FORCE_WEIGHT, KNOCK_SAFETY_DEG, cellsInForce, missedMixCause, missesTarget, veSettledFor,
+  IN_FORCE_WEIGHT, KNOCK_SAFETY_DEG, cellsInForce, floatMissFromRpm, missedMixCause, missesTarget, veSettledFor,
   afrTargetVerdict, pullCellLimits, pullSparkCells, pullTableCells, reachKpaAt, sparkForLimit,
 } from './advisors.js';
 import { bestPowerAfr } from './manifold.js';
@@ -177,6 +178,25 @@ export function injectorDutyPreview(input) {
 
 /** Engine speed TUNE → INJECTORS previews duty at, RPM. */
 export const DUTY_PREVIEW_RPM = 6500;
+
+/** @param {{floatRpm?: number}} derived @returns {number} where the valves float, RPM */
+const floatRpmOf = (derived) => derived.floatRpm || 99999;
+
+/**
+ * What fixes valve float, with the spring rate to set: the one that keeps the valves on the
+ * cam a margin past the redline (`springRateFor`), where the build offers a spring that stiff.
+ * @param {{floatRpm?: number, camDuration?: number, exhaustCamDuration?: number}} derived
+ * @param {number} redline
+ * @returns {string}
+ */
+function floatFix(derived, redline) {
+  const cam = Math.max(derived.camDuration ?? 0, derived.exhaustCamDuration ?? 0);
+  const rate = springRateFor(redline, cam);
+  const below = `set the rev limiter below ${Math.round(floatRpmOf(derived))} RPM on TUNE → PROTECT`;
+  return rate <= SPRING_RATE_MAX
+    ? `On BUILD → HEADS AND CAM, raise the valve spring rate to ${rate}, which keeps the valves on this cam past your ${redline} RPM redline, or fit a milder cam. Or keep the engine under it: ${below}.`
+    : `No valve spring on BUILD → HEADS AND CAM keeps this cam's valves on the lobes to your ${redline} RPM redline (it would take ${rate}, and ${SPRING_RATE_MAX} is the stiffest): fit a milder cam, or keep the engine under it: ${below}.`;
+}
 
 /**
  * Where the injector duty preview reads: DUTY_PREVIEW_RPM, or the redline of an engine
@@ -461,6 +481,16 @@ export function simulateSweep({
   const veAxes = layout?.ve ?? { rpm: RPM, load: LOAD, loadUnit: 'kPa' };
   // One reading with FUEL's advisor (`veSettledFor`), so the two never disagree.
   const veDone = veSettledFor(points, veAxes, endRpm, (p) => !spraying(p));
+
+  // Where the valves float, a mixture missed (lean, rich or off the target) follows the float,
+  // and is fixed by fixing it (`floatFix`), not in the table: `floatMissFromRpm`, read the
+  // same way by FUEL. Judged at the run's worst point, as the entry quotes it.
+  const floatFromRpm = floatMissFromRpm(derived, veAxes, reachedRpm);
+  // Only where the air estimate is the cause, as FUEL reads it: an injector scaling, a MAF, maxed
+  // injectors or a starved rail each has its own entry, and its fix comes first.
+  const afterFloat = (run, peak) => peak.rpm >= floatFromRpm && !run.some(spraying)
+    && missedMixCause(run, { injectorCc, ecuInjectorCc }) === 've';
+  const floatMixFix = () => `This follows the valve float above ${Math.round(floatRpmOf(derived))} RPM (Hardware, in this log): the cylinder's filling falls off a cliff there, more steeply than the VE table can bend between its breakpoints, so no VE edit settles it and Correct VE from logs cannot either. Fix the float first. ${floatFix(derived, endRpm)} Then pull again, and correct what is left with Correct VE from logs.`;
   const veFit = veDone.fit;
   // Cells the pull crossed too briefly for Correct VE from logs to trust (a boost rise climbs
   // through a row in one or two speeds): it leaves them as they are, so the log must not send
@@ -658,6 +688,7 @@ export function simulateSweep({
         ? `Upgrade injectors on BUILD → FUEL SYSTEM (and set TUNE → INJECTORS to match), or lower VE/boost so demand fits within current capacity.`
         : spraying(peak)
           ? baseVeOff(peak) < -0.08 ? baseFuelFix(peak) : nitrousFuelFix(peak, 'more')
+          : peak.afrCommanded <= COEFF.LEAN_DAMAGE_AFR && afterFloat(run, peak) ? floatMixFix()
           : peak.afrCommanded <= COEFF.LEAN_DAMAGE_AFR
           ? `Fuel delivery isn't hitting the target, so don't ask for a richer number to make up for it. Correct the VE table in this range on TUNE → AIRFLOW (log a pull and accept the suggested cells), then check the injector flow rate on TUNE → INJECTORS and the MAF and sensor scaling on TUNE → SENSORS match the parts on BUILD.`
           : `On TUNE → FUEL, richen the AFR target in these cells to about ${peak.bestAfr.toFixed(1)}:1 (λ ${(peak.bestAfr / 14.7).toFixed(2)})${peak.boostPsi > 1 ? ' — richer than the NA best-power mixture, because boost needs the charge cooling' : ''}.${missedTarget(peak) ? ' Then correct the VE table there on TUNE → AIRFLOW, so the engine gets what the target asks for.' : ''}`,
@@ -676,7 +707,7 @@ export function simulateSweep({
       const peak = run.reduce((a, b) => (Math.abs(b.afr - b.afrCommanded) > Math.abs(a.afr - a.afrCommanded) ? b : a));
       const miss = peak.afr - peak.afrCommanded;
       // Grid-bound: as well tuned as these breakpoints can be, so it costs the score little.
-      const grid = veDone.settled(peak);
+      const grid = veDone.settled(peak) && !afterFloat(run, peak);
       events.push({
         type: 'missedmix', severity: Math.abs(miss / peak.afrCommanded) > 0.06 ? 2 : 1,
         impact: grid ? 1 : Math.max(2, Math.round((Math.abs(miss / peak.afrCommanded) > 0.06 ? 8 : 4) * (0.3 + 0.7 * rangeFrac(run)))),
@@ -684,7 +715,7 @@ export function simulateSweep({
         ...(grid ? { gridBound: true } : {}),
         msg: `Mixture ${lean ? 'leaner' : 'richer'} than the AFR table asks for across ${rangeLabel(run)}: ${peak.afr.toFixed(1)}:1 where it asks for ${peak.afrCommanded.toFixed(1)}:1`,
         cause: `The AFR table asks for ${peak.afrCommanded.toFixed(1)}:1 at ${peak.rpm} RPM and ${Math.round(peak.map)} kPa and the engine got ${peak.afr.toFixed(1)}:1. What reaches the cylinder is not what the ECU meant to give it, so the fuelling is what to fix.${targetNote(peak)} ${lean ? 'Lean under load runs hotter and knocks sooner.' : 'Rich past best power costs torque and washes the bores.'}`,
-        fix: deliveryFix(peak, run, miss).replace(/^Fuel first: (.)/, (m, c) => c.toUpperCase()),
+        fix: afterFloat(run, peak) ? floatMixFix() : deliveryFix(peak, run, miss).replace(/^Fuel first: (.)/, (m, c) => c.toUpperCase()),
       });
     });
   }
@@ -730,7 +761,9 @@ export function simulateSweep({
         ? `This is while the nitrous sprays, and the extra fuel is the nitrous's, not the base tune's. ${nitrous?.kit === 'dry' ? 'The injectors carry the dry kit\'s fuel on top of the fuel for the air' : 'The wet kit\'s own jet adds fuel, jetted rich on purpose, on top of the injectors'} — and the nitrous vapour takes up room the air would have had. A speed-density ECU works out air from MAP and the VE table, so it cannot see that and keeps fuelling for air that is not there. Past about 11:1 the extra fuel washes the cylinder walls, fouls plugs and costs power.`
         : `Far more fuel is being delivered than the available air can burn. Raw fuel washes the oil film off the cylinder walls, fouls plugs, and passes into the exhaust. It also costs a lot of power — the mixture is well past the point where extra fuel helps.`,
       fix: spraying(peak) && baseVeOff(peak) > 0.08 ? baseFuelFix(peak)
-        : spraying(peak) ? nitrousFuelFix(peak, 'less') : peak.afrCommanded / 14.7 >= COEFF.RICH_DAMAGE_LAMBDA
+        : spraying(peak) ? nitrousFuelFix(peak, 'less')
+        : peak.afrCommanded / 14.7 >= COEFF.RICH_DAMAGE_LAMBDA && afterFloat(run, peak) && !injMismatch ? floatMixFix()
+        : peak.afrCommanded / 14.7 >= COEFF.RICH_DAMAGE_LAMBDA
         ? `The AFR target asked for ${peak.afrCommanded.toFixed(1)}:1 and the engine got ${peak.afr.toFixed(1)}:1, so the fuelling is off.${targetNote(peak)} ${injMismatch ? `Fix the injector flow rate on TUNE → INJECTORS first (its own entry in this log) — it alone makes every pulse ${(injectorCc / ecuInjectorCc).toFixed(1)}× too big. Then correct` : 'Correct'} the VE table on TUNE → AIRFLOW, and check the MAF scalar on TUNE → SENSORS matches the parts on BUILD.`
         : `The AFR target itself asks for this much fuel. On TUNE → FUEL, lean the target in these cells back to about ${peak.bestAfr.toFixed(1)}:1 (λ ${(peak.bestAfr / 14.7).toFixed(2)}).${missedTarget(peak) ? ' Then check the VE table on TUNE → AIRFLOW and the injector flow rate on TUNE → INJECTORS, because the engine is getting even more than the target.' : ''}`,
     });
@@ -855,7 +888,7 @@ export function simulateSweep({
 
   // Valve float is a hard mechanical limit — the springs cannot close the valves fast
   // enough, so cylinder filling collapses. No calibration change touches this.
-  const floatRpm = derived.floatRpm || 99999;
+  const floatRpm = floatRpmOf(derived);
   if (floatRpm < reachedRpm) {
     const lost = points.filter((p) => p.rpm > floatRpm);
     events.push({
@@ -863,7 +896,7 @@ export function simulateSweep({
       rpmStart: Math.round(floatRpm), rpmEnd: reachedRpm,
       msg: `Valve float above ${Math.round(floatRpm)} RPM — cylinder filling collapsing over the last ${lost.length * SWEEP_STEP_RPM} RPM of the pull`,
       cause: `The camshaft opens the valves but only the springs close them. Above ${Math.round(floatRpm)} RPM the valves stop following the lobe, so the cylinder cannot fill and power falls off a cliff instead of tapering. A ${derived.camDuration}° cam opens further and faster, which is exactly why it demands stiffer springs than stock.`,
-      fix: `On BUILD → HEADS AND CAM, raise the valve spring rate until float sits above your ${endRpm} RPM redline, or fit a milder cam. Or keep the engine under it: set the rev limiter below ${Math.round(floatRpm)} RPM on TUNE → PROTECT. No table change fixes valve float.`,
+      fix: `${floatFix(derived, endRpm)} No table change fixes valve float.`,
     });
   }
 

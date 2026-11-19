@@ -27,3 +27,9 @@ declare module '*?worker&inline' {
   const WorkerFactory: new () => Worker;
   export default WorkerFactory;
 }
+
+/** Vite's raw import: a file's text, built into the bundle (ui/sim/breathingStore.js). */
+declare module '*?raw' {
+  const text: string;
+  export default text;
+}

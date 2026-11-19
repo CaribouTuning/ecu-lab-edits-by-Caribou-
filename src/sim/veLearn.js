@@ -24,15 +24,15 @@
  * their limit, and transients — anything where the mixture was not the VE table's doing.
  */
 
+import { COEFF } from './coefficients.js';
 import { readTable } from './layouts.js';
 import { interp2 } from './math.js';
 import { LOAD, RPM } from './tables.js';
 
-/** A cell counts once its weight passes this: about two samples sitting right on it. */
-const MIN_CELL_WEIGHT = 2;
-/** A sample shares itself among the four cells around it; below this share it says too
- *  little about a cell to count there. */
-const MIN_SHARE = 0.2;
+/** A cell counts once its samples' weight passes this (coefficients.js). */
+const MIN_CELL_WEIGHT = COEFF.VE_FIT_MIN_CELL_WEIGHT;
+/** Below this share of a sample, it says too little about a cell to count there (coefficients.js). */
+const MIN_SHARE = COEFF.VE_FIT_MIN_SHARE;
 /** Steady-state only: manifold pressure moving faster than this between log rows is a
  *  transient, where the wall film and the sensor lag, not the VE table, set the mixture. */
 const MAX_MAP_STEP_KPA = 3;

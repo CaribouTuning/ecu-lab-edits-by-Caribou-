@@ -49,6 +49,22 @@ export function valveFloatRpm(springRate, camDuration) {
     - (camDuration - CAM_BASE_DURATION) * COEFF.FLOAT_PER_CAM_DEG;
 }
 
+/** The stiffest valve spring the build offers (BUILD → HEADS AND CAM). */
+export const SPRING_RATE_MAX = 100;
+
+/**
+ * The spring rate that floats the valves COEFF.SPRING_MARGIN_RPM past a redline with this cam
+ * (the inverse of `valveFloatRpm`), never below the stock 50.
+ *
+ * @param {number} redline
+ * @param {number} camDuration crank degrees, the longer of the two lobes
+ * @returns {number}
+ */
+export function springRateFor(redline, camDuration) {
+  const needed = 50 + (redline + COEFF.SPRING_MARGIN_RPM - valveFloatRpm(50, camDuration)) / COEFF.FLOAT_PER_SPRING_RATE;
+  return Math.max(50, Math.ceil(needed));
+}
+
 /**
  * Parasitic loss from compressing stiffer valve springs, every cycle.
  *

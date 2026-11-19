@@ -55,5 +55,5 @@
 .specs .wide { grid-column: span 2; }
 .specs dt { font-size: 11px; font-weight: 600; color: var(--ink2); }
 .specs dd { margin: 0; font-family: var(--sans); font-variant-numeric: tabular-nums; font-size: 14px; font-weight: 600; color: var(--ink); }
-.use { height: 40px; border-radius: 6px; border: 1px solid var(--acc); background: var(--acc); color: var(--acc-on); font: inherit; font-weight: 700; cursor: pointer; }
+.use { height: 40px; border-radius: 6px; border: 1px solid var(--acc-fill); background: var(--acc-fill); color: var(--acc-on); font: inherit; font-weight: 700; cursor: pointer; }
 .use:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }

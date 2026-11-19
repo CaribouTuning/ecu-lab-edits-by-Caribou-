@@ -52,6 +52,10 @@ export const tokens = Object.freeze({
   accInk: '#93c5fd',
   accBg: '#13233f',
   accOn: '#ffffff',
+  // A fill with text on it (a primary button, a label): darker than `acc`, so `accOn` reads at
+  // 5.2:1 (WCAG AA for small text; `acc` itself gives 3.7:1). `acc` stays the accent on the
+  // dark background, where the lighter blue is the one that reads.
+  accFill: '#2563eb',
   // Keyboard focus: a white ring, the brightest thing on the screen, never a status colour.
   focus: '#ffffff',
 

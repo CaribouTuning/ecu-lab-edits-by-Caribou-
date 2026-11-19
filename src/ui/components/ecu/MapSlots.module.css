@@ -17,7 +17,7 @@
 .slot {
   position: relative;
   min-width: 28px;
-  height: 22px;
+  height: 24px;
   margin-right: -6px;
   border: 0;
   border-radius: 5px;
@@ -61,7 +61,7 @@
 }
 
 .select {
-  height: 22px;
+  height: 24px;
   max-width: 100%;
   padding: 0 6px;
   border-radius: 6px;

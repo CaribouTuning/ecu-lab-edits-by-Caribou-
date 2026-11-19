@@ -13,6 +13,8 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  /* At least 24 px to hit (WCAG 2.5.8); the padding alone made 21. */
+  min-height: 24px;
   padding: 3px 12px;
   border: none;
   border-radius: 5px;

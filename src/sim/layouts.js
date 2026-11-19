@@ -17,7 +17,7 @@
  */
 
 import { LOAD, RPM } from './tables.js';
-import { interp1, interp2 } from './math.js';
+import { interp1, interp2, solveIncreasing } from './math.js';
 
 /**
  * @typedef {object} TableAxes
@@ -370,12 +370,7 @@ export function sameAxes(a, b) {
 export function kpaForLoad(axes, rpm, v, airAt) {
   if (axes.loadUnit === 'kPa') return v;
   const g = axes.loadUnit === 'mg/cyl' ? v / 1000 : v;
-  let lo = 5; let hi = 600;
-  for (let i = 0; i < 40; i += 1) {
-    const mid = (lo + hi) / 2;
-    if (airAt(rpm, mid) < g) lo = mid; else hi = mid;
-  }
-  return (lo + hi) / 2;
+  return solveIncreasing((kpa) => airAt(rpm, kpa), g, 5, 600);
 }
 
 /**
