@@ -286,7 +286,10 @@ describe('the port share table', () => {
     fireEvent.click(screen.getByRole('button', { name: /Port share/ }));
     const factory = S.defaultEcuCalibration({}).injector.portShare;
     const cell = screen.getAllByRole('button', { name: /^Port share at RPM \d+, MAP kPa \d+: \d+ %$/ })[0];
-    fireEvent.pointerDown(cell);
+    // A mouse press and release selects the cell (#163: touch scrolls the table, a tap selects).
+    fireEvent.pointerDown(cell, { pointerType: 'mouse', button: 0, buttons: 1 });
+    fireEvent.pointerUp(window, { pointerType: 'mouse', button: 0 });
+    fireEvent.click(cell, { detail: 1 });
     fireEvent.click(screen.getByRole('button', { name: 'Increase' }));
     const saved = savedShare();
     // The factory table's shape, with the one edit in it: not a table of one cell.
