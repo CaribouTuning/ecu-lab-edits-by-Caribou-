@@ -161,8 +161,8 @@
 .wrap[data-wide] .stage > [role='img'] { flex: 1; min-height: 0; height: auto; border: 0; border-radius: 0; background: transparent; }
 .wrap[data-wide] .sheet {
   overflow-y: auto; min-height: 0; margin: 8px 8px 8px 0; border-radius: 16px;
-  background: color-mix(in srgb, var(--mac-window) 86%, transparent);
-  -webkit-backdrop-filter: blur(24px) saturate(160%); backdrop-filter: blur(24px) saturate(160%);
+  /* Nearly opaque over the moving shop, so no blur: it would cost every frame and show nothing. */
+  background: color-mix(in srgb, var(--mac-window) 92%, transparent);
   box-shadow: inset 0 1px 0 var(--glass-hi), inset 0 0 0 1px var(--glass-edge), 0 12px 32px var(--glass-shade);
 }
 .wrap[data-wide] .steps { position: sticky; bottom: 0; z-index: 1; background: color-mix(in srgb, var(--mac-window) 94%, transparent); border-top: 1px solid var(--glass-edge); border-radius: 0; }

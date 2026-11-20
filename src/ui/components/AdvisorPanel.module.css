@@ -77,9 +77,11 @@
   font-weight: 800;
   line-height: 1;
 }
-.panel[data-tone='ok'] .headline::before { content: '✓'; }
-.panel[data-tone='warn'] .headline::before, .panel[data-tone='danger'] .headline::before { content: '!'; }
-.panel[data-tone='info'] .headline::before { content: 'i'; }
+/* The glyph is drawing, not words: the alternative text after the slash is empty, so a screen
+   reader reads the headline alone (the first declaration is for a browser without that syntax). */
+.panel[data-tone='ok'] .headline::before { content: '✓'; content: '✓' / ''; }
+.panel[data-tone='warn'] .headline::before, .panel[data-tone='danger'] .headline::before { content: '!'; content: '!' / ''; }
+.panel[data-tone='info'] .headline::before { content: 'i'; content: 'i' / ''; }
 
 .head { flex-wrap: wrap; }
 

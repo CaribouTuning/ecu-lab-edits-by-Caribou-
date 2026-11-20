@@ -4,14 +4,6 @@
    than snapped onto either. */
 .panel { margin-bottom: 14px; }
 
-.chartLabel {
-  font-size: 10px;
-  color: var(--ink2);
-
-  font-weight: 700;
-  padding: 2px 0 8px;
-}
-
 /* Event bands. Painted before the traces so the lines stay on top, and
    pointer-transparent so the chart's own click and tooltip still work — the RPM under
    the pointer is what resolves a click, not which band happens to be uppermost. */

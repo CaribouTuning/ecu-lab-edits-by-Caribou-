@@ -145,8 +145,8 @@
 /* A window is a pane of glass on the wallpaper: rounded, lifted, its edge a highlight. */
 .window {
   flex: 1; min-width: 0; display: flex; flex-direction: column; margin: 6px; border-radius: 16px; overflow: hidden;
+  /* Nearly opaque, so no blur: under a pane this dense it would cost a frame and show nothing. */
   background: color-mix(in srgb, var(--mac-window) 84%, transparent);
-  -webkit-backdrop-filter: blur(24px) saturate(160%); backdrop-filter: blur(24px) saturate(160%);
   box-shadow: inset 0 1px 0 var(--glass-hi), inset 0 0 0 1px var(--glass-edge), 0 12px 32px var(--glass-shade);
 }
 .titleBar {

@@ -214,15 +214,19 @@
   min-height: 44px;
   padding: 8px 10px 8px 12px;
   cursor: pointer;
-  background: var(--glass-chip);
+  /* Clear, only its edge drawn: it sits on its group's glass already, and a second layer of
+     glass took the axes' names (small grey text) under 4.5:1. */
+  background: transparent;
   border: 0;
   box-shadow: inset 0 1px 0 var(--glass-hi), inset 0 0 0 1px var(--glass-edge);
   border-radius: 12px;
   text-align: left;
   -webkit-tap-highlight-color: transparent;
 }
-.summary:hover { background: var(--glass-thumb); }
-.summary:active { background: var(--glass-thumb); }
+/* Only a real pointer hovers: a tap on a phone leaves :hover stuck on the row, and the
+   lighter glass under its small grey axis names took them under 4.5:1. */
+@media (hover: hover) { .summary:hover { background: var(--glass-soft); } }
+.summary:active { background: var(--glass-soft); }
 .table[data-open] > .summary { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 /* The chevron at the row's end, as a disclosure row has it: down to open, up when open. */
 .summaryChev { flex: none; color: var(--ink2); transition: transform 0.15s; }
@@ -270,7 +274,7 @@
   border-radius: 12px;
   cursor: pointer;
 }
-.more:hover { background: var(--glass-thumb); }
+@media (hover: hover) { .more:hover { background: var(--glass-thumb); } }
 .more > svg { color: var(--ink2); }
 
 .chev { transition: transform 0.15s; }
@@ -391,4 +395,5 @@
 
 /* The page's name strip runs the head's width, the undo keys at its end. */
 .head > :first-child { flex: 1; margin-bottom: 0; }
+.head > .flex { display: none; }
 .head { margin-bottom: 2px; }
