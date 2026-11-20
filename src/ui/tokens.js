@@ -135,7 +135,9 @@ export const tokens = Object.freeze({
   macControlHi: '#273449',
   macSelected: '#2b3850',
   macRowSel: '#13233f',
-  // The software's finish (DESIGN.md, direction 8): Apple glass for the chrome, Automation's technical panels for the data. Translucent fills sit over the darker navy wallpaper; an edge is a faint inner line and a top highlight, never a border.
+  // The software's finish (DESIGN.md, direction 8): glass for the chrome, titled technical
+  // panels for the data. Translucent fills over the darker navy wallpaper; an edge is a faint
+  // inner line and a top highlight, never a border.
   glass: 'rgba(17, 27, 46, 0.72)',
   glassSoft: 'rgba(255, 255, 255, 0.045)',
   glassChip: 'rgba(255, 255, 255, 0.08)',
@@ -144,7 +146,7 @@ export const tokens = Object.freeze({
   glassEdge: 'rgba(190, 215, 255, 0.10)',
   glassWell: 'rgba(0, 0, 0, 0.30)',
   glassShade: 'rgba(0, 0, 0, 0.38)',
-  // A technical panel's title strip (Automation's), a step lighter than the panel under it.
+  // A technical panel's title strip, a step lighter than the panel under it.
   stripHi: 'rgba(255, 255, 255, 0.075)',
   stripLo: 'rgba(255, 255, 255, 0.03)',
   // The laptop's and the stations' wallpaper: deep navy, lit faintly from one corner.
@@ -156,7 +158,7 @@ export const tokens = Object.freeze({
   // The primary capsule: the accent, a step deeper so it does not glare.
   pillHi: '#2d64c4',
   pillLo: '#234f9e',
-  // A check cell in a stat table (Automation's): good, borderline, bad. Dark enough for white text.
+  // A check cell in a stat table: good, borderline, bad. Dark enough for white text.
   cellGood: '#1f5a2c',
   cellMid: '#5c581b',
   cellBad: '#6e2020',

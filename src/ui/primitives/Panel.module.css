@@ -9,8 +9,7 @@
 
 .tight { padding: var(--sp-md) var(--sp-lg); }
 
-/* A technical panel: a title strip along the top, the name centred in it, as a car designer
-   draws its panels; the body under it. */
+/* A technical panel: a title strip along the top, the name centred in it, the body under it. */
 .titled { padding: 0; overflow: hidden; }
 .strip {
   display: grid; grid-template-columns: 1fr minmax(0, max-content) 1fr; align-items: center; gap: 8px;

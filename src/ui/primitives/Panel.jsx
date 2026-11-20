@@ -10,7 +10,7 @@ import styles from './Panel.module.css';
  * @property {boolean} [tight] reduce the padding
  * @property {React.ElementType} [as] element to render, defaults to a div
  * @property {React.ReactNode} [title] the panel's name, centred in a title strip along its top
- *   (a technical panel, as a car designer's are drawn); without it the panel has no strip
+ *   (a technical panel); without it the panel has no strip
  * @property {React.ReactNode} [lead] small text at the strip's left (a size, a map number)
  * @property {React.ReactNode} [tools] controls at the strip's right (undo, help)
  */

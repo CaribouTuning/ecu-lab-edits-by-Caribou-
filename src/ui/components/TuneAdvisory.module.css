@@ -68,7 +68,7 @@
 .ok { color: var(--ok); }
 
 .cellStats {
-  /* A stat table, as a car designer's are drawn: each figure its own band, the value right. */
+  /* A stat table: each figure on its own band, the value at the right. */
   margin: 6px 0 8px;
   display: grid;
   grid-template-columns: minmax(0, max-content) minmax(72px, max-content);
