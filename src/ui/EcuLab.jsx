@@ -58,7 +58,7 @@ import { useRoute } from './useRoute.js';
 import { ACTIONS } from './state/reducer.js';
 import { buildName, offersBaseMap, originPreset } from './state/baseMap.js';
 import { buildSignature as tuneStartSignature, offersTuneStart, useGuideStep, useTuneStartChoice } from './state/tuneStart.js';
-import { safeBaseMap } from './state/safeBaseMap.js';
+import { safeBaseMap, turboWithoutBoost } from './state/safeBaseMap.js';
 import { TuneStart } from './components/TuneStart.jsx';
 import { redoLabel, undoLabel } from './state/history.js';
 import { diffMeasuredInputs, pullSignature, measuredInputs } from './state/pullSignature.js';
@@ -1807,6 +1807,7 @@ export function EcuLabApp({ startWith = null, startShown = false } = {}) {
     failed: blown ? FAILURE_MODES[blown].title.toLowerCase() : null,
     running,
     startTune: tuneStartOpen,
+    noBoost: !inCareer && turboWithoutBoost(build),
     guide: tuneStartChoice === 'guided' && offersTuneStart({ mode: session.mode, build }) ? guideNow : null,
   });
   // Already where the step happens: it is only said, with nothing to press.

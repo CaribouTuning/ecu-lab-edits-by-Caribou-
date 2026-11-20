@@ -6,7 +6,7 @@ import { Check, ChevronDown, ChevronRight, Circle, Gauge, ListChecks, Wrench, X 
 import { Button } from '../primitives/Button.jsx';
 import { warm } from '../sim/warm.js';
 import { ACTIONS } from '../state/reducer.js';
-import { safeBaseMap } from '../state/safeBaseMap.js';
+import { safeBaseMap, turboWithoutBoost } from '../state/safeBaseMap.js';
 import { buildChanges, buildSignature, guideStepNow, guidedSteps, offersTuneStart, publishGuideStep, useTuneStartChoice, writeTuneStart } from '../state/tuneStart.js';
 import { useBuild, useSession, useTune } from '../state/StoreProvider.jsx';
 import styles from './TuneStart.module.css';
@@ -100,6 +100,9 @@ export function TuneStart({ onGo, force = false, advice = null, page = null }) {
       <div className={styles.head}>
         <h2 id="tune-start-title" className={styles.title}>Start the tune</h2>
         <p className={styles.lead}>Make it safe before chasing power. Undo puts your tables back.</p>
+        {turboWithoutBoost(build) && (
+          <p className={styles.lead} role="note"><b>The turbo has no boost target yet.</b> Set one on TUNE → BOOST first: at 0 psi it only restricts the exhaust. The guide starts there.</p>
+        )}
       </div>
       <ul className={styles.list}>
         {options.map(({ id, Icon, name, text, onPick }) => (
@@ -139,14 +142,16 @@ function Entries({ items, title }) {
  * @param {{made: import('../state/safeBaseMap.js').SafeBaseMap, onClose: () => void}} props
  */
 function BaseMapResult({ made, onClose }) {
-  const [open, setOpen] = React.useState(!made.clean);
+  const [open, setOpen] = React.useState(!made.clean || !!made.noBoost);
+  // Safe, but at 0 psi: proven, yet it says nothing about the turbo until it has a target.
+  const tone = made.clean && !made.noBoost ? 'ok' : 'warn';
   return (
-    <section className={styles.bar} data-testid="tune-start-result" data-tone={made.clean ? 'ok' : 'warn'} aria-label="Safe base map">
+    <section className={styles.bar} data-testid="tune-start-result" data-tone={tone} aria-label="Safe base map">
       <div className={styles.barRow}>
         <span className={styles.dot} aria-hidden="true" />
         <span className={styles.barText}>
-          <b>{made.clean ? 'Safe base map loaded' : 'Base map loaded: not safe yet'}</b>
-          <span className={styles.barMeta}> · {made.peakHp} whp · {made.pulls} pulls{made.clean ? '' : ` · ${made.parts.length ? 'a part is the limit' : 'see why'}`}</span>
+          <b>{!made.clean ? 'Base map loaded: not safe yet' : made.noBoost ? 'Base map loaded at 0 psi of boost' : 'Safe base map loaded'}</b>
+          <span className={styles.barMeta}> · {made.peakHp} whp · {made.pulls} pulls{!made.clean ? ` · ${made.parts.length ? 'a part is the limit' : 'see why'}` : made.noBoost ? ' · set a boost target' : ''}</span>
         </span>
         <button type="button" className={styles.barToggle} aria-expanded={open} onClick={() => setOpen((v) => !v)}>
           Details <ChevronDown size={14} aria-hidden="true" className={styles.chev} data-open={open ? 'true' : 'false'} />
@@ -155,6 +160,11 @@ function BaseMapResult({ made, onClose }) {
       </div>
       {open && (
         <div className={styles.barBody}>
+          {made.noBoost && (
+            <p className={styles.lead}>
+              <b>The turbo has no boost target.</b> Its gate holds 0 psi, so the turbine only stands in the exhaust and the engine makes less than it did without it. Set a boost target on TUNE → BOOST (6–8 psi is a common first step on pump fuel), then load the safe base map again: it proves the turbo a step at a time, from the low boost up.
+            </p>
+          )}
           <p className={styles.lead}>
             {made.clean
               ? <>Proven on the dyno as a tuner does it, with no knock and no lean. It is a safe start, not a finished tune: the timing sits a few degrees under what the engine can take, so a hot day or a poor tank of fuel does not hurt it. The power left is yours to find: tap a SPARK cell to see the room the last pull measured there, add a degree or two at a time, and pull again. The pull log speaks up only when something is wrong.</>

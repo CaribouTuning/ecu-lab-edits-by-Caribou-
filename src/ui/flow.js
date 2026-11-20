@@ -29,6 +29,8 @@
  * @property {boolean} [buildJob] CAREER: an engine-building job
  * @property {string|null} [failed] what failed, when the engine has: nothing else can be done
  *   with it until it is rebuilt
+ * @property {boolean} [noBoost] SANDBOX: a turbo fitted with no boost target, so it only
+ *   restricts the exhaust (state/safeBaseMap.js turboWithoutBoost)
  * @property {boolean} [startTune] SANDBOX: an engine just built, its way into the tune not chosen
  *   yet (a safe base map, the guide or the advice: components/TuneStart.jsx). A tuner makes it
  *   safe before starting it and pulling it.
@@ -84,6 +86,9 @@ export function nextStep(f) {
   // stand", then to "a clean pull: build more" with the boost steps still to do).
   const g = f.guide && !f.guide.checkable ? f.guide : null;
   const inGuide = g ? `Base map guide, step ${g.n} of ${g.of}: ${g.title}. ` : '';
+  // A turbo with no boost target makes less than the engine did without it: nothing on the
+  // stand or the dyno says anything about it until it has one.
+  if (f.noBoost) return { id: 'boost', text: 'The turbo has no boost target, so it only restricts the exhaust. Set one on TUNE → BOOST.', label: 'Boost target', go: 'tune:boost' };
   if (!f.heard && !f.fresh && !f.atDyno) return { id: 'hear', text: `${inGuide}${g ? 'First start' : 'Start'} it on the stand and listen to it.`, label: 'Run it', go: 'live' };
   if (!f.fresh) return { id: 'pull', text: `${inGuide}${!f.pulled ? 'Put it on the dyno and run a pull.' : f.changed === false ? 'Run the pull again to bring its curves and log back up.' : 'It has changed since the last pull. Pull it again to see what that did.'}`, label: 'Dyno', go: 'dyno' };
   if (f.attention.length) return fixStep(f.attention[0]);

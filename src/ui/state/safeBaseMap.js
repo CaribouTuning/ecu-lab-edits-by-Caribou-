@@ -309,7 +309,19 @@ const sprayArmed = (st, on) => ({ ...st, session: { ...st.session, liveAux: { ..
  * @property {{type: string, msg: string, fix: string}[]} parts the parts that limit the build, as the log names them
  * @property {{type: string, msg: string, fix: string}[]} left what the last pull still logged that a map could not take out (knock with the spark at its minimum: the boost or the fuel)
  * @property {{rpm: number, map: number, airCharge: number}[]} samples where the checking pull ran: what a guided player is graded at
+ * @property {boolean} noBoost a turbo with no boost target: the map is proven at 0 psi, where the
+ *   turbine only restricts the exhaust, and the card says to set a target and load it again
  */
+
+/**
+ * A turbo fitted with no boost target. A map proven there says nothing about the turbo: its
+ * gate holds 0 psi and the turbine only stands in the exhaust, so the engine pulls under what it
+ * made without one. The map leaves the target to the player (it is the build's, on TUNE → BOOST)
+ * and says so.
+ * @param {any} build
+ * @returns {boolean}
+ */
+export const turboWithoutBoost = (build) => !!build.turboOn && Math.max(0, ...build.boostCurve) <= 0;
 
 /**
  * The safe base map for the engine on the bench.
@@ -334,6 +346,8 @@ export function safeBaseMap(state) {
   const steps = [];
   let pulls = 0;
   const steps0 = boostSteps(st.build);
+  const noBoost = turboWithoutBoost(st.build);
+  if (noBoost) steps.push('No boost target: the turbo is held at 0 psi, where it only restricts the exhaust. Proven there; set a boost target on TUNE → BOOST and load it again for the turbo.');
   const spray = !!st.build.nitrous;
   /** The conditions of a run: boost held to a step, nitrous off until the engine is proven dry. */
   const run = (s, { psi = null, nitrous = false } = {}) => {
@@ -439,5 +453,6 @@ export function safeBaseMap(state) {
     left: p.events.filter(unsafe).map(entry),
     parts: p.events.filter((e) => PARTS.has(e.type)).map(entry),
     samples: p.points.map((q) => ({ rpm: q.rpm, map: q.map, airCharge: q.airCharge ?? 0 })),
+    noBoost,
   };
 }

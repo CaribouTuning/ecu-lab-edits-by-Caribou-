@@ -254,3 +254,35 @@ describe('the safe base map follows a tuner\'s order of work', () => {
     expect(last).toMatch(new RegExp(`highest step it ran clean was ${m.cleanAt} psi`));
   }, 300_000);
 });
+
+describe('a turbo fitted with no boost target (a play test: a turbo LS1 lost 84 whp and the card said "safe")', () => {
+  const ls1Turbo = () => set(preset('ls1'), 'turboOn', true);
+
+  it('is a turbo without boost until a target is set', async () => {
+    const { turboWithoutBoost } = await import('../src/ui/state/safeBaseMap.js');
+    const s = ls1Turbo();
+    expect(Math.max(...s.build.boostCurve)).toBe(0);
+    expect(turboWithoutBoost(s.build)).toBe(true);
+    expect(turboWithoutBoost(set(s, 'boostCurve', s.build.boostCurve.map(() => 6)).build)).toBe(false);
+    expect(turboWithoutBoost(preset('ls1').build)).toBe(false);
+    expect(turboWithoutBoost(preset('n54').build)).toBe(false);
+  });
+
+  it('the safe base map says so, and says what to do', () => {
+    const made = safeBaseMap(ls1Turbo());
+    expect(made.noBoost).toBe(true);
+    expect(made.steps[0]).toMatch(/No boost target: the turbo is held at 0 psi.*set a boost target on TUNE → BOOST and load it again/);
+    // With a target, the map proves the turbo a step at a time and the note is gone.
+    const s = ls1Turbo();
+    const six = safeBaseMap(set(s, 'boostCurve', s.build.boostCurve.map(() => 6)));
+    expect(six.noBoost).toBe(false);
+    expect(six.steps.some((t) => /No boost target/.test(t))).toBe(false);
+  });
+
+  it('the Next bar sends the player to TUNE → BOOST, after the start is chosen, not before', () => {
+    const base = { mode: /** @type {const} */ ('sandbox'), engineMissing: false, heard: false, pulled: false, fresh: false, attention: [] };
+    expect(nextStep({ ...base, noBoost: true })).toMatchObject({ id: 'boost', go: 'tune:boost' });
+    expect(nextStep({ ...base, noBoost: true, startTune: true }).id).toBe('start-tune');
+    expect(nextStep({ ...base, noBoost: false }).id).toBe('hear');
+  });
+});
