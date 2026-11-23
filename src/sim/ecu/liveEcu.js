@@ -109,6 +109,7 @@ export const LOG_CHANNELS = [
   { id: 'idleAir', label: 'Idle air', unit: '%' },
   { id: 'torque', label: 'Torque (crank)', unit: 'Nm' },
   { id: 'egt', label: 'EGT', unit: '°C' },
+  { id: 'pops', label: 'Pops (lit in the exhaust)', unit: '%' },
   { id: 'iat', label: 'IAT (read)', unit: '°C' },
   { id: 'ect', label: 'Coolant', unit: '°C' },
   { id: 'oil', label: 'Oil pressure', unit: 'kPa' },
@@ -761,7 +762,7 @@ export function liveStepEcu(st, dt, input, cfg) {
     pw: log ? log.pw : 0, injOpen: log ? log.injOpen : 0, duty: log ? log.duty : 0, portPw: log ? log.portPw : 0, portDuty: log ? log.portDuty : 0, deadTime: log ? log.deadTime : 0, railDp: log ? log.railDp : 0,
     timing: log ? log.timing : 0, egt: log ? log.egt : 0, misfire: log ? log.misfire : 0,
     // Share of the charge lighting in the exhaust (point.js): the pops, and their heat.
-    afterfire: log ? log.afterfire : 0, burble: e.burble ? 1 : 0,
+    afterfire: log ? log.afterfire : 0, pops: log ? Math.round(log.afterfire * 100) : 0, burble: e.burble ? 1 : 0,
     filmFactor: log ? Math.round(log.filmFactor) : 100, torque: Math.round(crankNm),
     bfs: log ? log.bfs : 0, knockCount: Math.round(s.knockCount), highDet: e.highDet ? 1 : 0, launch: launchArmed ? 1 : 0,
     nitrous: pt?.nitrousLbMin ?? 0, bottle: s.bottle && s.bottle.massKg > 0 ? Math.round(bottlePressurePsi(s.bottle.tempK)) : 0,

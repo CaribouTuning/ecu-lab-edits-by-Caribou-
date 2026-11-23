@@ -200,7 +200,9 @@ describe('the guide is this build\'s, not a generic one', () => {
     const { g } = steps(st);
     expect(g[g.length - 1].id).toBe('nitrous');
     expect(g[g.length - 1].text).toMatch(/Retard while spraying to at least [0-9.]+°/);
-    expect(g.find((x) => x.id === 'pull').text).toMatch(/Leave the nitrous off/);
+    // Off for the first pull, and the player told where the switch is: a kit is armed once fitted.
+    expect(g.find((x) => x.id === 'pull').text).toMatch(/Switch the nitrous off for now with the Nitrous button on the dyno's controls/);
+    expect(g[g.length - 1].text).toMatch(/arm it with the Nitrous button on the dyno's controls/);
   }, 300_000);
 });
 
@@ -300,6 +302,9 @@ describe('a factory turbo engine\'s torque limit (an audit: on an N54, B58 or EA
     expect(lim[0]).toBeGreaterThan(Math.round(S.presetById('n54').factory.crankTq / 0.7376));
     expect(lim[0]).toBeLessThan(1000);
     expect(made.steps.some((t) => /Torque limit: .*Raised to \d+ Nm/.test(t))).toBe(true);
+    // The limit, not how the computer enforces it: BMW's trims boost, and the base map once
+    // swapped that for spark retard without a word.
+    expect(S.getCal(made.action.ecu, 'torque.method')).toBe('boost');
   }, 300_000);
 
   it('the guide has the step, with the base map\'s number, and following it lets the parts make power', () => {
@@ -318,6 +323,14 @@ describe('a factory turbo engine\'s torque limit (an audit: on an N54, B58 or EA
     expect(after.find((s) => s.id === 'torque').done).toBe(true);
     expect(pull(typed).peakHp).toBeGreaterThan(pull(st).peakHp);
   }, 300_000);
+
+  it('names the nitrous as the change, not the factory turbo it sprays into', () => {
+    // The guide once opened with "the turbo changed (8.5 psi, intercooled)" on a stock N54
+    // with only a kit added: nitrous counts as induction, and was read as the turbo.
+    expect(buildChanges(n54Spray().build)).toEqual(['a 75 hp wet nitrous shot']);
+    const more = set(preset('n54'), 'boostCurve', preset('n54').build.boostCurve.map((b) => (b > 0 ? b + 4 : b)));
+    expect(buildChanges(more.build).join(', ')).toMatch(/^the turbo changed/);
+  });
 
   it('an engine the factory did not cap gets no torque step', () => {
     const st = set(preset('ls1'), 'nitrous', { kit: 'wet', shotHp: 75, heater: true, bottleLb: 10 });

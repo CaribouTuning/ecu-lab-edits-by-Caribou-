@@ -222,7 +222,7 @@ function Guide({ sig, made, build, tune, advice, page = null, onGo, onClose }) {
       {!open && <p className={styles.barStep}><span className={styles.clamp}>{now.text}</span></p>}
       {open && (
         <div className={styles.barBody}>
-          <p className={styles.lead}><b>This build: {changes.join(', ')}.</b> The steps below are what those parts need before the engine is pulled hard, in the order a tuner does them. The numbers come from a map the game checked on the dyno for this engine. You type every cell yourself; a step ticks off when your cells get there and TUNE&apos;s advisor agrees.</p>
+          <p className={styles.lead}><b>This build: {changes.join(', ')}.</b> The steps below are what this build needs before the engine is pulled hard, in the order a tuner does them. The numbers come from a map the game checked on the dyno for this engine. You type every cell yourself; a step ticks off when your cells get there and TUNE&apos;s advisor agrees.</p>
           <ol className={styles.steps}>
             {steps.map((s) => (
               <li key={s.id} className={styles.step} data-done={s.done ? 'true' : 'false'} data-now={s === now ? 'true' : 'false'}>

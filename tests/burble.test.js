@@ -7,6 +7,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { lateSparkQuench } from '../src/sim/cycle.js';
+import { LOG_CHANNELS } from '../src/sim/index.js';
 
 import { makeEngine, runLive } from './ecuHarness.js';
 
@@ -33,6 +34,14 @@ describe('the overrun burble', () => {
     expect(pops.every((r) => r.burble === 1 && !r.cut && r.timing < 0)).toBe(true);
     expect(mean(pops.map((r) => r.afterfire))).toBeGreaterThan(0.05);
     expect(mean(pops.map((r) => r.egt))).toBeGreaterThan(mean(cut.map((r) => r.egt)) + 150);
+  });
+
+  it('shows on LIVE as the Pops channel, the same share in percent, for a player with the sound off', () => {
+    expect(LOG_CHANNELS.find((c) => c.id === 'pops')?.unit).toBe('%');
+    expect(inWindow(liftOff({})).every((r) => r.pops === 0)).toBe(true);
+    const pops = inWindow(liftOff({ 'ignition.burbleEnabled': true }));
+    expect(pops.every((r) => r.pops === Math.round(r.afterfire * 100))).toBe(true);
+    expect(Math.max(...pops.map((r) => r.pops))).toBeGreaterThanOrEqual(10);
   });
 
   it('pops harder, and runs the exhaust hotter, the later the spark', () => {

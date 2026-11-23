@@ -58,8 +58,8 @@ export const HOW_TO_SEE = {
   fuelIs: 'BUILD › FUEL SYSTEM: the fuel the customer asked for.',
   naOnly: 'BUILD › INDUCTION: no turbo, supercharger or nitrous.',
   maxRedline: 'BUILD › SHORT BLOCK: the rev limit.',
-  pops: 'TUNE › SPARK, Overrun burble. Then LIVE: rev it and lift off; the pops are what the customer hears.',
-  overrunEgt: 'LIVE: rev it and lift off, and watch the exhaust temperature while it pops. Later burble timing and a longer burble run it hotter.',
+  pops: 'TUNE › SPARK, Overrun burble. Then LIVE: rev it and lift off, with the Pops channel shown on the stand computer\'s ECU screen: what lights in the exhaust is what the customer hears.',
+  overrunEgt: 'LIVE: rev it and lift off, and watch the EGT channel on the stand computer\'s ECU screen while it pops. Later burble timing and a longer burble run it hotter.',
 };
 
 /**

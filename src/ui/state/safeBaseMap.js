@@ -455,6 +455,10 @@ export function safeBaseMap(state) {
   // past anything an engine here makes); where the factory left one holding the engine to its
   // rating, it carries a limit a tuner would set: the build's own peak crank torque, with room.
   let ecu = st.tune.ecu;
+  // How the computer takes torque out is the engine's own (BMW's and VW's trim boost; spark
+  // retard heats the exhaust): the base map changes the limit, never the method.
+  const method = getCal(state.tune.ecu, 'torque.method');
+  if (method != null) ecu = setCal(ecu, 'torque.method', method);
   const had = getCal(state.tune.ecu, 'torque.limitByRpm');
   const free = getCal(ecu, 'torque.limitByRpm');
   if (had?.z && free?.z && Math.min(...had.z) < Math.min(...free.z)) {

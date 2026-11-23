@@ -139,7 +139,8 @@ export function buildChanges(build) {
   const out = [];
   const peak = Math.max(0, ...(build.boostCurve ?? [0]));
   if (build.turboOn && !preset.induction?.turboOn) out.push(`${(build.turbineCount ?? 1) > 1 ? 'twin turbos' : 'a turbo'} at ${peak} psi${build.mods?.intercooler ? ' with an intercooler' : ', no intercooler'}`);
-  else if (build.turboOn && changed.has('induction')) out.push(`the turbo changed (${peak} psi${build.mods?.intercooler ? ', intercooled' : ''})`);
+  // The turbo itself: nitrous or a blower also count as induction, and are named below.
+  else if (build.turboOn && changedParts({ ...build, nitrous: null, blowerId: null }, preset).has('induction')) out.push(`the turbo changed (${peak} psi${build.mods?.intercooler ? ', intercooled' : ''})`);
   if (build.blowerId) out.push(`a ${BLOWER_OPTS.find((b) => b.id === build.blowerId)?.label ?? 'supercharger'}${build.mods?.intercooler ? ' with an intercooler' : ''}`);
   if (build.nitrous) out.push(`a ${build.nitrous.shotHp} hp ${build.nitrous.kit} nitrous shot`);
   const fitted = INJECTOR_OPTS[build.injIdx]?.cc;
@@ -316,7 +317,7 @@ export function guidedSteps({ build, tune, target, samples, advice = null }) {
     },
     {
       id: 'pull', title: steps.length ? `First full-throttle pull at ${steps[0]} psi` : 'First full-throttle pull', short: 'First full pull', go: 'dyno',
-      text: `Run one full-throttle pull${steps.length ? ` with the boost held at ${steps[0]} psi (TUNE → BOOST, Boost limit by gear, 4th)` : ''}.${build.blowerId ? ' A supercharger\'s boost comes from its pulley, not from the computer, so this first pull already runs the full boost: the steps before it matter all the more.' : ''}${build.nitrous ? ' Leave the nitrous off (not armed) for now: it comes last, once the engine runs clean without it.' : ''} Then read the pull log from the top and do what it says, in its order: problems with the parts and the fuel first (a lean spot, or Correct VE from logs), then knock. Where it reports knock, set the cells it names to the numbers it gives: TUNE → SPARK marks the same cells with the same numbers. If it says false knock, the knock sensor is too sensitive; the timing is fine. Pull again until the log shows no lean and no knock.${steps.length > 1 || build.nitrous ? '' : DONE}`,
+      text: `Run one full-throttle pull${steps.length ? ` with the boost held at ${steps[0]} psi (TUNE → BOOST, Boost limit by gear, 4th)` : ''}.${build.blowerId ? ' A supercharger\'s boost comes from its pulley, not from the computer, so this first pull already runs the full boost: the steps before it matter all the more.' : ''}${build.nitrous ? ' Switch the nitrous off for now with the Nitrous button on the dyno\'s controls, beside Run a pull (a kit is armed once fitted): it comes last, once the engine runs clean without it.' : ''} Then read the pull log from the top and do what it says, in its order: problems with the parts and the fuel first (a lean spot, or Correct VE from logs), then knock. Where it reports knock, set the cells it names to the numbers it gives: TUNE → SPARK marks the same cells with the same numbers. If it says false knock, the knock sensor is too sensitive; the timing is fine. Pull again until the log shows no lean and no knock.${steps.length > 1 || build.nitrous ? '' : DONE}`,
       done: null,
     },
     ...(steps.length > 1 ? [{
@@ -326,7 +327,7 @@ export function guidedSteps({ build, tune, target, samples, advice = null }) {
     }] : []),
     ...(build.nitrous ? [{
       id: 'nitrous', title: 'Add the nitrous last', short: 'Nitrous', go: 'nitrous',
-      text: `Only once the engine runs clean without it. Nitrous adds oxygen, so the ${build.nitrous.shotHp} hp shot burns more fuel, faster and hotter: while it sprays the engine needs less timing and ${build.nitrous.kit === 'dry' ? 'the computer must add the fuel for it' : 'its own fuel'}. On TUNE → NITROUS set Retard while spraying to at least ${wantRetard ?? 2}°${wantTrim ? ` and Fuel correction while spraying to ${wantTrim}%` : ''} (what the base map was checked with). Then arm it, make a pull, and work its log the same way.${DONE}`,
+      text: `Only once the engine runs clean without it. Nitrous adds oxygen, so the ${build.nitrous.shotHp} hp shot burns more fuel, faster and hotter: while it sprays the engine needs less timing and ${build.nitrous.kit === 'dry' ? 'the computer must add the fuel for it' : 'its own fuel'}. On TUNE → NITROUS set Retard while spraying to at least ${wantRetard ?? 2}°${wantTrim ? ` and Fuel correction while spraying to ${wantTrim}%` : ''} (what the base map was checked with). Then arm it with the Nitrous button on the dyno's controls, make a pull, and work its log the same way.${DONE}`,
       done: wantRetard != null ? (getCal(tune.ecu, 'nitrous.retardDeg') ?? 0) >= wantRetard - 0.25 && (getCal(tune.ecu, 'nitrous.fuelTrimPct') ?? 0) >= (wantTrim ?? 0) - 0.5 : null,
     }] : []),
   ];
