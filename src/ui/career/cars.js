@@ -80,3 +80,34 @@ export function idleTest(state, { seconds = 16, acAt } = {}) {
     targetRpm: s.ecu?.idleTarget ?? state.tune.ecu?.idle?.targetRpm ?? 0,
   };
 }
+
+/** Where on the overrun the pops are judged: above idle, under the burble's usual top. */
+const OVERRUN_WINDOW_RPM = [2200, 5000];
+
+/**
+ * Revs the car on the LIVE engine and lifts off, the way a customer listens for pops and bangs:
+ * warm, 60% throttle for a second and a half, then nothing for three and a half. Reports the
+ * share of each charge that lit in the exhaust over the overrun (point.js `afterfire`: the
+ * pops) and the hottest the exhaust ran while it did (what the turbo and the cat feel).
+ *
+ * @param {StoreState} state
+ * @returns {{pops: number, peakEgtC: number, burbled: boolean}}
+ */
+export function overrunTest(state) {
+  const { args, derived, mafErrorBase } = pullInputs(state);
+  const b = state.build;
+  const exhaustDiaError = EXHAUST_DIA_OPTS[b.exhaustDiaIdx].dia
+    - idealExhaustDiameter(derived.displacementL, b.turboOn ? Math.max(...b.boostCurve) : 0);
+  const cfg = { ...args, mafErrorBase, exhaustDiaError, ecu: { ...args.ecu, aux: { ...(state.session.liveAux ?? {}), ac: false } } };
+  let s = { ...makeLiveState(), cranking: true, coolantC: 88, oilC: 88, ecu: { ...makeEcuLiveState(), sEct: 88 } };
+  for (let i = 0; i < 60; i += 1) s = liveStep(s, 0.05, { throttle: 0, load: 0 }, cfg);
+  const rows = [];
+  for (let i = 0; i < 100; i += 1) {
+    const t = i * 0.05;
+    s = liveStep(s, 0.05, { throttle: t < 1.5 ? 60 : 0, load: 0 }, cfg);
+    const log = s.ecu.log[s.ecu.log.length - 1];
+    if (t > 1.7 && s.rpm > OVERRUN_WINDOW_RPM[0] && s.rpm < OVERRUN_WINDOW_RPM[1]) rows.push(log);
+  }
+  const pops = rows.length ? rows.reduce((a, r) => a + (r.afterfire ?? 0), 0) / rows.length : 0;
+  return { pops, peakEgtC: rows.length ? Math.max(...rows.map((r) => r.egt ?? 0)) : 0, burbled: rows.some((r) => r.burble === 1) };
+}

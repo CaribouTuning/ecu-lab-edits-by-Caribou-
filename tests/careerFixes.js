@@ -191,5 +191,7 @@ export const STORY_FIXES = {
   'full-session': (s) => zmul(storyVeFromLogs(setBuild(s, { ecuInjectorCc: S.INJECTOR_OPTS[s.build.injIdx].cc, mafScalar: 1.11 })), 'ignition.knockThreshold', 1.4),
   'blower-power': (s) => boostSparkAndFuel(s, 3, 12.2),
   nitrous: (s) => setCal(setCal(s, 'nitrous.fuelTrimPct', getCal(s, 'nitrous.fuelTrimPct') - 25), 'nitrous.retardDeg', 12),
+  // The overrun burble switched on, at the calibration's own moderate timing and length.
+  'pops-bangs': (s) => setCal(s, 'ignition.burbleEnabled', true),
 };
 

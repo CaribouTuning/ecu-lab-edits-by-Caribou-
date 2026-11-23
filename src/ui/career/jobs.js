@@ -31,7 +31,7 @@ import { generatedJob } from './generate.js';
 
 /**
  * @typedef {object} Criterion
- * @property {'events'|'mixture'|'minHp'|'maxEgt'|'maxDuty'|'untouched'|'idle'|'score'|'fuelIs'|'naOnly'|'maxRedline'} type
+ * @property {'events'|'mixture'|'minHp'|'maxEgt'|'maxDuty'|'untouched'|'idle'|'score'|'fuelIs'|'naOnly'|'maxRedline'|'pops'|'overrunEgt'} type
  * @property {'complaint'|'safety'|'request'} kind
  * @property {string} label what the customer would call it
  * @property {string[]} [types]
@@ -267,6 +267,28 @@ export const JOBS = [
     ],
     hint: 'Still bogs when it comes on, or it still makes that noise. It isn’t right yet.',
     teaches: 'Nitrous brings its own oxygen, so it needs its own fuel, and it lowers the knock limit while it sprays. Both are set for the spray alone; the base tune stays as it was.',
+  },
+  {
+    id: 'pops-bangs', tier: 2,
+    customer: { name: 'Tyler', car: '2017 BMW 340i', color: 'blue', body: 'sedan' },
+    says: 'Every car at the meet crackles when it lifts off except mine. Mine just goes quiet.',
+    wants: 'Pops and bangs when I lift off the throttle. I don’t want to cook the turbo or the cat doing it.',
+    work: ['Write in an overrun burble', 'Keep the exhaust heat in check'],
+    car: { preset: 'b58-m0' },
+    needs: { training: ['knock'] }, minRep: 15, pay: 450, rep: 7,
+    checks: [
+      // A tenth of each charge lighting in the exhaust is a crackle the customer hears; the
+      // factory overrun cuts the fuel and lights none (tests/burble.test.js).
+      { type: 'pops', kind: 'complaint', min: 0.1, label: 'Pops and bangs when you lift off' },
+      // The overrun with the burble on runs this engine's exhaust at about 480 °C at the
+      // calibration's own timing, 520 °C at 25° after TDC, and 600 °C with every setting at its
+      // most (35° after, 6 s, 6% air): heat the turbo and the catalyst take every time the driver
+      // lifts. The cap passes a crackle and fails one cranked past sense, as the customer asks.
+      { type: 'overrunEgt', kind: 'safety', max: 560, label: 'Exhaust heat on the overrun kept in check' },
+      ...SAFE,
+    ],
+    hint: 'It’s exactly as quiet as it was. I lift off and nothing happens.',
+    teaches: 'A burble keeps the fuel on with the throttle shut and fires the spark late, after top dead centre, so the charge is still burning when the exhaust valve opens and finishes in the manifold. The later the spark and the longer it runs, the louder the pops and the hotter the turbo and the catalyst get: a tuner keeps it short and moderate.',
   },
 ];
 

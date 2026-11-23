@@ -224,10 +224,16 @@ export function solve(job, prep = (x) => x) {
     const v = evaluateJob(job, st);
     if (v.verdict === 'pass') return { ok: true, path, v, cannot };
     const idleFail = v.results.some((x) => !x.pass && x.check.type === 'idle');
+    // The ticket's own words: the pops are written in on TUNE › SPARK, Overrun burble, and run
+    // too hot they are taken back a step at a time (later timing runs hotter).
+    const popsFail = v.results.some((x) => !x.pass && x.check.type === 'pops');
+    const hotOverrun = v.results.some((x) => !x.pass && x.check.type === 'overrunEgt');
     const r = round(st);
     r.cannot.forEach((c) => cannot.add(c));
     if (r.did.length) { st = r.st; path.push(r.did.join(', ')); continue; }
     if (idleFail) { st = idleStep(st); path.push('LIVE: idle damping up, gains down'); continue; }
+    if (popsFail && !S.getCal(st.tune.ecu, 'ignition.burbleEnabled')) { st = setCal(st, 'ignition.burbleEnabled', true); path.push('SPARK: overrun burble on'); continue; }
+    if (hotOverrun && S.getCal(st.tune.ecu, 'ignition.burbleSparkDeg') < -10) { st = setCal(st, 'ignition.burbleSparkDeg', S.getCal(st.tune.ecu, 'ignition.burbleSparkDeg') + 5); path.push('SPARK: burble timing 5° earlier'); continue; }
     return { ok: false, path, v, cannot };
   }
   return { ok: false, path, v: evaluateJob(job, st), cannot };
