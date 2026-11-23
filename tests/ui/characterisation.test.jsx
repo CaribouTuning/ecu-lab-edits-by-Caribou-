@@ -86,7 +86,7 @@ describe('entry', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Tutorial/ }));
     // It opens on its contents page: what you will learn, then the chapters.
     expect(screen.getByText('Tutorial contents')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'START' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
     expect(screen.getByText(/Tutorial, page 1 of/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
     expect(screen.getByRole('region', { name: 'Build' })).toBeTruthy();

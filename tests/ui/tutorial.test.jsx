@@ -52,7 +52,7 @@ describe('the tutorial is short', () => {
     render(<TutorialScreen onDone={() => {}} />);
     expect(screen.getByText('Tutorial contents')).toBeTruthy();
     expect(screen.getByText('By the end you will be able to')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'START' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
     expect(screen.getByText(`Tutorial, page 1 of ${TUTORIAL.lessons.length}`)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'NEXT' }));
     expect(screen.getByText(`Tutorial, page 2 of ${TUTORIAL.lessons.length}`)).toBeTruthy();

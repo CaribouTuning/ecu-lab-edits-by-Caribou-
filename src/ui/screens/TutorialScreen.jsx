@@ -74,7 +74,7 @@ export function TutorialScreen({ book = TUTORIAL, onDone }) {
         </div>
         <div className={styles.actions}>
           <Button size="lg" onClick={() => setAt(progress.at ? resumeAt : 0)}>
-            {progress.at ? `CONTINUE AT ${LESSONS[resumeAt].number}` : 'START'}
+            {progress.at ? `Continue at ${LESSONS[resumeAt].number}` : 'Start'}
           </Button>
         </div>
       </div>
