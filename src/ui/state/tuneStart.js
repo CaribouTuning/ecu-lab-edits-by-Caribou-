@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from 'react';
 
-import { BARO_KPA, BLOWER_OPTS, IDLE_COLUMN_MAX_RPM, INJECTOR_OPTS, KNOCK_SAFETY_DEG, OPEN_LOOP_KPA, getCal, layoutById, loadFor, mafErrorFactor, readTable, tankFuel } from '../../sim/index.js';
+import { BARO_KPA, BLOWER_OPTS, IDLE_COLUMN_MAX_RPM, INJECTOR_OPTS, KNOCK_SAFETY_DEG, NM_PER_LBFT, OPEN_LOOP_KPA, getCal, layoutById, loadFor, mafErrorFactor, readTable, tankFuel } from '../../sim/index.js';
 
 import { changedParts, isOwnEngine, offersBaseMap, originPreset } from './baseMap.js';
 import { boostSteps } from './safeBaseMap.js';
@@ -207,6 +207,13 @@ export function guidedSteps({ build, tune, target, samples, advice = null }) {
   // The injectors: a step where they were changed, or the ECU is not told the ones fitted.
   const factoryCc = INJECTOR_OPTS[build.factoryInjIdx ?? preset?.parts?.injectorIdx ?? build.injIdx]?.cc;
   const injStep = fittedCc != null && (fittedCc !== factoryCc || build.ecuInjectorCc !== fittedCc);
+  // The engine computer's torque limit: a step where the factory left one holding the engine to
+  // its rating and the base map raises it (safeBaseMap.js), or every part added is trimmed away.
+  const myTq = getCal(tune.ecu, 'torque.limitByRpm');
+  const wantTq = getCal(target.ecu, 'torque.limitByRpm');
+  const tqNeed = wantTq?.z ? Math.min(...wantTq.z) : null;
+  const tqFactory = preset?.factory?.torqueCapped && preset.factory.crankTq ? Math.round(preset.factory.crankTq * NM_PER_LBFT) : null;
+  const tqStep = tqFactory != null && tqNeed != null && myTq?.z && tqNeed > tqFactory;
   const fuel = tankFuel(build);
   // The FUEL table is written on petrol's scale whatever is in the tank, as many tuning
   // suites show it: 14.7 is lambda 1.00, and the computer converts it with the fuel's own
@@ -237,6 +244,11 @@ export function guidedSteps({ build, tune, target, samples, advice = null }) {
       id: 'maf', title: 'Tell the computer how to read the air meter', short: 'Air meter (MAF)', go: 'sensors',
       text: `Open SENSORS and set the MAF scalar to ${mafTarget.toFixed(2)}. The MAF is the air meter in the intake: the computer measures the air with it and adds fuel to match. The ${build.mods?.intake && build.turboOn ? 'new intake and the turbo pipework change' : build.turboOn ? 'turbo pipework changes' : 'new intake changes'} how the air flows past it, so it now reads about ${Math.round((1 - 1 / mafTarget) * 100)}% less air than really goes in, and the engine would run lean (too little fuel, the dangerous way). The scalar corrects the reading. ${mafTarget.toFixed(2)} is the figure the game checked on the dyno; on a real car it comes from the intake maker, or from a wideband oxygen sensor and the fuel trims, and your first pull's fuel trims check it the same way.`,
       done: Math.abs((build.mafScalar ?? 1) - mafTarget) <= GUIDE_TOLERANCE.maf,
+    }] : []),
+    ...(tqStep ? [{
+      id: 'torque', title: 'Raise the computer\'s torque limit', short: 'Torque limit', go: 'torque',
+      text: `Open TORQUE and raise Crank torque limit by RPM to ${tqNeed} Nm at every speed. This engine left the factory with its computer holding it to its rated ${tqFactory} Nm by trimming the boost, so whatever the parts add, the computer takes back. ${tqNeed} Nm is a tenth above the most this build makes at the crank, measured on the dyno: the room a tuner leaves so the limit never trims a clean pull. On a real car, check the gearbox and clutch are rated for it first.`,
+      done: Math.min(...myTq.z) >= tqNeed - 5,
     }] : []),
     {
       id: 'mixture', title: 'Choose the fuel mixture', short: 'Fuel mixture', go: 'fuel',

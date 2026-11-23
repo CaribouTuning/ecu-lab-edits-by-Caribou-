@@ -5,7 +5,7 @@
  */
 
 import {
-  BARO_KPA, INJECTOR_OPTS, OPEN_LOOP_KPA, PSI_TO_KPA, monotoneFullLoad, START_UP_RETARD_DEG, ecuHardwareOf, getCal, setCal, SPARK_MIN_DEG, applyVeCorrections, calibrationAdvice, intakeCamAt, layoutById, loadFor, simulateSweep, veCorrections, veSamplesFromPull,
+  BARO_KPA, DRIVETRAIN_EFF, INJECTOR_OPTS, NM_PER_LBFT, OPEN_LOOP_KPA, PSI_TO_KPA, monotoneFullLoad, START_UP_RETARD_DEG, ecuHardwareOf, getCal, setCal, SPARK_MIN_DEG, applyVeCorrections, calibrationAdvice, intakeCamAt, layoutById, loadFor, simulateSweep, veCorrections, veSamplesFromPull,
 } from '../../sim/index.js';
 
 import { baseMapAction } from './baseMap.js';
@@ -27,6 +27,14 @@ const unsafe = (e) => UNSAFE.has(e.type) && !e.gridBound;
 export const SAFE_KNOCK_MARGIN_DEG = 2;
 /** Mixture a lean cell is set richer than the advisor's target by, AFR. */
 export const SAFE_RICH_MARGIN_AFR = 0.2;
+/**
+ * How far above the build's own peak crank torque a base map sets the engine computer's torque
+ * limit, where the factory left one holding the engine to its rating: a tuner raises the cap so
+ * the parts can pay, and leaves room over what the engine makes so the limit never trims a
+ * clean pull, without switching the protection off.
+ */
+export const TORQUE_LIMIT_HEADROOM = 1.1;
+
 /** Pulls the check may take before it gives up and reports what is left. */
 const MAX_PULLS = 4;
 
@@ -443,8 +451,20 @@ export function safeBaseMap(state) {
   // call it safe: it says so and names the part.
   const clean = isClean(p) && !p.events.some(unsafe);
   const entry = (e) => ({ type: e.type, msg: String(e.msg), fix: String(e.fix ?? '') });
+  // The engine computer's torque limit. The base map is checked with none (the default curve,
+  // past anything an engine here makes); where the factory left one holding the engine to its
+  // rating, it carries a limit a tuner would set: the build's own peak crank torque, with room.
+  let ecu = st.tune.ecu;
+  const had = getCal(state.tune.ecu, 'torque.limitByRpm');
+  const free = getCal(ecu, 'torque.limitByRpm');
+  if (had?.z && free?.z && Math.min(...had.z) < Math.min(...free.z)) {
+    const peakNm = Math.max(...p.points.map((q) => q.torque)) * NM_PER_LBFT / DRIVETRAIN_EFF;
+    const limitNm = Math.ceil((peakNm * TORQUE_LIMIT_HEADROOM) / 10) * 10;
+    ecu = setCal(ecu, 'torque.limitByRpm', { ...free, z: free.z.map(() => limitNm) });
+    steps.push(`Torque limit: the engine computer held this engine to its factory rating. Raised to ${limitNm} Nm at every speed, a tenth above the ${Math.round(peakNm)} Nm this build makes at the crank.`);
+  }
   return {
-    action: { ...base, ecuInjectorCc: fittedCc, ve: st.tune.ve, timing: st.tune.timing, afr: st.tune.afr, ecu: st.tune.ecu },
+    action: { ...base, ecuInjectorCc: fittedCc, ve: st.tune.ve, timing: st.tune.timing, afr: st.tune.afr, ecu },
     peakHp: p.peakHp,
     pulls,
     steps,

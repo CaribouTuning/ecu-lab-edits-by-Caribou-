@@ -286,3 +286,42 @@ describe('a turbo fitted with no boost target (a play test: a turbo LS1 lost 84 
     expect(nextStep({ ...base, noBoost: false }).id).toBe('hear');
   });
 });
+
+describe('a factory turbo engine\'s torque limit (an audit: on an N54, B58 or EA888 the guide made no power from any part)', () => {
+  // The factory computer holds these engines to their rated torque by trimming boost. The safe
+  // base map raised it and the guide did not, so nitrous on an N54 made 335 whp from the base map
+  // and the stock 259 from the guide.
+  const n54Spray = () => set(preset('n54'), 'nitrous', { kit: 'wet', shotHp: 75, heater: true, bottleLb: 10 });
+
+  it('the base map sets a limit a tuner would, not none, and says so', () => {
+    const made = safeBaseMap(n54Spray());
+    const lim = S.getCal(made.action.ecu, 'torque.limitByRpm').z;
+    expect(new Set(lim).size).toBe(1);
+    expect(lim[0]).toBeGreaterThan(Math.round(S.presetById('n54').factory.crankTq / 0.7376));
+    expect(lim[0]).toBeLessThan(1000);
+    expect(made.steps.some((t) => /Torque limit: .*Raised to \d+ Nm/.test(t))).toBe(true);
+  }, 300_000);
+
+  it('the guide has the step, with the base map\'s number, and following it lets the parts make power', () => {
+    const st = n54Spray();
+    const made = safeBaseMap(st);
+    const steps = guidedSteps({ build: st.build, tune: st.tune, target: made.action, samples: made.samples });
+    const tq = steps.find((s) => s.id === 'torque');
+    expect(tq).toBeDefined();
+    expect(tq.done).toBe(false);
+    const nm = Number(/raise Crank torque limit by RPM to (\d+) Nm/.exec(tq.text)[1]);
+    expect(nm).toBe(S.getCal(made.action.ecu, 'torque.limitByRpm').z[0]);
+    // Typed: the step is done, and the same tables pull more than the factory cap allowed.
+    const cur = S.getCal(st.tune.ecu, 'torque.limitByRpm');
+    const typed = reducer(st, { type: ACTIONS.SET_ECU, path: 'torque.limitByRpm', value: { ...cur, z: cur.z.map(() => nm) } });
+    const after = guidedSteps({ build: typed.build, tune: typed.tune, target: made.action, samples: made.samples });
+    expect(after.find((s) => s.id === 'torque').done).toBe(true);
+    expect(pull(typed).peakHp).toBeGreaterThan(pull(st).peakHp);
+  }, 300_000);
+
+  it('an engine the factory did not cap gets no torque step', () => {
+    const st = set(preset('ls1'), 'nitrous', { kit: 'wet', shotHp: 75, heater: true, bottleLb: 10 });
+    const made = safeBaseMap(st);
+    expect(guidedSteps({ build: st.build, tune: st.tune, target: made.action, samples: made.samples }).some((s) => s.id === 'torque')).toBe(false);
+  }, 300_000);
+});
