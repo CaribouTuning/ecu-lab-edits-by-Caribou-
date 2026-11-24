@@ -1,0 +1,50 @@
+/** Whether the 3D shop is drawn at all. */
+
+const KEY = 'ecu-lab:3d';
+
+/** @returns {'on'|'off'|'force'} what the player or a failed start chose; 'force' skips the software-renderer check */
+export function read3d() {
+  try {
+    const v = window.localStorage.getItem(KEY);
+    return v === 'off' || v === 'force' ? v : 'on';
+  } catch { return 'on'; }
+}
+
+/** @param {'on'|'off'|'force'} v */
+export function write3d(v) {
+  try {
+    if (v === 'on') window.localStorage.removeItem(KEY);
+    else window.localStorage.setItem(KEY, v);
+  } catch { /* private window: it is just for this visit */ }
+}
+
+let hardwareGl = /** @type {boolean|null} */ (null);
+
+/** Renderer names of the GPU-less WebGL implementations. */
+const SOFTWARE_RENDERER = /swiftshader|llvmpipe|softpipe|software|basic render driver/i;
+
+/**
+ * Whether this machine draws WebGL in hardware: asked once, of a scratch canvas, with
+ * `failIfMajorPerformanceCaveat`, which a software renderer (hardware acceleration off, a
+ * blocklisted GPU) should refuse, and by the renderer's own name where the browser gives it.
+ * @returns {boolean}
+ */
+export function hasHardwareGl() {
+  if (hardwareGl != null) return hardwareGl;
+  try {
+    const c = document.createElement('canvas');
+    const gl = c.getContext('webgl2', { failIfMajorPerformanceCaveat: true })
+      ?? c.getContext('webgl', { failIfMajorPerformanceCaveat: true });
+    // Chromium now hands out its SwiftShader software renderer even with the caveat flag, so
+    // the renderer's own name is asked as well: SwiftShader (Chromium), llvmpipe and softpipe
+    // (Mesa), Microsoft Basic Render Driver (Windows WARP) and Apple's software renderer all
+    // draw on the CPU, where one frame of the shop took about a second and froze the page.
+    const info = gl?.getExtension('WEBGL_debug_renderer_info');
+    const renderer = info ? String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL) ?? '') : '';
+    hardwareGl = !!gl && !SOFTWARE_RENDERER.test(renderer);
+    /** @type {any} */ (gl)?.getExtension('WEBGL_lose_context')?.loseContext();
+  } catch {
+    hardwareGl = false;
+  }
+  return hardwareGl;
+}
