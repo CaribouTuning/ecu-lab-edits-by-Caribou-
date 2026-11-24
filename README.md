@@ -16,14 +16,21 @@ pull, and read a log that explains what went right or wrong.
 
 It is a teaching tool, not a game with a horsepower slider.
 
-Three ways in: **SANDBOX** is free play; **TUTORIAL** is five minutes on the basics, with
-the full Tuning Course under HOME › Learn; **CAREER** is a tuning shop of your own.
+Three ways in, all in the same shop. **SANDBOX** is free play: the laptop on the desk has
+Build (the engine, drawn in 3D as you change it), Tune (the ECU's tables), Learn (the guide to
+tuning, a page at a time) and Physics (the engine model laid open on your own engine, a page at a
+time: the curves, the intake, the exhaust, one cylinder firing, every calculation and the
+wear); shut it and the dyno, the build bench and the engine stand are in the shop behind it.
+On a phone the laptop is the phone: the same apps on a home screen. **TUTORIAL** is five
+minutes on the basics. **CAREER** is a tuning shop of your own: your late dad Ray's,
+reopened by your uncle Pops, who teaches you the trade by text in a twelve-chapter story
+that ends with you a master tuner, with the job board on the wall and Ray's dyno in the bay.
 Customers bring cars with real faults and describe what the car does, never what is wrong
 with it: a cast of named customers, and new walk-ins every day without end, generated
 from faults the simulator genuinely produces and harder as the shop's name grows. Every
 job is graded on the same simulator as everything else: the car you hand back is pulled
 and idled, and power bought with knock or a lean top end is not a finished job. Money
-buys a dyno, lifts and tools and pays the running costs; training opens more of the ECU,
+buys lifts and tools and pays the running costs; training opens more of the ECU,
 and eventually engine building, where customers bring a wish list instead of a fault.
 Its save is separate from SANDBOX's, and switching between them loses nothing.
 
@@ -101,8 +108,12 @@ src/
     thermo.js        charge temperature
     friction.js      rubbing, pumping and total parasitic losses
     engine.js        short-block design -> derived properties
+    bottomEnd.js     pistons and rods: the piston speed each assembly is rated for
     manifold.js      manifold pressure, best-power mixture
-    airflow.js       hardware -> VE table
+    airflow.js       hardware -> VE table, through the gas exchange
+    breathing.js     the gas exchange: valves on lift curves, runner and primary waves, the exhaust's losses
+    throttle.js      the throttle body: opening -> manifold pressure
+    layouts.js       the tables' breakpoints, the game's 8 x 6 and a grid sized to the engine
     cycle.js         the closed cycle: heat release, two-zone gas, knock integral, EGT
     knock.js         charge index and autoignition helpers
     turbo.js         the turbo spool-up solve (and the induction solve for a supercharger)
@@ -113,15 +124,22 @@ src/
     point.js         evaluatePoint — the heart of it
     sweep.js         a full dyno pull + the event log
     live.js          real-time crank dynamics + ECU control loop
+    liveCore.js      the live engine's state and its seeded noise
+    damage.js        wear and failure: rings, bearings and valves, from the conditions they run in
     advisors.js      what the hardware wants vs. what your tables say
     scoring.js       tuning / engineer / pull scores
     presets.js       the factory engines and their generated calibrations
+    factoryFuel.js   the factories' own enrichment, for the factory fuel tables
+    veLearn.js       VE correction from logs, as an autotune does
+    rig.js           a whole engine and pull from a preset, for scripts, tests and the /dyno bot
     acoustics.js     the engine sound, built from the same cycle
     ecu/             engine management: calibration, sensors, controllers, protections,
                      the live ECU and its pull-log events
   ui/            presentation only — no physics below this line
     career/        CAREER: the shop, its customers and jobs, and the grading, which
                    runs the real simulator on the car handed back
+    desk/          the 3D shop (three.js), its stations and the laptop's apps
+    world/         the 3D toolkit the shop is drawn with: the stage, materials and models
   storage.js     persistence adapter (artifact host / localStorage / memory)
 tests/           physics intent tests + the behavioural fingerprint
 ```
@@ -192,6 +210,12 @@ Contributions from anyone else are very welcome — see
 ## Licence
 
 [MIT](LICENSE) — copyright Caribou Tuning and Turtle.GTI.
+
+## Trademarks
+
+Nissan, BMW, Volkswagen, General Motors, Chrysler and the engine and model names in the
+catalogue are the names and marks of their owners. They are used here only to say which
+real engine a preset is built from; no owner makes, endorses or supports this project.
 
 ## A note on real engines
 
