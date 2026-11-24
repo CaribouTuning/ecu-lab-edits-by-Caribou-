@@ -114,6 +114,17 @@ export function layoutById(id) {
   return (typeof id === 'string' && ECU_LAYOUTS[id]) || GAME_LAYOUT;
 }
 
+/**
+ * Whether an engine runs inside the game grid: its limiter no further past the last RPM
+ * column than a limiter is ever placed (`AXIS_RPM_PAST_LIMIT`), and no more manifold
+ * pressure than the top load row. Past either, the ECU would read the edge for the whole
+ * top end, so the engine's tables are sized to it instead.
+ * @param {{redline: number, peakMapKpa: number}} spec
+ */
+export function fitsGameGrid({ redline, peakMapKpa }) {
+  return redline <= GAME_AXES.rpm[GAME_AXES.rpm.length - 1] + AXIS_RPM_PAST_LIMIT && peakMapKpa <= GAME_AXES.load[0];
+}
+
 /** Smallest of the round steps an ECU's breakpoints are usually written in that is at least `x`. */
 const NICE_STEPS = [5, 6, 7.5, 8, 10, 12.5, 15, 20, 25, 30, 40, 50, 60, 75, 100];
 const niceUp = (x) => NICE_STEPS.find((s) => s >= x - 1e-9) ?? Math.ceil(x / 25) * 25;
@@ -192,6 +203,32 @@ export function engineLayout(spec) {
     timing: axes,
     afr: axes,
   };
+}
+
+/**
+ * Axes that reach `want`, made by ADDING breakpoints to `axes`: new load rows above the top
+ * and new RPM columns past the last, every existing breakpoint kept exactly where it was.
+ * This is what tuning software's "extend axis" does, and why it is safe on a table someone
+ * has tuned: a cell's breakpoints do not move, so no value is re-sampled or blurred (a new
+ * evenly spaced grid, re-reading the old one at its points, turned a single tuned cell into
+ * the average of its neighbours).
+ *
+ * New load rows step by the old top spacing, or 10 kPa if that is finer: boost is not tuned
+ * at the 5 kPa a vacuum table is. New columns step by the last two columns' spacing.
+ * @param {TableAxes} axes in kPa on the load axis (descending) and RPM (ascending)
+ * @param {{loadKpa: number, rpm: number}} want the top load and last RPM to reach
+ * @returns {{axes: TableAxes, addRows: number, addCols: number}} the new axes, and how many
+ *   rows were put above and columns after
+ */
+export function extendAxesTo(axes, want) {
+  if (axes.loadUnit !== 'kPa') return { axes, addRows: 0, addCols: 0 };
+  const load = [...axes.load];
+  const rpm = [...axes.rpm];
+  const rowStep = Math.max(10, load.length > 1 ? load[0] - load[1] : 10);
+  while (load[0] < want.loadKpa - 0.5) load.unshift(Number((load[0] + rowStep).toFixed(3)));
+  const colStep = rpm.length > 1 ? rpm[rpm.length - 1] - rpm[rpm.length - 2] : 500;
+  while (rpm[rpm.length - 1] < want.rpm - 0.5) rpm.push(Number((rpm[rpm.length - 1] + colStep).toFixed(3)));
+  return { axes: { ...axes, load, rpm }, addRows: load.length - axes.load.length, addCols: rpm.length - axes.rpm.length };
 }
 
 /**

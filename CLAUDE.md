@@ -79,15 +79,69 @@ remaining risk is the same Node major with a different libm, which is what step 
   generates its calibration from the physics. The advisor, the pull log and the Tuning Score
   must tell one story: a stock calibration is clean on TUNE at every load, and RESET ALL TO
   STOCK writes `stockCalibrationFor` the hardware on the bench, never the Nissan V6 tables
-  (those knocked every other engine in the catalogue), and keeps an intercooler with its turbo
-  (`stockModsOf`). "Cells the pull did not run" is judged against the player's own pull
-  (`cellsNotRunBy`), never TUNE's full-throttle one. `CUSTOM_ENGINE_LIMITS` are the ranges
+  (those knocked every other engine in the catalogue), on the induction it left the factory
+  with (`build.factoryInduction`): a turbo added since gets no calculated boost cells. It keeps
+  an intercooler with its factory turbo (`stockModsOf`). The game never fills tables for the
+  player. Every engine that fits it starts on the game's 8 × 6 grid (`presetLayout`; only one
+  that revs past 7,750 RPM or makes more than 200 kPa gets breakpoints sized to it), and the
+  sized 16 × 16 is on TUNE's layout switch. In SANDBOX a build that reaches past its tables extends the axes as the same
+  write (`withRowsForTheBuild` in reducer.js): `extendAxes` only ever APPENDS rows and columns
+  (never re-sample a tuned table: that once turned a typed 11° into 21°) and fills them from
+  the edge, marked not tuned, and TUNE fades the cells the engine does not reach yet
+  (`state/reach.js`, the advisor's `reachKpaAt`). In CAREER a build change leaves the
+  tables alone (past the axes the ECU reads the edge) and the player extends them. "Cells the pull did not
+  run" is judged against the player's own pull (`cellsNotRunBy`), never TUNE's full-throttle
+  one. `CUSTOM_ENGINE_LIMITS` are the ranges
   `tests/randomBuilds.js` fuzzes: widen one only with the fuzz, and keep both passing.
-- **Preset fidelity is tracked in #19.** The gap is the shape of the airflow curve, not a
-  missing effect such as direct injection: the DI presets already sit at MBT timing
-  almost everywhere. Fix #15 (no naturally aspirated power peak before redline) before
-  refitting presets, or the refit fits data to the wrong shape. Compare whole curves with
-  `scripts/analyze_presets.py`, not just peaks.
+- **VE is a gas-exchange model, not a curve** (`sim/breathing.js`, called by
+  `airflow.js hardwareVeAt` on a lazily filled 100 RPM × 2 kPa grid). Valves are orifices
+  on lift curves with opening and closing ramps; each cam lobe has its own duration
+  (`camDuration`, `exhaustCamDuration`, at 0.050 in) and the exhaust lobe also sets EVO in
+  the cycle (`cycle.js evoAtdcDeg`). The intake runner and the exhaust primary are linear
+  acoustic lines (the runner reflects at the plenum by area ratio, its waves carried from
+  one cycle to the next); the runner is tuned so its torque peak lands on the published
+  speed (`tunedRunnerM`). Every cell runs on the stoichiometric full-charge exhaust
+  temperature (`INDUCTION_REF_EXHAUST_K`): the load-only probe correlation once starved
+  light load at high speed. One fitted constant, `BREATH_VALVE_CD` 0.61; a head with
+  flow-bench data carries `intakePortCfm`. Bolt-ons change hardware, never add VE. Do not
+  reintroduce a VE multiplier to fix a preset: the user's rule is that the air model is the
+  physics. It is slow: the full suite takes over an hour on one core, so run the changed
+  files, not the suite, while working.
+- **The head, cam card and headers are optional parts** (`intakeLiftMm`, `exhaustLiftMm`,
+  `exhaustValveMm`, `exhaustPortCfm`, `lsaDeg`, `iclDeg`, `runnerMm`, `headerPrimaryMm`,
+  `headerPrimaryIdMm` on the engine; `mods.catalyst`). Absent, each is the model's own figure
+  (`headDefaultsOf`), and setting it to that changes nothing (tests/head-exhaust.test.js):
+  keep that true when adding one. A head or cam change keeps the intake runner (BUILD pins
+  `runnerMm`): retuning it is a new manifold, and cost about 0.65 s a slider step. A cam
+  phaser moves only its own lobe (`valveEvents` `intakeAdvanceDeg`).
+- **A pull's load is a throttle opening** (`loadKpa / 101.3`), turned into MAP by the
+  throttle body (`sim/throttle.js`). Label it "% throttle" in the UI, never kPa, and read a
+  point's own `map` for anything about manifold pressure.
+- **Tests that pull a preset go through `tests/ecuHarness.js` `makeEngine`** (the app's own
+  path: the hardware's breathing as truth, the ECU in the loop). Passing the factory VE table
+  as `veTruth` reads the table back as if it were the engine and hides the physics.
+- **Preset fidelity is tracked in #19.** Cams are published figures with their sources in
+  presets.js (converted to 0.050 in through the model's own lift curve where quoted at
+  another lift); only the B58s and EA888s, with no factory figure found, are fitted, and
+  their comments say so. Known misses (`KNOWN_GAPS` in tests/presets.test.js, with the
+  measurements): VQ35HR power 8-9% low (no cam moves it; no flow data for its head), GM
+  truck V8 torque +8-12% with peaks 300-700 RPM early (87-octane rating is 1.2-1.9 points
+  of it); the LS6 and 6.4 HEMI still rise gently into their limiters (FLAT_TO_LIMITER in
+  tests/physics.test.js). Cam swaps check out on the LS1 (+10.5% against about +9-10% on
+  real cam-only swaps) but pay the VQ less than MotoIQ's JWT C2 test (+2.5% against +6%),
+  and headers gain about 1% against 3-6%: the career's NA builds are set from the model.
+  Compare whole curves with `scripts/analyze_presets.py`, not just peaks.
+- **Every pull and advice call passes the build's exhaust pipe** (`exhaustDia`): the VE
+  truth prices it, so a pull, the live engine or the advisor that leaves it out runs the
+  car on a 3.0 in pipe and disagrees with its own factory calibration. `src/sim/rig.js`,
+  `pullInputs.js` and EcuLab's sweeps all carry it.
+- **Live noise is seeded** (`liveCore.js liveRandom`, mulberry32 in `s.rng`), so a LIVE run
+  replays exactly; do not call `Math.random` in the simulation.
+- **The overrun burble is physics, not a sound effect.** `ignition.burble*` keeps fuel on
+  with the spark after TDC on a closed throttle. The share of charge unburned at EVO (the
+  Wiebe tail plus `lateSparkQuench`, which is zero for any spark up to 5° ATDC) costs work
+  and lights in the manifold (`afterfire`, EGT). The audio's pops read that share. Keep the
+  quench at zero near MBT, or every retarded boost cell loses power.
 - **Offline tooling may be Python** (validation, analysis, plotting, data generation in
   `scripts/`). The simulation itself runs in the browser and stays JavaScript.
 

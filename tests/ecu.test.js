@@ -48,7 +48,7 @@ describe('the default calibration is the original model', () => {
 });
 
 describe('the dyno\'s two numbers', () => {
-  // Learn article 37 teaches hp = lb-ft × RPM ÷ 5252 on this app's own figures. Both are
+  // Learn article 32 teaches hp = lb-ft × RPM ÷ 5252 on this app's own figures. Both are
   // wheel numbers (crank × the same drivetrain efficiency), so the identity must hold
   // on every logged point, rounding aside — and the curves must cross at 5252 RPM.
   it('logs power as torque times speed, on every point', () => {
@@ -81,12 +81,20 @@ describe('sensors: the ECU acts on what it measures', () => {
   });
 
   it('drives closed loop to the wrong mixture on a mis-scaled wideband, while reading on target', () => {
+    // A pull's load is a throttle opening: 15% holds this 3.5 L near 36 kPa at 3500 RPM, part
+    // load in closed loop (40% opening is already near full load, in power enrichment). The
+    // ECU set to read "AFR 10-20" sees 1.00 at 2.35 V, which the fitted controller's lambda
+    // 0.5-1.5 line puts at lambda 0.970: closed loop pulls the mixture rich toward it while
+    // the gauge reads on target.
     const eng = makeEngine({ cal: { 'sensors.wideband': 'afr-10-20' } });
-    const p = at(eng.pull(40), 3500);
+    const reads = S.readSensor({ kind: 'wideband', value: 0.97, part: 'lambda-0.5-1.5', scale: 'afr-10-20' }).value;
+    expect(reads).toBeCloseTo(1, 2);
+    const p = at(eng.pull(15), 3500);
     expect(p.openLoop).toBe(false);
     expect(Math.abs(p.sensedLambda - 1)).toBeLessThan(0.02);
-    expect(Math.abs(p.lambda - 1)).toBeGreaterThan(0.025);
-    expect(types(eng.pull(40))).toContain('wideband');
+    expect(p.lambda).toBeLessThan(0.985);
+    expect(p.lambda).toBeLessThan(p.sensedLambda - 0.015);
+    expect(types(eng.pull(15))).toContain('wideband');
   });
 
   it('misreads charge temperature on the wrong thermistor curve', () => {
@@ -154,10 +162,14 @@ describe('fuel: what the ECU believes about fuel reaches the cylinder', () => {
   });
 
   it('leans out under boost on a returnless rail, and compensation brings it back', () => {
-    const base = { preset: 'b58-m1', build: { fuelSystem: { regulator: 'returnless', basePressureKpa: 300, pumpIdx: 3 } } };
-    const ret = at(makeEngine({ preset: 'b58-m1' }).pull(), 4500);
+    // The B58's factory fuel runs lambda 1 under boost (factoryFuel.js), so leaning it 8%
+    // trips the ECU's lean protection, which cuts the boost this test is about. The rail's
+    // physics is what is under test here, so the protection is off on all three.
+    const noCut = { 'protect.leanEnabled': false };
+    const base = { preset: 'b58-m1', build: { fuelSystem: { regulator: 'returnless', basePressureKpa: 300, pumpIdx: 3 } }, cal: noCut };
+    const ret = at(makeEngine({ preset: 'b58-m1', cal: noCut }).pull(), 4500);
     const raw = at(makeEngine(base).pull(), 4500);
-    const comp = at(makeEngine({ ...base, cal: { 'injector.pressureComp': 'manifold' } }).pull(), 4500);
+    const comp = at(makeEngine({ ...base, cal: { ...noCut, 'injector.pressureComp': 'manifold' } }).pull(), 4500);
     expect(raw.railDp).toBeLessThan(250);
     expect(raw.lambda).toBeGreaterThan(ret.lambda * 1.08);
     expect(Math.abs(comp.lambda - ret.lambda)).toBeLessThan(0.02);
@@ -175,12 +187,15 @@ describe('fuel: what the ECU believes about fuel reaches the cylinder', () => {
   });
 
   it('starves the rail when the pump is too small for the demand', () => {
-    // The stock pump, and a tired one at that, against E85's fuel volume under boost.
-    const eng = makeEngine({ preset: 'b58-m1', build: { octaneIdx: 3, injIdx: 4, ecuInjectorCc: 850, fuelSystem: { regulator: 'return', basePressureKpa: 300, pumpIdx: 0 } }, faults: { pump: 'weak' } });
+    // The stock pump, and a tired one at that, against E85's fuel volume under boost. Lean
+    // protection off: the B58's lambda-1 factory fuel sits close enough to its threshold
+    // that it would cut the boost, and the demand with it, before the pump runs short.
+    const noCut = { 'protect.leanEnabled': false };
+    const eng = makeEngine({ preset: 'b58-m1', build: { octaneIdx: 3, injIdx: 4, ecuInjectorCc: 850, fuelSystem: { regulator: 'return', basePressureKpa: 300, pumpIdx: 0 } }, faults: { pump: 'weak' }, cal: noCut });
     const pull = eng.pull();
     expect(pull.points.some((p) => p.fuelStarved)).toBe(true);
     const starved = pull.points.find((p) => p.fuelStarved);
-    const healthy = at(makeEngine({ preset: 'b58-m1', build: { octaneIdx: 3, injIdx: 4, ecuInjectorCc: 850 } }).pull(), starved.rpm);
+    const healthy = at(makeEngine({ preset: 'b58-m1', build: { octaneIdx: 3, injIdx: 4, ecuInjectorCc: 850 }, cal: noCut }).pull(), starved.rpm);
     expect(starved.lambda).toBeGreaterThan(healthy.lambda);
   });
 
@@ -403,6 +418,18 @@ describe('the live engine runs its controllers in time', () => {
     expect(lowest).toBeGreaterThan(560);
   });
 
+  // A real engine catches, flares a few hundred RPM over its fast idle and comes down in
+  // a second or two. The base idle air used to be a fifth open on a cold start and the
+  // hold ran nearly a second, so every V6 shot to 2,500–2,900 RPM and took four seconds
+  // to come back: it read as the throttle sticking.
+  it.each([[null], ['vq35hr'], ['vq35de-revup'], ['n54']])('flares modestly on a start and settles (%s)', (preset) => {
+    for (const coolantC of [20, 88]) {
+      const { rows } = runLive(makeEngine({ preset }), { seconds: 4, coolantC });
+      expect(Math.max(...rows.map((r) => r.rpm))).toBeLessThan(2000);
+      expect(rows.at(-1).rpm).toBeLessThan(1100);
+    }
+  });
+
   it('charges the battery at a hot idle, and sags only under a heavy electrical load', () => {
     // A 120 A alternator gives about half its rating at idle: enough for the car itself,
     // not for lights and A/C on top.
@@ -435,7 +462,10 @@ describe('the live engine runs its controllers in time', () => {
     // engine cranks and will not fire. On E85, with twice gasoline's latent heat, the
     // evaporation arithmetic used to cool that charge below absolute zero and hand LIVE
     // a NaN for RPM.
-    const eng = makeEngine({ build: { octaneIdx: 3 } });
+    // The ECU is also told its injectors are half their size, so every pulse is doubled: on
+    // the gas-exchange model the cold engine fills close to the table's 130%, and the table
+    // alone leaves it at lambda 0.4-0.45, inside the rich limit, where it does fire.
+    const eng = makeEngine({ build: { octaneIdx: 3, ecuInjectorCc: 158 } });
     eng.tables.ve = eng.tables.ve.map((row) => row.map(() => 130));
     const { rows, state } = runLive(eng, { seconds: 8, coolantC: 20, pedal: (t) => (t > 4 ? 100 : 0) });
     expect(rows.every((r) => Number.isFinite(r.rpm) && Number.isFinite(r.torque) && Number.isFinite(r.egt))).toBe(true);

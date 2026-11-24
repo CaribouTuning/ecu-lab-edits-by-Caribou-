@@ -16,13 +16,14 @@ import { exhaustManifoldKpa } from './friction.js';
 import { chargeTempK, exhaustTempK } from './thermo.js';
 import { clamp, curveAt, interp1 } from './math.js';
 import { evaluatePoint, portKitBlend, stagedPortShare } from './point.js';
+import { wearEffects } from './damage.js';
 import { reachableKpa } from './manifold.js';
 import { inductionAtMap } from './turbo.js';
 import {
   GAME_LAYOUT, kpaForLoad, layoutById, loadForKpa, needsAirmass, readEcuTable, sameAxes, truthReader,
 } from './layouts.js';
 import {
-  OPEN_LOOP_KPA, SPARK_MAX_DEG, SPARK_MIN_DEG, interpolationRoomDeg,
+  OPEN_LOOP_KPA, REACHABLE_SLACK_KPA, SPARK_MAX_DEG, SPARK_MIN_DEG, interpolationRoomDeg,
 } from './tables.js';
 
 /**
@@ -35,17 +36,49 @@ const INDUCTION_MEMO = new WeakMap();
 /** A cell delta below this (percent) is not worth reporting. */
 export const VE_NOTABLE_PCT = 2.5;
 
-/** Safety left under the calculated knock limit when advising, degrees. */
-const KNOCK_SAFETY_DEG = 1.5;
+/** Safety left under the calculated knock limit when advising, degrees. The pull log's
+ *  lazy-spark entry (sweep.js) measures against the same target. */
+export const KNOCK_SAFETY_DEG = 1.5;
+/** Protections (strategy.js) that take boost or load away, so a pull under them did not
+ *  reach the boost its tune asks for. IAT and EGT protection pull timing or add fuel and
+ *  leave the boost alone. */
+const BOOST_CUTTING = new Set(['knock', 'duty', 'overboost', 'lean', 'torque', 'oil', 'fuelpressure', 'limp']);
 
 /** A cell must sit more than this far past a ceiling before it is worth reporting. */
 const ADVANCE_TOLERANCE_DEG = 1.0;
 
 /** A cell has to be leaving this much advance on the table before it is worth chasing. */
-const UNDER_ADVANCED_DEG = 3.0;
+export const UNDER_ADVANCED_DEG = 3.0;
+/** A pull at or above this load is a full-throttle pull. */
+const FULL_THROTTLE_LOAD_KPA = 95;
+/** How near a pull's point must be to a cell to stand for its knock limit: RPM and kPa. */
+const PULL_CEILING_RPM = 160;
+const PULL_CEILING_KPA = 4;
 
 /** Mixture error worth reporting, AFR points. Below this it is calibration noise. */
 const MIX_NOTABLE_AFR = 0.45;
+
+/**
+ * The mixtures a production calibration actually runs at full load, as lambda. A cell
+ * inside the band is a calibration choice, not an error: factories run richer than best
+ * power for exhaust and catalyst temperature, and direct-injection engines built for
+ * emissions run stoichiometric (factoryFuel.js has the sources).
+ *
+ * RICH: lambda 0.74. The richest power enrichment in 26 stock GM calibrations is the
+ * LM7's 0.749 (ECU Lab Pro, gm-benchmark.json); richer than any of those is fuel no
+ * factory spends.
+ * LEAN, port injection: best power plus MIX_NOTABLE_AFR, as before.
+ * LEAN, direct injection: stoichiometric, where stock B58 and EA888 logs sit through a
+ * full-throttle pull; in-cylinder evaporation cools the charge, and the knock model
+ * already charges the spark for it.
+ */
+const MIX_RICHEST_LAMBDA = 0.74;
+
+/** How far past stoichiometric a direct-injection cell may read before it is lean: sensor noise. */
+const MIX_DI_MARGIN_AFR = 0.15;
+
+/** Full load for the lean edge: where the factory enrichment is complete (factoryFuel.js). */
+const MIX_FULL_LOAD_KPA = 97;
 
 /**
  * Compares the player's VE table against what the current hardware would flow, and
@@ -122,7 +155,7 @@ export function veRecommendations(currentVe, cfg, mods, hw, axes = GAME_LAYOUT.v
  * @param {object} input
  * @returns {number} MBT spark advance, degrees BTDC
  */
-function mbtAtRow({ rpm, mapKpa, veCell, afrCell, fuel, mods, derived, turboOn, turbine }) {
+function mbtAtRow({ rpm, mapKpa, veCell, afrCell, fuel, mods, derived, turboOn, turbine, exhaustDia = null }) {
   const chargeK = chargeTempK(Math.max(0, (mapKpa - BARO_KPA) / PSI_TO_KPA), mods.intercooler);
   const airG = trappedAirGrams({
     veActual: veCell, mapKpa, chargeK,
@@ -141,6 +174,7 @@ function mbtAtRow({ rpm, mapKpa, veCell, afrCell, fuel, mods, derived, turboOn, 
       turboOn, turbine: turboOn ? turbine : null,
       exhaustFlowKgS: ((airG + burnedFuelG) / 1000) * derived.cyl * (rpm / 2) / 60,
       exhaustK: exhaustTempK({ chargeIndex: chargeIndexOf(veCell, mapKpa), lambda }),
+      pipeDiaIn: exhaustDia ?? 3.0, mods,
     }),
   });
 }
@@ -149,15 +183,72 @@ function mbtAtRow({ rpm, mapKpa, veCell, afrCell, fuel, mods, derived, turboOn, 
  * One cell of mixture advice. Scaling the commanded value by target/delivered prices the
  * error the engine actually made, and lands on the number to type in (rule 3 below).
  */
-function fuelCell(ri, ci, rpm, rowKpa, rowLoad, bracketOnly, current, pt) {
-  const suggestedAfr = current * (pt.bestAfr / Math.max(0.1, pt.afr));
+function fuelCell(ri, ci, rpm, rowKpa, rowLoad, bracketOnly, current, pt, direct) {
+  // Inside the band the factory's choice stands; outside it, the advice is best power.
+  // The lean edge ramps with load, as the factory's enrichment does: stoichiometric is a
+  // calibration's own choice where open loop begins (OPEN_LOOP_KPA), and the best-power
+  // edge applies from full load (MIX_FULL_LOAD_KPA) up.
+  const full = clamp((rowKpa - OPEN_LOOP_KPA) / (MIX_FULL_LOAD_KPA - OPEN_LOOP_KPA), 0, 1);
+  const portEdge = pt.bestAfr + MIX_NOTABLE_AFR;
+  const partEdge = 14.7 + MIX_NOTABLE_AFR;
+  // Direct injection: stoichiometric stays a factory choice at full load too.
+  const leanEdge = Math.max(portEdge, partEdge * (1 - full) + portEdge * full, direct ? 14.7 + MIX_DI_MARGIN_AFR : 0);
+  const outside = pt.afr > leanEdge || pt.afr < 14.7 * MIX_RICHEST_LAMBDA;
+  const suggestedAfr = outside ? current * (pt.bestAfr / Math.max(0.1, pt.afr)) : current;
   return {
     ri, ci, rpm, map: Number(rowKpa.toFixed(1)), load: rowLoad, bracketOnly, current,
     suggested: Number(suggestedAfr.toFixed(1)),
     delta: Number((suggestedAfr - current).toFixed(1)),
-    delivered: Number(pt.afr.toFixed(2)), target: Number(pt.bestAfr.toFixed(2)),
+    delivered: Number(pt.afr.toFixed(2)), target: Number(pt.bestAfr.toFixed(2)), outside,
     duty: pt.duty,
   };
+}
+
+/**
+ * The most manifold pressure the engine reaches at each speed, kPa absolute: the cells the
+ * advisor judges, and the ones TUNE draws as reached.
+ *
+ * Highest manifold pressure the boost controller is even asking for at this speed. A
+ * supercharger asks for nothing (its boost is what the pulley makes), so there the pull's
+ * own boost is the answer.
+ *
+ * @param {object} input
+ * @param {boolean} input.turboOn
+ * @param {number[]} input.boostCurve
+ * @param {{points?: object[]}|null} [input.pull] a full-throttle dyno pull, if one was made
+ * @returns {(rpm: number) => number}
+ */
+export function reachKpaAt({ turboOn, boostCurve, pull = null }) {
+  const blowerPull = !turboOn && pull?.points?.some((p) => p.blowerRpm != null) ? pull.points : null;
+  // A turbo makes the boost its turbine can drive, which at low speed is far below the
+  // target: judged by the target alone, a 175 kPa cell at 750 RPM, which this engine never
+  // reaches, was flagged as past the knock limit. With a pull to read, a turbo reaches what
+  // the pull measured at that speed (never more than the target), except where a protection
+  // cut the boost there: that shortfall is the tune's, and the cell is reached once it is fixed.
+  // The pull's logged target is the target AFTER the protection's cut, so where a
+  // protection cut the boost the cell is judged at the BUILD curve's own target. Read from
+  // the pull's target, a knock cut hid the cells whose knock tripped it: they were never
+  // advised, kept their knock, and the cut came back on every pull. Below the pull's first
+  // speed nothing was measured, so there the boost it achieved at that speed stands.
+  // Read by the manifold pressure the pull logged, not atmospheric plus its boost: the intake
+  // duct and the throttle lose a few kPa before the manifold (throttle.js), and reach counted
+  // from the barometer put a turbo engine into the gap toward a row it never ran.
+  const turboPull = turboOn && pull?.points?.length
+    ? pull.points.map((p) => ({
+      rpm: p.rpm,
+      kpa: p.protect?.some((x) => BOOST_CUTTING.has(x))
+        ? reachableKpa({ turboOn, boostCurve, rpm: p.rpm })
+        : p.map + REACHABLE_SLACK_KPA,
+    }))
+    : null;
+  const turboPullAt = (rpm) => (rpm < turboPull[0].rpm
+    ? turboPull[0].kpa
+    : interp1(turboPull.map((p) => p.rpm), turboPull.map((p) => p.kpa), rpm));
+  return (rpm) => (blowerPull
+    ? reachableKpa({ turboOn, boostCurve, rpm, boostPsi: interp1(blowerPull.map((p) => p.rpm), blowerPull.map((p) => p.boostPsi), rpm) })
+    : turboPull
+      ? Math.min(reachableKpa({ turboOn, boostCurve, rpm }), turboPullAt(rpm))
+      : reachableKpa({ turboOn, boostCurve, rpm }));
 }
 
 /**
@@ -191,23 +282,28 @@ function fuelCell(ri, ci, rpm, rowKpa, rowLoad, bracketOnly, current, pt) {
  *    earlier as it advances, which raises effective compression and lowers the knock
  *    limit. `camAt` (`intakeCamAt`) says where the phaser sits; absent, the cam is parked.
  *
- * 5. WITH THE FUEL WHERE THE ECU SENDS IT. A port injection kit on a direct-injected engine
+ * 5. ON THE ENGINE AS WORN. `health` (damage.js) is the engine's condition: a worn engine
+ *    is judged with what its worn parts do, as the dyno pull it is compared with runs it.
+ *
+ * 6. WITH THE FUEL WHERE THE ECU SENDS IT. A port injection kit on a direct-injected engine
  *    takes direct injection's extra filling and charge cooling away in proportion to the
  *    fuel it carries (`portKitBlend`), which is what the pull runs. `portKit` says how much
  *    its table asks of it, staged as the ECU stages it (`stagedPortShare`); absent, every
  *    drop is injected directly.
  *
- * @param {object} input includes `camAt`, the intake cam advance the VVT calibration holds
- *   at a speed and pressure (crank degrees), when the engine has an intake phaser, and
- *   `portKit`, a fitted port kit's staging on the calibration the pull runs
- *   (`portStagingOf` in ecu/calibration.js)
+ * @param {object} input includes `exhaustDia`, the exhaust pipe in inches (3.0 absent),
+ *   `camAt`, the intake cam advance the VVT calibration holds
+ *   at a speed and pressure (crank degrees), when the engine has an intake phaser,
+ *   `health`, the engine's condition (absent: as new), and `portKit`, a fitted port kit's
+ *   staging on the calibration the pull runs (`portStagingOf` in ecu/calibration.js)
  * @returns {{spark: object[], fuelAdv: object[], overAdvanced: object[], underAdvanced: object[], pastMbt: object[], wrongMix: object[]}}
  */
 export function calibrationAdvice({
   ve, veTruth, timing, afr, layout = null, derived, fuel, mods, turboOn, boostCurve,
-  compressor, turbine, injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, pull = null, camAt = null,
-  portKit = null,
+  compressor, turbine, injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, pull = null, camAt = null, health = null,
+  exhaustDia = null, portKit = null,
 }) {
+  const wear = wearEffects(health, derived.cyl);
   const spark = [], fuelAdv = [];
   // The breakpoints each table is on: an engine-sized layout, an engine computer's own,
   // or the old 8 × 6 grid when the tables carry none.
@@ -226,13 +322,12 @@ export function calibrationAdvice({
   const kpaOf = (axes, rpm, v) => kpaForLoad(axes, rpm, v, ecuAirAt);
   const loadOf = (axes, rpm, kpa) => loadForKpa(axes, rpm, kpa, ecuAirAt);
 
-  /** Highest manifold pressure the boost controller is even asking for at this speed. A
-   *  supercharger asks for nothing — its boost is what the pulley makes — so there the
-   *  pull's own boost is the answer. */
-  const blowerPull = !turboOn && pull?.points?.some((p) => p.blowerRpm != null) ? pull.points : null;
-  const reachAt = (rpm) => (blowerPull
-    ? reachableKpa({ turboOn, boostCurve, rpm, boostPsi: interp1(blowerPull.map((p) => p.rpm), blowerPull.map((p) => p.boostPsi), rpm) })
-    : reachableKpa({ turboOn, boostCurve, rpm }));
+  const reachAt = reachKpaAt({ turboOn, boostCurve, pull });
+  // What the engine reaches at full throttle: the bound a suggestion to add timing must
+  // respect (see the interpolation pass below). A full-throttle pull measured it; from a
+  // part-throttle pull, the boost curve the build asks for stands in, as the most it can reach.
+  const reachFull = pull && (pull.loadKpa ?? 0) >= FULL_THROTTLE_LOAD_KPA ? reachAt : reachKpaAt({ turboOn, boostCurve, pull: null });
+  const blowerPull = !turboOn && pull?.points?.some((p) => p.blowerRpm != null);
 
   /**
    * The compressor pressure and exhaust backpressure a turbo engine runs at a manifold
@@ -292,7 +387,8 @@ export function calibrationAdvice({
       ...(camAt ? { cam: { intakeAdvDeg: camAt(rpm, mapKpa) } } : {}),
       fuel, mods: { ...mods, turboFitted: turboOn }, mafScalar, mafErrorBase,
       injectorCc, ecuInjectorCc, derived: kit ? kit.derived : derived, compressor,
-      turbine: turboOn ? turbine : null,
+      turbine: turboOn ? turbine : null, exhaustDia,
+      ...(wear ? { wear } : {}),
     });
     const kit = kitAt(rpm, mapKpa);
     const pt = run(kit);
@@ -308,7 +404,21 @@ export function calibrationAdvice({
    * pressure — so this is the ceiling that genuinely applies BETWEEN two rows.
    */
   const ceilingMemo = new Map();
-  const ceilingAt = (rpm, mapKpa) => {
+  // THE LOG OVERRULES HERE TOO. Where the pull ran at this speed and pressure, the knock
+  // limit it met is the one that holds: the static point below prices a part-spooled turbo's
+  // charge and backpressure as an estimate, and capped a 130 kPa row at 0.8 degrees where
+  // the pull at 133 kPa measured 8.2.
+  const pullNear = (rpm, mapKpa) => {
+    let best = null; let bestD = Infinity;
+    for (const p of pull?.points ?? []) {
+      if (Math.abs(p.rpm - rpm) > PULL_CEILING_RPM || Math.abs(p.map - mapKpa) > PULL_CEILING_KPA || !Number.isFinite(p.threshold)) continue;
+      const d = Math.abs(p.rpm - rpm) / PULL_CEILING_RPM + Math.abs(p.map - mapKpa) / PULL_CEILING_KPA;
+      if (d < bestD) { bestD = d; best = p; }
+    }
+    return best;
+  };
+  const ceilingAt = (rpm, mapKpa) => pullNear(rpm, mapKpa)?.threshold ?? staticCeilingAt(rpm, mapKpa);
+  const staticCeilingAt = (rpm, mapKpa) => {
     const key = `${rpm}|${mapKpa}`;
     if (!ceilingMemo.has(key)) {
       ceilingMemo.set(key, pointAt(rpm, mapKpa, {
@@ -388,7 +498,7 @@ export function calibrationAdvice({
       const knockCeiling = pt.threshold - KNOCK_SAFETY_DEG;
       const mbt = mbtAtRow({
         rpm, mapKpa: gradeKpa, veCell, afrCell,
-        fuel, mods, derived: kitAt(rpm, gradeKpa, pt.fuelCmd / 1000)?.derived ?? derived, turboOn, turbine,
+        fuel, mods, derived: kitAt(rpm, gradeKpa, pt.fuelCmd / 1000)?.derived ?? derived, turboOn, turbine, exhaustDia,
       });
       const safeTiming = clamp(
         Math.round(Math.min(knockCeiling, mbt) * 2) / 2, SPARK_MIN_DEG, SPARK_MAX_DEG,
@@ -403,7 +513,7 @@ export function calibrationAdvice({
         knockLimited: knockCeiling < mbt,
         unbounded: pt.threshold >= COEFF.KNOCK_UNBOUNDED_BTDC,
       });
-      if (sharedAxes) fuelAdv.push(fuelCell(ri, ci, rpm, rowKpa, rowLoad, bracketOnly, afr[ri][ci], pt));
+      if (sharedAxes) fuelAdv.push(fuelCell(ri, ci, rpm, rowKpa, rowLoad, bracketOnly, afr[ri][ci], pt, derived.injection === 'direct'));
     });
   });
 
@@ -419,7 +529,7 @@ export function calibrationAdvice({
           veVal: read('ve', rpm, rowKpa), veActualVal: truthAt ? truthAt(rpm, rowKpa) : undefined,
           timingVal: read('timing', rpm, rowKpa), afrCommanded: afr[ri][ci],
         });
-        fuelAdv.push(fuelCell(ri, ci, rpm, rowKpa, rowLoad, Math.abs(gradeKpa - rowKpa) > 1e-6, afr[ri][ci], pt));
+        fuelAdv.push(fuelCell(ri, ci, rpm, rowKpa, rowLoad, Math.abs(gradeKpa - rowKpa) > 1e-6, afr[ri][ci], pt, derived.injection === 'direct'));
       });
     });
   }
@@ -458,22 +568,31 @@ export function calibrationAdvice({
     for (let ri = 1; ri < T.load.length; ri++) {
       const here = byCell.get(`${ri}|${ci}`);
       const above = byCell.get(`${ri - 1}|${ci}`);        // one row up = more pressure
-      // If the row above is unreachable it was never graded, and the engine never runs at
-      // those pressures either — so there is no interpolated path to protect.
-      if (!here || !above) continue;
+      if (!here) continue;
       // Only the part of the gap the engine actually enters needs protecting. At 14 psi
       // the manifold peaks at 197.9 kPa, so a 150-200 gap is entered 96% of the way;
       // at no boost it is not entered at all and the pair is left alone.
       const hereKpa = kpaOf(T, rpm, T.load[ri]);
       const span = kpaOf(T, rpm, T.load[ri - 1]) - hereKpa;
       const entered = clamp((reachAt(rpm) - hereKpa) / span, 0, 1);
+      // ADVICE IS FOR EVERY PULL, NOT ONLY THIS ONE. The verdicts follow the pull the player
+      // made, but a suggestion to ADD timing is typed into a cell the engine also reads on
+      // its way into boost, at full throttle, on the boost curve it is built with. Advised
+      // only from a part-throttle pull, a turbo engine's 100 kPa row was raised into knock,
+      // the next full-throttle pull lowered it, the next part-throttle pull raised it again:
+      // following the advice never ended. So the room it may suggest is the room across
+      // everything the build reaches, the row above read as the table holds it if no pull
+      // graded it.
+      const enteredAdvice = Math.max(entered, clamp((reachFull(rpm) - hereKpa) / span, 0, 1));
+      const aboveNow = above ? above.current : timing[ri - 1]?.[ci];
+      const aboveAdvised = above ? above.suggested : aboveNow;
       // Neither row can knock at any advance it could carry, so nothing between them can:
       // knock only gets likelier with pressure.
-      if (entered <= 0 || (here.unbounded && above.unbounded)) continue;
+      if (enteredAdvice <= 0 || aboveAdvised == null || (here.unbounded && (above?.unbounded ?? false))) continue;
       const room = interpolationRoomDeg({
         ceilingAtFrac: (f) => ceilingAt(rpm, hereKpa + f * span) - KNOCK_SAFETY_DEG,
-        aboveDeg: above.suggested,
-        entered,
+        aboveDeg: aboveAdvised,
+        entered: enteredAdvice,
       });
       if (room < here.suggested) {
         here.suggested = clamp(Math.floor(room * 2) / 2, SPARK_MIN_DEG, SPARK_MAX_DEG);
@@ -490,6 +609,8 @@ export function calibrationAdvice({
       // Judged against the table as it stands, therefore. When the two agree the
       // result is identical; where they differ, this is the one that answers "is the
       // table in front of me dangerous".
+      // Judged only over what this pull entered, between rows it graded.
+      if (entered <= 0 || !above) continue;
       const judged = interpolationRoomDeg({
         ceilingAtFrac: (f) => ceilingAt(rpm, hereKpa + f * span) - KNOCK_SAFETY_DEG,
         aboveDeg: above.current,
@@ -502,6 +623,19 @@ export function calibrationAdvice({
       // suggestion without the warning would leave the player with a number to type and
       // no reason for it.
       here.knockCeiling = Math.min(here.knockCeiling, Number(judged.toFixed(1)));
+      // AND THE SUGGESTION MAY NOT CARRY MORE THAN THE JUDGEMENT ALLOWS. Following the
+      // advice means typing in the flagged cells; a neighbour that is not flagged keeps
+      // its number. Suggesting against the neighbour's SUGGESTED value alone handed a
+      // flagged cell a number past its own judged ceiling (70 kPa at 2,500 RPM on a turbo
+      // V6: ceiling 24.8, suggestion 27.5), so it stayed flagged however many times the
+      // player typed it, and once suggested MORE advance for a cell it had just called
+      // over-advanced. The lower of the two is safe whether or not the neighbour is
+      // changed too, and it only ever lowers a suggestion.
+      if (judged < here.suggested) {
+        here.suggested = clamp(Math.floor(judged * 2) / 2, SPARK_MIN_DEG, SPARK_MAX_DEG);
+        here.delta = Number((here.suggested - here.current).toFixed(1));
+        here.interpolationLimited = true;
+      }
     }
   });
 
@@ -514,8 +648,35 @@ export function calibrationAdvice({
   // ceiling and the table is over both: the cell is detonating, but the lower ceiling
   // is MBT. Classifying on ceiling order would file that cell as merely wasteful and
   // tell the player it is safe, which is the one thing this report must never do.
-  const wrongMix = fuelAdv.filter((c) => !c.bracketOnly && c.map >= OPEN_LOOP_KPA
-    && Math.abs(c.delta) > MIX_NOTABLE_AFR);
+  // THE LOG OVERRULES THE BREAKPOINTS. A table is judged at its breakpoints, but the engine
+  // runs between them: with few columns and a cam whose breathing bulges between two of them,
+  // both cells can read right while the pull runs lean or rich in the middle. Where the log
+  // says so, the cells either side of that speed, on the row nearest its pressure, are flagged
+  // with the correction the log itself implies.
+  if (pull) {
+    for (const p of pull.points) {
+      if (!(p.leanRisk || p.richRisk) || p.fuelLimited || !(p.afr > 0)) continue;
+      const near = fuelAdv.filter((c) => !c.bracketOnly && c.map >= OPEN_LOOP_KPA);
+      if (!near.length) continue;
+      const row = near.reduce((a, c) => (Math.abs(c.map - p.map) < Math.abs(a.map - p.map) ? c : a)).map;
+      const cols = near.filter((c) => c.map === row);
+      const below = cols.filter((c) => c.rpm <= p.rpm).reduce((a, c) => (!a || c.rpm > a.rpm ? c : a), null);
+      const above = cols.filter((c) => c.rpm >= p.rpm).reduce((a, c) => (!a || c.rpm < a.rpm ? c : a), null);
+      for (const c of [below, above]) {
+        if (!c) continue;
+        const asked = Number((c.current * (c.target / p.afr)).toFixed(1));
+        if (!c.outside || Math.abs(asked - c.current) > Math.abs(c.delta)) {
+          c.outside = true;
+          c.suggested = asked;
+          c.delta = Number((asked - c.current).toFixed(1));
+        }
+      }
+    }
+  }
+  // Not in the idle columns: full throttle at idle speed is a tip-in, not a point any pull
+  // holds (a dyno sweep starts at 1500 RPM), and a factory fuel strategy is written for the
+  // idle there, not for power (GM's LQ4 asks 13.5:1 at 800 RPM, 100 kPa).
+  const wrongMix = fuelAdv.filter((c) => !c.bracketOnly && c.map >= OPEN_LOOP_KPA && c.outside && c.rpm > IDLE_COLUMN_MAX_RPM);
   // SPARK CANNOT FIX EVERY CELL. Where the knock ceiling sits below the most retard the
   // table can hold, no number typed into this cell is safe at the boost being asked for:
   // the fix is less boost here (a real ECU's low-speed boost or torque limit), or better
@@ -524,7 +685,11 @@ export function calibrationAdvice({
   if (pull) {
     return { spark, fuelAdv, wrongMix, ...judgeAgainstPull(spark, pull, (p) => cellsInForce(p.rpm, loadOf(T, p.rpm, p.map), T)) };
   }
-  const overAdvanced = spark.filter((c) => !c.bracketOnly && c.current - c.knockCeiling > ADVANCE_TOLERANCE_DEG);
+  // Nor is a cell called dangerous for knock in the idle column where no spark the table can
+  // hold would protect it: full throttle at idle speed is the same tip-in as above, not a
+  // point any pull holds, and the advice still shows the cell with `sparkCannotFix`.
+  const overAdvanced = spark.filter((c) => !c.bracketOnly && c.current - c.knockCeiling > ADVANCE_TOLERANCE_DEG
+    && !(c.sparkCannotFix && c.rpm <= IDLE_COLUMN_MAX_RPM));
   const pastMbt = spark.filter((c) => !c.bracketOnly && c.current - c.knockCeiling <= ADVANCE_TOLERANCE_DEG
     && c.current - c.mbt > ADVANCE_TOLERANCE_DEG);
   const underAdvanced = spark.filter((c) => !c.bracketOnly && c.delta > UNDER_ADVANCED_DEG);
@@ -655,7 +820,9 @@ function judgeAgainstPull(spark, pull, inForce) {
       continue;
     }
     if (c.bracketOnly) continue;
-    if (c.current - c.knockCeiling > ADVANCE_TOLERANCE_DEG) overAdvanced.push(c);
+    // As without a pull: an idle-column cell no spark the table holds would protect is a
+    // full-throttle tip-in at idle speed, shown with `sparkCannotFix`, not a danger verdict.
+    if (c.current - c.knockCeiling > ADVANCE_TOLERANCE_DEG) { if (!(c.sparkCannotFix && c.rpm <= IDLE_COLUMN_MAX_RPM)) overAdvanced.push(c); }
     else if (c.current - c.mbt > ADVANCE_TOLERANCE_DEG) pastMbt.push(c);
     else if (!idle && c.delta > UNDER_ADVANCED_DEG) underAdvanced.push(c);
   }

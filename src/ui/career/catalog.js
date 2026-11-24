@@ -54,7 +54,7 @@ export const TRAINING = [
       'Idle problems are drivability problems. Customers notice them at every red light, and a car that stalls in traffic is not safe to hand back.',
       'Test idle on LIVE: start it, let it settle, and watch the RPM trace. A healthy idle holds within a few tens of RPM of its target.',
     ],
-    deeper: 'Learn article 35, controllers',
+    deeper: 'Learn article 30, controllers',
   },
   {
     id: 'fuel-strategy', title: 'Advanced fuel strategies', price: 700, rep: 25, requires: [],
@@ -64,7 +64,7 @@ export const TRAINING = [
       'Behind the tables is the strategy that uses them: how the ECU works out air (speed-density, MAF, or both blended), how it enriches cold and under heat, and how it treats the wall film on the port.',
       'These settings rarely need touching on a healthy car. When they do, it is because the car is doing something the base tables were never meant to cover.',
     ],
-    deeper: 'Learn articles 33 and 43',
+    deeper: 'Learn articles 28 and 38',
   },
   {
     id: 'knock', title: 'Knock control', price: 900, rep: 30, requires: ['spark'], pages: [], sections: ['spark'],
@@ -73,7 +73,7 @@ export const TRAINING = [
       'The ECU does not know knock happened: it hears vibration and compares it with a threshold. Set the threshold too low and valvetrain noise reads as knock, so the ECU pulls timing for nothing (false knock). Too high and real knock goes unheard.',
       'A big cam or stiff springs make more valvetrain noise, so the threshold has to be re-learned after either. The pull log tells false knock and unheard knock apart.',
     ],
-    deeper: 'Learn article 34',
+    deeper: 'Learn article 29',
   },
   {
     id: 'limits', title: 'Rev limits and protections', price: 700, rep: 30, pages: ['protect'],
@@ -82,7 +82,7 @@ export const TRAINING = [
       'The protections are what stand between a mistake and a broken engine: lean, overheating, knock and pressure all have an action, from pulling timing to limp mode.',
       'Rev and load limits keep an engine inside what its parts survive. Customers with built engines care about them as much as the power figure.',
     ],
-    deeper: 'Learn article 36',
+    deeper: 'Learn article 31',
   },
   {
     id: 'vvt', title: 'Variable cam timing', price: 900, rep: 60, pages: ['vvt'],
@@ -91,7 +91,7 @@ export const TRAINING = [
       'Moving the intake cam changes when the valve closes, which changes how much air the cylinder traps at each RPM. Advance helps low-speed torque; retard helps the top end.',
       'The VE table depends on cam position, so a cam-timing change is also a breathing change: log it again afterwards.',
     ],
-    deeper: 'Learn article 35',
+    deeper: 'Learn article 30',
   },
   {
     id: 'boost', title: 'Boost control', price: 1500, rep: 60, requires: ['spark'], pages: ['boost'],
@@ -100,7 +100,7 @@ export const TRAINING = [
       'The ECU holds boost by opening and closing the wastegate. Base duty gets it close; the closed loop trims it to the target. Too much gain overshoots, too little and it never arrives.',
       'Boost is cylinder pressure. Every psi lowers the knock limit, so spark comes out of the boost rows and the mixture goes richer to cool the charge.',
     ],
-    deeper: 'Learn articles 22 and 35',
+    deeper: 'Learn articles 17 and 30',
   },
   {
     id: 'builder', title: 'Engine building', price: 4000, rep: 90, requires: ['spark'], pages: [], build: true,
@@ -110,7 +110,7 @@ export const TRAINING = [
       'Breathing parts and a longer cam move the power up the rev range and cost idle quality and low-speed torque. Compression is free power until it meets the fuel’s knock limit. Boost is the biggest lever, and it needs injectors, spark and fuel to match.',
       'Build first, then tune: every hardware change makes the VE table out of date, so log it again. A build is only done when the whole list is met on the dyno and it is safe.',
     ],
-    deeper: 'The Tuning Course, chapter 4, and Learn articles 22, 40 and 45',
+    deeper: 'The Tuning Course, chapter 4, and Learn articles 17, 35 and 40',
   },
   {
     id: 'torque', title: 'Torque management', price: 800, rep: 80, pages: ['torque'],
@@ -118,7 +118,7 @@ export const TRAINING = [
     lesson: [
       'A gearbox and clutch have a torque rating too. Torque management trims boost, throttle or spark so the engine never asks more of the driveline than it can carry.',
     ],
-    deeper: 'Learn article 36',
+    deeper: 'Learn article 31',
   },
   {
     id: 'nitrous', title: 'Nitrous tuning', price: 1200, rep: 80, requires: ['spark'], pages: ['nitrous'],
@@ -127,7 +127,7 @@ export const TRAINING = [
       'Nitrous is oxygen from a bottle. More oxygen burns more fuel, so it needs its own fuel while it sprays, and the extra cylinder pressure lowers the knock limit: about 2° out per 50 hp of shot is the rule of thumb.',
       'A speed-density ECU cannot see the air the nitrous vapour displaces, so a wet kit tends to run rich; a lean nitrous mixture melts pistons in seconds.',
     ],
-    deeper: 'Learn article 41',
+    deeper: 'Learn article 36',
   },
 ];
 

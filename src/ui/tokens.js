@@ -215,9 +215,3 @@ export const shop = Object.freeze({
     pearl: '#bdc3c7',
   }),
 });
-
-/** Tyre smoke at a given opacity — it fades as it drifts, so alpha is a parameter. */
-export const smokeAlpha = (alpha) => `rgba(214, 222, 230, ${alpha})`;
-
-/** The low sun behind the treeline, at a given opacity. */
-export const horizonGlowAlpha = (alpha) => `rgba(255, 150, 60, ${alpha})`;

@@ -57,11 +57,21 @@ describe('fixLinks', () => {
 
   it('counts how many events point at each TUNE page', () => {
     const counts = tuneAttention([
-      { fix: 'On TUNE → NITROUS, raise the retard.' },
-      { fix: 'On TUNE → NITROUS, lower the fuel. Or BUILD → INDUCTION.' },
-      { fix: 'On TIMING, take 2° out.' },
-      { fix: null },
+      { type: 'bottle', fix: 'On TUNE → NITROUS, raise the retard.' },
+      { type: 'nitrouswindow', fix: 'On TUNE → NITROUS, lower the fuel. Or BUILD → INDUCTION.' },
+      { type: 'falseknock', fix: 'On TIMING, take 2° out.' },
+      { type: 'cam', fix: null },
     ]);
     expect(counts).toEqual({ nitrous: 2, spark: 1 });
+  });
+
+  it('counts causes, not the symptoms grouped under them', () => {
+    // Lean boost cells and the lean protection they trip, over the same RPM: one cause,
+    // so FUEL is pointed at once.
+    const counts = tuneAttention([
+      { type: 'lean', rpmStart: 3000, rpmEnd: 5000, fix: 'On TUNE → FUEL, richen it.' },
+      { type: 'leanprot', rpmStart: 3500, rpmEnd: 4000, fix: 'Check TUNE → FUEL and TUNE → INJECTORS.' },
+    ]);
+    expect(counts).toEqual({ fuel: 1 });
   });
 });

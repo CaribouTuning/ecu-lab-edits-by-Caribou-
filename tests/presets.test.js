@@ -10,29 +10,18 @@ import { describe, expect, it } from 'vitest';
 
 import * as S from '../src/sim/index.js';
 
+import { makeEngine } from './ecuHarness.js';
+
 /** Crank rating converted to the wheel figure the sim reports. */
 const toWheel = (crankHp) => crankHp * S.DRIVETRAIN_EFF;
 
-/** Runs a preset exactly as the app would, with its own factory calibration. */
+/**
+ * Runs a preset exactly as the app would, with its own factory calibration: the hardware's
+ * own breathing is the truth (not the factory VE table read back as if it were the engine)
+ * and the ECU is in the loop (tests/ecuHarness.js, as EcuLab.jsx builds it).
+ */
 function pullFor(preset) {
-  const patch = S.applyPreset(preset);
-  const fuel = S.tankFuel(patch);
-  const derived = S.deriveEngine(patch.engineConfig);
-  return S.simulateSweep({
-    loadKpa: 100,
-    ve: patch.ve, veTruth: patch.ve, layout: patch.layout,
-    timing: patch.timing, afr: patch.afr,
-    turboOn: patch.turboOn, boostCurve: patch.boostCurve,
-    octaneBonus: fuel.bonus,
-    octaneLabel: fuel.label,
-    fuel,
-    injectorCc: S.INJECTOR_OPTS[patch.injIdx].cc,
-    ecuInjectorCc: patch.ecuInjectorCc,
-    injectorLabel: S.INJECTOR_OPTS[patch.injIdx].label,
-    mods: patch.mods, mafScalar: patch.mafScalar, derived,
-    turbine: S.presetTurbine(preset),
-    compressor: S.presetCompressor(preset),
-  });
+  return makeEngine({ preset: preset.id }).pull(100);
 }
 
 describe('preset data integrity', () => {
@@ -85,7 +74,11 @@ describe('preset data integrity', () => {
         expect(e.compression).toBeLessThanOrEqual(13.0);
         expect(e.camDuration).toBeGreaterThanOrEqual(180);
         expect(e.camDuration).toBeLessThanOrEqual(300);
-        expect(e.camDuration % 2).toBe(0);
+        // Cams are specified to the degree, and every shipped engine states both lobes.
+        expect(Number.isInteger(e.camDuration)).toBe(true);
+        expect(Number.isInteger(e.exhaustCamDuration)).toBe(true);
+        expect(e.exhaustCamDuration).toBeGreaterThanOrEqual(180);
+        expect(e.exhaustCamDuration).toBeLessThanOrEqual(300);
         expect(e.springRate).toBeGreaterThanOrEqual(20);
         expect(e.springRate).toBeLessThanOrEqual(100);
       });
@@ -183,39 +176,39 @@ function flatTopRpm(points) {
  *
  * Its own docstring said that if either engine ever started peaking before its redline
  * the entry should be DELETED rather than updated, because that would mean the model had
- * gained the term it was missing. The inlet Mach index (issue #15) is that term, both
- * engines now peak where they are rated to, and so the map is gone and every preset goes
- * through the ordinary rated-RPM assertions.
+ * gained what it was missing. The gas-exchange breathing model (breathing.js) is that:
+ * VE falls at speed from the valves' own flow, both engines peak before their limiters,
+ * and so the map is gone and every preset goes through the ordinary rated-RPM assertions.
  */
 
 /*
- * Where a preset is known to sit outside the ordinary band, and why. Each entry is the
- * measured figure against the rating, and the cause; the assertion still holds the
- * engine to its measured value (within 1.5 points), so a change that makes it worse
- * fails, and a change that brings it inside the ordinary band should DELETE the entry.
+ * Where a preset is known to sit outside the ordinary band, and why, with the measurement
+ * that says so. A change that brings it inside the ordinary band should DELETE the entry.
  *
- * The two turbo entries are direct-injection engines that the model holds far from MBT on
- * knock at full boost (10-17 degrees short at peak torque). The rich-flame chemistry
- * (thermo.js, heatReleasedShare) took the 4-6% of heat a rich flame never releases out of
- * every full-throttle point; the naturally aspirated presets had their one fitted input
- * (cam duration) refitted to their ratings, but on these two duration does not move peak
- * power, the knock limit does. docs/accuracy.md, approximation 2.
+ * The rating misses recorded here before October 2026 (VQ35DE -9%, VQ35HR, B58 M1, LS6 and
+ * the GTI's torque) closed when the cycle started counting molar expansion (thermo.js,
+ * molarExpansion) and the factory fuel tables took the engines' real full-load mixtures
+ * (factoryFuel.js): best power moved from lambda 0.94 to 0.90, as real engines have it.
  */
 const KNOWN_GAPS = {
-  // Naturally aspirated, but its fitted cam cannot rise to pay for the rich-flame heat
-  // without running power flat into the 7000 limiter (presets.js); held at the longest
-  // cam whose power still rolls off before it.
-  'vq35de-revup': { hp: -0.09 },
-  // On the edge of the band at -5%: 228 lands inside it, but then the stock spark table
-  // knocks at 5100 RPM once an intake and headers are fitted, which a factory margin does
-  // not allow (presets.js).
-  vq35hr: { hp: -0.05 },
-  'b58-m1': { hp: -0.079 },
-  // Its cam is held at 228 by the overlap advisory (a factory cam never trips it); with
-  // dissociation that lands -5.0%, on the edge of the band. Its real heads out-flow the
-  // LS1's on the same valve size, which the valve-diameter breathing model cannot see.
-  ls6: { hp: -0.05 },
-  'ea888-gti': { tq: -0.102 },
+  // The N54 is underrated: measured stock, it makes more torque than BMW publishes.
+  // Automobile magazine's stock 335i laid down 300 lb-ft at the wheels on a DynoJet
+  // (bimmerfile.com, 2010-09-14, "Automobile pits the N54 against N55"), and an owner's
+  // stock baseline read 298 (f30.bimmerpost.com). The model's wheel torque sits under those
+  // measurements, so its ceiling is the measured figure, not the rating.
+  n54: { tqHighWheel: 300 },
+  // MEASURED on the gas-exchange model (November 2026), BREATH_VALVE_CD 0.61: the VQ35HR
+  // makes 8-9% under its 306 hp on every intake cam from 218 to 234 (its own figure is
+  // inferred, see presets.js), so its cam is not what it is short of. Its revised head and
+  // twin-runner intake are what Nissan credits for the HR's power, and no flow-bench figure
+  // for that head was found, so it breathes through the universal port.
+  'vq35hr': { hp: -0.09 },
+  // MEASURED likewise: the GM truck V8s read high on peak torque, peaking 300-700 RPM before
+  // their published 4000 (LQ4 +9.7%, LM7 +7.8%, LR4 +11.7% of the rating). GM rates them on
+  // 87 regular, which the fuel list does not carry; calibrated and run on 87 (RON 91, MON
+  // 83) they read 1.2-1.9 points lower, so the octane is a part of it and not the whole.
+  // The LR4 is the one past the band; its ceiling is its measured torque on 91.
+  lr4: { tqHighWheel: 281 },
 };
 
 describe('factory calibration validates against real published figures', () => {
@@ -236,7 +229,7 @@ describe('factory calibration validates against real published figures', () => {
         const target = toWheel(preset.factory.crankTq);
         const lo = gap.tq === undefined ? 0.90 : 1 + gap.tq - 0.015;
         expect(r.peakTq).toBeGreaterThan(target * lo);
-        expect(r.peakTq).toBeLessThan(target * 1.10);
+        expect(r.peakTq).toBeLessThan(gap.tqHighWheel ?? target * 1.10);
       });
 
       it('peaks where the manufacturer says it does', () => {
@@ -337,7 +330,7 @@ describe('an engine of the player\'s own', () => {
   it('names every figure it filled in, fuel injection and the pistons and rods included', () => {
     const v = check();
     expect(v.ok).toBe(true);
-    expect(v.assumed).toEqual(['camDuration', 'valvetrain', 'valvesPerCyl', 'blockMaterial', 'headMaterial', 'injection', 'bottomEnd']);
+    expect(v.assumed).toEqual(['camDuration', 'exhaustCamDuration', 'valvetrain', 'valvesPerCyl', 'blockMaterial', 'headMaterial', 'injection', 'bottomEnd']);
     expect(v.estimated.at(-2)).toBe('fuel injection (port assumed)');
     expect(v.estimated.at(-1)).toBe('pistons and rods (production assumed)');
     expect(check({ injection: 'direct' }).assumed).not.toContain('injection');

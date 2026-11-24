@@ -11,6 +11,8 @@
  * each screen once, in the order the text first names it.
  */
 
+import { groupByCause } from './fixOrder.js';
+
 /**
  * Longest names first, so "BUILD → FUEL SYSTEM" is not read as a shorter match. The two
  * bare "On TIMING" / "On AFR" forms are older pull-log wording for the spark and fuel
@@ -50,15 +52,17 @@ export function fixLinks(text) {
 }
 
 /**
- * How many of a pull's events send the player to each TUNE page.
+ * How many of a pull's causes send the player to each TUNE page.
  *
- * @param {{fix?: string}[]} events
+ * @param {{type: string, fix?: string, rpmStart?: number, rpmEnd?: number}[]} events
  * @returns {Record<string, number>} TUNE section id → event count
  */
 export function tuneAttention(events) {
   /** @type {Record<string, number>} */
   const counts = {};
-  for (const e of events ?? []) {
+  // Causes, not symptoms: a symptom clears with its cause's fix (fixOrder.js
+  // `groupByCause`), so counting it would point the player at its screen too.
+  for (const { root: e } of groupByCause(events ?? [])) {
     for (const l of fixLinks(e.fix)) {
       if (l.tab === 'tune') counts[l.section] = (counts[l.section] ?? 0) + 1;
     }

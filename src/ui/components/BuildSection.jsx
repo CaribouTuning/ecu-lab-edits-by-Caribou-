@@ -51,7 +51,6 @@ export const BuildLocked = createContext(false);
  * @returns {React.ReactElement}
  */
 export function BuildSection({ active, onClick, icon: Icon, label, sub, children }) {
-  const locked = useContext(BuildLocked);
   const bodyId = useId();
   const headerRef = useRef(/** @type {HTMLButtonElement|null} */ (null));
   const bodyRef = useRef(/** @type {HTMLDivElement|null} */ (null));
@@ -60,6 +59,7 @@ export function BuildSection({ active, onClick, icon: Icon, label, sub, children
   useLayoutEffect(() => {
     if (!active && bodyRef.current?.contains(document.activeElement)) headerRef.current?.focus();
   }, [active]);
+  const locked = useContext(BuildLocked);
   return (
     <div style={{ marginBottom: 9 }}>
       <button ref={headerRef} type="button" aria-expanded={active} aria-controls={bodyId} onClick={onClick} style={{

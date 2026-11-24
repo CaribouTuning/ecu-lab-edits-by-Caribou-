@@ -57,9 +57,12 @@ export function EcuSection({ section, title, icon, intro, liveVars = null, embed
   );
   const hwNow = ecuHardwareOf(build);
   // A field that only means something with a part fitted (the port share table needs a
-  // port kit) is not offered without it.
+  // port kit) is not offered without it; nor is a field for one kind of nitrous kit only (a
+  // dry kit's fuel) on the other: on a wet kit it does nothing, and a tuner reaching for it
+  // is chasing nothing.
   const fitted = (m) => !m.needs || !!hwNow[m.needs];
-  const fields = ECU_META.filter((m) => m.section === section && fitted(m) && (showPro || !m.pro));
+  const fitsKit = (m) => !m.nitrousKit || m.nitrousKit === build.nitrous?.kit;
+  const fields = ECU_META.filter((m) => m.section === section && fitted(m) && (showPro || !m.pro) && fitsKit(m));
   const hiddenPro = ECU_META.filter((m) => m.section === section && fitted(m) && m.pro).length;
   const groups = [];
   for (const f of fields) {

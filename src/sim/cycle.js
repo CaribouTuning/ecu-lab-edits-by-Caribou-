@@ -45,17 +45,30 @@ import { BARO_KPA, KPA_PER_BAR, R_AIR } from './constants.js';
 import { clamp } from './math.js';
 import { N2O } from './nitrous.js';
 import {
-  burnedGammaShift, dissociatedEnergyFast, evaporativeCoolingK, fuelDewPointK, heatReleasedShare, productsPerKgCharge, residualFraction, trappedChargeK,
+  burnedGammaShift, dissociatedEnergyFast, evaporativeCoolingK, fuelDewPointK, heatReleasedShare, molarExpansion, productsPerKgCharge, residualFraction, trappedChargeK,
 } from './thermo.js';
 
 /**
- * Crank angle at which the exhaust valve opens, degrees after TDC firing.
+ * Crank angle at which the exhaust valve opens, degrees after TDC firing, at the 0.050 inch
+ * checking height: the exhaust lobe is centred where the intake's is mirrored about TDC
+ * (breathing.js `valveEvents`), the intake's centre being 180 + IVC - duration / 2 after
+ * TDC, so a longer exhaust lobe opens earlier and gives up expansion for blowdown.
  *
  * Exported because the acoustics model needs the same angle: the exhaust note is the
  * blowdown pulse that starts here, and two files holding their own idea of when the
  * valve cracks would drift apart silently.
+ *
+ * @param {number} exhaustCamDuration crank degrees at 0.050 inch
+ * @param {number} [intakeCamDuration] crank degrees at 0.050 inch; sets the lobe centres
+ * @returns {number} EVO, degrees after TDC firing
  */
-export const EVO_ATDC = 180 - 50;
+export function evoAtdcDeg(exhaustCamDuration, intakeCamDuration = exhaustCamDuration) {
+  const centreAtdc = 180 + ivcAfterBdcDeg(intakeCamDuration) - intakeCamDuration / 2;
+  return 180 - (exhaustCamDuration / 2 - (180 - centreAtdc));
+}
+
+/** EVO for the reference cam, for callers that carry no engine. */
+export const EVO_ATDC = evoAtdcDeg(COEFF.IVC_CAM_REF_DURATION);
 
 /**
  * Cylinder volume at a crank angle, from the slider-crank geometry.
@@ -114,6 +127,18 @@ export function ivcAfterBdcDeg(camDuration) {
  * @param {number} [input.boreFlameFactor] flame travel scaling from bore, 1 at reference
  * @returns {number} burn duration, crank degrees
  */
+/**
+ * The share of the charge a spark fired after top dead centre never burns in the cylinder:
+ * partial burns and quenched kernels in an expanding chamber (COEFF.LATE_SPARK_QUENCH_*).
+ * It leaves at exhaust valve open with its fuel, and lights in the manifold.
+ * @param {number} sparkBtdc spark advance, degrees before TDC (negative: after)
+ * @returns {number} 0..LATE_SPARK_QUENCH_MAX
+ */
+export function lateSparkQuench(sparkBtdc) {
+  const late = (-sparkBtdc - COEFF.LATE_SPARK_QUENCH_ONSET_ATDC) / COEFF.LATE_SPARK_QUENCH_SPAN_DEG;
+  return late <= 0 ? 0 : COEFF.LATE_SPARK_QUENCH_MAX * Math.min(1, late) ** 1.5;
+}
+
 export function burnDurationDeg({ rpm, lambda, residualFrac, boreFlameFactor = 1 }) {
   // Mixture: fastest a little rich of stoichiometric, slower in both directions, but
   // not symmetrically. Laminar flame speed falls away far faster on the lean side, where
@@ -134,6 +159,7 @@ export function burnDurationDeg({ rpm, lambda, residualFrac, boreFlameFactor = 1
 
 /**
  * @typedef {object} CycleInput
+ * @property {boolean} [trace] keep the pressure trace, returned as `trace`
  * @property {number} rpm engine speed
  * @property {number} sparkBtdc commanded spark advance, degrees before TDC
  * @property {number} trappedPa cylinder pressure at intake valve close
@@ -167,6 +193,7 @@ export function burnDurationDeg({ rpm, lambda, residualFrac, boreFlameFactor = 1
 
 /**
  * @typedef {object} CycleResult
+ * @property {{deg: number[], bar: number[], burned: number[]}} [trace] the pressure trace, when asked for
  * @property {number} imepGrossPa gross indicated MEP over the closed period
  * @property {number} peakPressurePa highest cylinder pressure reached
  * @property {number} peakPressureDeg crank angle of that peak, degrees ATDC
@@ -177,6 +204,7 @@ export function burnDurationDeg({ rpm, lambda, residualFrac, boreFlameFactor = 1
  * @property {number} blowbyFrac charge lost past the rings over the closed period
  * @property {number} knockIntegral Livengood-Wu autoignition integral; ≥ 1 means knock
  * @property {number} mfb50Deg crank angle of 50% mass burned, degrees ATDC
+ * @property {number} unburnedAtEvoFrac share of the charge not yet burned at exhaust valve open
  */
 
 /**
@@ -189,9 +217,13 @@ export function runCycle({
   rpm, sparkBtdc, trappedPa, trappedK, heatJ,
   clearanceM3, sweptM3, rodRatio, ivcAbdc, burnDeg, octaneNumber,
   boreM, strokeM, trappedMassKg, evoAtdc = EVO_ATDC, exhaustManifoldPa = BARO_KPA * 1000,
-  flameDevDeg = COEFF.FLAME_DEVELOPMENT_DEG, gammaBurned = COEFF.GAMMA_BURNED, products = null,
+  flameDevDeg = COEFF.FLAME_DEVELOPMENT_DEG, gammaBurned = COEFF.GAMMA_BURNED, products = null, trace = false,
 }) {
   const step = COEFF.CYCLE_STEP_DEG;
+  // The pressure trace itself, when asked for (the Physics page draws it): every step's crank
+  // angle, pressure and burned share, as integrated.
+  /** @type {{deg: number[], bar: number[], burned: number[]}|null} */
+  const rec = trace ? { deg: [], bar: [], burned: [] } : null;
   const thetaStart = -180 + ivcAbdc;
   const spark = -sparkBtdc;
   // Spark does not light the charge instantly: there is a delay while a kernel forms
@@ -224,6 +256,11 @@ export function runCycle({
   // at wall temperature and takes no part in combustion, then comes back out on
   // expansion. This is where most unburnt hydrocarbon actually comes from.
   const creviceM3 = clearanceM3 * COEFF.CREVICE_VOLUME_FRAC;
+  // MOLAR EXPANSION (thermo.js molarExpansion): the products hold more moles than the
+  // charge they came from, so each slice that burns raises the pressure by that share as
+  // well as by its heat. Without it a rich mixture, whose products gain the most moles,
+  // was charged for its unburned CO and H2 and paid nothing back.
+  const molarGain = products ? molarExpansion(products) - 1 : 0;
 
   let p = trappedPa;
   let v = cylinderVolumeM3(thetaStart, clearanceM3, sweptM3, rodRatio);
@@ -308,7 +345,8 @@ export function runCycle({
       dHeld = heldNext - heldJ;
       heldJ = heldNext;
     }
-    const dp = ((gamma - 1) / workingV) * (dQ - dHeld - dQwall) - (gamma * p * (vNext - v)) / workingV;
+    const dp = ((gamma - 1) / workingV) * (dQ - dHeld - dQwall) - (gamma * p * (vNext - v)) / workingV
+      + (p * molarGain * (burned - prevBurned)) / (1 + molarGain * prevBurned);
     const pNext = Math.max(1, p + dp);
 
     // Work on the piston, trapezoidal.
@@ -378,6 +416,7 @@ export function runCycle({
       knockIntegral += (endGasShare * step * msPerDeg) / tau;
     }
 
+    if (rec) { rec.deg.push(thetaNext); rec.bar.push(pNext / 1e5); rec.burned.push(burned); }
     if (pNext > peakPressurePa) { peakPressurePa = pNext; peakPressureDeg = thetaNext; }
     if (!crossed50 && burned >= 0.5) { mfb50Deg = thetaNext; crossed50 = true; }
 
@@ -448,6 +487,7 @@ export function runCycle({
   const portK = blowdownMassFrac * blowdownK + (1 - blowdownMassFrac) * displacedK;
 
   return {
+    ...(rec ? { trace: rec } : {}),
     imepGrossPa: work / sweptM3,
     // Cylinder pressure when the exhaust valve opens: what the blowdown pulse starts from.
     evoPressurePa: p,
@@ -459,6 +499,11 @@ export function runCycle({
     blowbyFrac,
     knockIntegral,
     mfb50Deg,
+    // The share of the charge still unburned when the exhaust valve opens. Nil at any
+    // timing near MBT; with the spark well after top dead centre (an overrun burble, a
+    // badly retarded map) the flame is still crossing the chamber at EVO, and that charge
+    // finishes burning in the exhaust manifold: heat the piston never saw, and the pops.
+    unburnedAtEvoFrac: 1 - burnedFraction(evoAtdc),
   };
 }
 
@@ -785,9 +830,9 @@ export function cycleInputsFor({
     products: productsPerKgCharge(lambda > 0 ? 1 / lambda : 1, fuel),
     residualFrac,
     effectiveCr: vIvc / clearanceM3,
-    // Only carried when a phaser has moved the exhaust cam, so a fixed-cam engine's
-    // cycle inputs are exactly what they always were.
-    ...(exhaustRet ? { evoAtdc: EVO_ATDC + exhaustRet } : {}),
+    // Where this engine's exhaust lobe opens, moved later by any exhaust phaser's retard.
+    evoAtdc: evoAtdcDeg(derived.exhaustCamDuration ?? derived.camDuration ?? COEFF.IVC_CAM_REF_DURATION,
+      derived.camDuration ?? COEFF.IVC_CAM_REF_DURATION) + exhaustRet,
     ...(empKpa ? { exhaustManifoldPa: empKpa * 1000 } : {}),
   };
 }

@@ -70,10 +70,10 @@ export const ECU_COEFF = Object.freeze({
 
   // ---- Idle and overrun.
   /** Idle-valve travel the controller may use, percent. */
-  IDLE_AIR_MIN_PCT: 1,
-  IDLE_AIR_MAX_PCT: 34,
+  IDLE_AIR_MIN_PCT: 0.1,
+  IDLE_AIR_MAX_PCT: 15,
   /** Where the idle valve bleeds back to while coasting down, percent. */
-  IDLE_COAST_AIR_PCT: 3,
+  IDLE_COAST_AIR_PCT: 1.35,
   /** Above this the ECU is coasting, not idling. */
   IDLE_CAPTURE_RPM: 2000,
   /** Below this idle spark control acts; above it (throttle shut) overrun retard does. */
@@ -270,19 +270,6 @@ export const ECU_COEFF = Object.freeze({
   /** Flow left in a weak fuel pump, and oil pressure left with the level low. */
   WEAK_PUMP_HEALTH: 0.55,
   LOW_OIL_HEALTH: 0.25,
-
-  // ---- Drag strip.
-  /** How fast each traction-control actuator delivers its cut, s. */
-  TC_TAU_SPARK_S: 0.02,
-  TC_TAU_FUEL_S: 0.01,
-  TC_TAU_THROTTLE_S: 0.12,
-  TC_TAU_BOOST_S: 0.5,
-  /** Most torque traction control may take away. */
-  TC_MAX_CUT: 0.95,
-  /** How fast the cut is released once the tyre hooks up, per 100 ms. */
-  TC_RELEASE_RATE: 0.6,
-  /** Share of a manual shift a flat-foot shift still takes. */
-  FFS_SHIFT_SHARE: 0.55,
 
   // ---- Ethanol.
   /** Octane gained from E85 to pure ethanol. */

@@ -1,8 +1,8 @@
 /**
  * HOME > Learn How It Works.
  *
- * The plain-language guide: forty-six numbered articles, in reading order, from
- * "an engine is an air pump" through reading a time slip to the published
+ * The plain-language guide: forty-one numbered articles, in reading order, from
+ * "an engine is an air pump" to the published
  * correlations the engine model implements and the limits it does not cross.
  *
  * It is the only screen in the app with NO state of its own and no store read —
@@ -198,7 +198,7 @@ function LearnScreenInner({ active, onToggle }) {
         The datalog is where diagnosis actually happens. Read it in pairs:
         <br /><br /><b className={styles.em}>Timing: asked → got</b> — if they differ, the ECU overrode you. That is knock retard, and the gap is roughly how far past the limit your table was (the ECU retards in whole steps, so it can pull a little more than the overshoot).
         <br /><br /><b className={styles.em}>Mixture: asked → got</b> — if actual is not what you commanded, the cause is upstream of the fuel table: usually MAF scaling or injectors out of duty. Do not "fix" it by editing fuel cells; fix the cause.
-        <br /><br /><b className={styles.em}>Airflow</b> — an engine near 300 hp flows around 210–230 g/s at peak power, about what a real one needs (article 39), which is a quick sanity check on whether your VE table is plausible.
+        <br /><br /><b className={styles.em}>Airflow</b> — an engine near 300 hp flows around 210–230 g/s at peak power, about what a real one needs (article 34), which is a quick sanity check on whether your VE table is plausible.
         <br /><br /><b className={styles.em}>Injectors</b> — duty above 90% is the wall. <b className={styles.em}>Heat</b> — sustained EGT above about 950–1000°C cooks turbines and valves; it rises with retarded timing and as the mixture leans toward stoichiometric, and a rich mixture is what pulls it back down: going from 13.5 to 11:1 cools it by about 60 °C here, as on a real engine.
         <br /><br /><TryIt href="#/dyno/data">DYNO › DATALOG</TryIt>
       </ExpandableInfo>
@@ -217,7 +217,7 @@ function LearnScreenInner({ active, onToggle }) {
       <div className={styles.part}>PART 4 · WHAT THE SIMULATOR IS DOING</div>
       <div className={styles.partGoal}>After this part you can say where the model&apos;s numbers come from, what the rest of the ECU does, and where the simulator simplifies.</div>
 
-      <ExpandableInfo title="22. The turbo is a machine, not a boost knob">
+      <ExpandableInfo title="17. The turbo is a machine, not a boost knob">
         A compressor is not a pump that delivers whatever number you type. It is a wheel with a <b className={styles.em}>map</b>: for a given pressure ratio it can only pass so much air, and it is only efficient in the middle of that map.
         <br /><br />Off the left edge is <b className={styles.em}>surge</b> — too little flow for the pressure being asked, and the air stalls off the blades and reverses. Off the right edge is <b className={styles.em}>choke</b>, and this one is a hard wall rather than a penalty: once the inducer reaches the speed of sound, no more air goes through it at any shaft speed. Asking for more boost past that point does nothing at all.
         <br /><br />What actually sets boost is an <b className={styles.em}>energy balance</b>. The turbine takes power out of the exhaust; the compressor spends it on the intake. Boost is wherever those two settle. That is why exhaust temperature and turbine size change boost without you touching the target, and why a wastegate lowers backpressure the moment it cracks open.
@@ -226,50 +226,50 @@ function LearnScreenInner({ active, onToggle }) {
         <br /><br /><b className={styles.em}>Big engines run out of compressor.</b> A 7-litre V8 at 7500 RPM and 10 psi asks for roughly 80 lb/min of air; one Large compressor here chokes near 66. The boost falls away before redline however high you set the target, and the small turbine that came with it dams the exhaust on the way out. That is why big engines so often run <b className={styles.em}>twin turbos</b>: two in parallel, each with its own compressor and turbine, pass twice the air at the same boost. BUILD › Induction has a Single/Twin picker, with a line comparing what your engine needs at the rev limit to where the fitted compressors choke.
       </ExpandableInfo>
 
-      <ExpandableInfo title="23. What boost costs: pumping work and backpressure">
+      <ExpandableInfo title="18. What boost costs: pumping work and backpressure">
         Boost is usually taught as free power. It is not, and the bill arrives in two places.
         <br /><br />First, <b className={styles.em}>pumping work</b>. Every cycle the engine has to push the exhaust out against whatever pressure is in the manifold and draw the next charge in. The cost is the difference between exhaust pressure and intake pressure. With a small or nearly choked turbine, exhaust manifold pressure can run well above boost pressure — so the engine is pushing out harder than it is being fed, and that is a straight torque loss before the crank sees anything.
         <br /><br />Second, <b className={styles.em}>residuals</b>. High exhaust pressure relative to intake pressure means more burned gas stays behind, or backflows during overlap. That hot, inert leftover does two things: it slows the flame (so MBT moves, see article 4) and it raises the starting temperature of the next charge — which feeds straight into the knock clock from article 5.
         <br /><br />This is the real reason turbine sizing matters, and why two setups making identical boost can be nothing alike to drive.
       </ExpandableInfo>
 
-      <ExpandableInfo title="24. Where the heat actually goes">
+      <ExpandableInfo title="19. Where the heat actually goes">
         Burning fuel does not hand all its energy to the piston. A large share goes through the chamber walls to the coolant, and the rate depends on how fast the gas is moving and how hot it is — not on a fixed percentage.
         <br /><br />This app uses the standard correlation for that (Woschni), against a wall at roughly 450 K and an area that grows as the piston uncovers the bore. Heat loss is therefore worst where gas velocity and temperature are highest: right around peak pressure.
         <br /><br />The other thing most simple models get wrong is that burned and unburned gas are not the same substance. Hot burned products have a lower ratio of specific heats than cool unburned charge. Treating the whole cylinder as unburned air overstates peak pressure — by about 7% in this app's engine at full throttle. This app carries <b className={styles.em}>two zones</b> and blends between them by how much has burned so far, with dissociation — high-temperature products holding energy back — worked out from its chemical equilibrium at every step and handed back to the gas as it cools.
         <br /><br />That is why the exhaust gas temperature in the datalog responds to timing the way it does: retard leaves more heat release happening late, and the gas leaves before it has given it up.
       </ExpandableInfo>
 
-      <ExpandableInfo title="25. Why the textbook Otto cycle is not your engine">
-        Physics classes teach the <b className={styles.em}>air-standard Otto cycle</b>, whose efficiency is a famously tidy formula depending on compression ratio alone. Interactive versions are worth playing with — see article 27 — because they build the right intuition about compression and about why heat must be thrown away.
-        <br /><br />But NASA's own primer states the assumptions plainly: no heat crossing the walls, no friction, and "instantaneous burning occurring at constant volume". Your engine does none of those. Combustion takes 40 to 60 crank degrees, heat leaves through the walls the whole time (article 24), the working fluid changes composition as it burns, the cylinder never empties cleanly (article 23), and spark timing has consequences (article 5).
+      <ExpandableInfo title="20. Why the textbook Otto cycle is not your engine">
+        Physics classes teach the <b className={styles.em}>air-standard Otto cycle</b>, whose efficiency is a famously tidy formula depending on compression ratio alone. Interactive versions are worth playing with — see article 22 — because they build the right intuition about compression and about why heat must be thrown away.
+        <br /><br />But NASA's own primer states the assumptions plainly: no heat crossing the walls, no friction, and "instantaneous burning occurring at constant volume". Your engine does none of those. Combustion takes 40 to 60 crank degrees, heat leaves through the walls the whole time (article 19), the working fluid changes composition as it burns, the cylinder never empties cleanly (article 18), and spark timing has consequences (article 5).
         <br /><br />Every one of those is a place a real engine loses efficiency — and every one is a place a <b className={styles.em}>tuner has leverage</b>. If the ideal cycle were accurate there would be nothing to tune but compression ratio.
         <br /><br />NASA adds that real losses "are normally accounted for by efficiency factors which multiply and modify the ideal result". That multiply-by-a-factor approach is exactly what this app used to do and no longer does: it integrates pressure through the cycle and takes the work out. The fitted realization factor was deleted once the cycle was solved properly.
       </ExpandableInfo>
 
-      <ExpandableInfo title="26. Where the engine model comes from">
+      <ExpandableInfo title="21. Where the engine model comes from">
         The physics is not invented for this app. It implements published correlations, so the numbers can be checked against the literature rather than taken on trust.
         <br /><br /><b className={styles.em}>Combustion.</b> Wiebe (Vibe) function for mass-burned fraction. Heywood, <i>Internal Combustion Engine Fundamentals</i> (McGraw-Hill, 2nd ed. 2018) for the two-zone treatment and the 8–10° ATDC MFB50 optimum in article 4.
         <br /><br /><b className={styles.em}>Knock.</b> Douaud &amp; Eyzat, "Four-Octane-Number Method for Predicting the Anti-Knock Behavior of Fuels and Engines", SAE 780080 (1978) — the ignition-delay correlation. Livengood &amp; Wu, 5th Symposium on Combustion (1955) — the integral that accumulates it. Together these are article 5.
-        <br /><br /><b className={styles.em}>Heat transfer.</b> Woschni, SAE 670931 (1967). Article 24.
+        <br /><br /><b className={styles.em}>Heat transfer.</b> Woschni, SAE 670931 (1967). Article 19.
         <br /><br /><b className={styles.em}>Control and gas exchange.</b> Guzzella &amp; Onder, <i>Introduction to Modeling and Control of Internal Combustion Engine Systems</i> (Springer, 2nd ed. 2010). Eriksson &amp; Nielsen, <i>Modeling and Control of Engine and Drivetrain Systems</i> (Wiley, 2014). Blair, <i>Design and Simulation of Four-Stroke Engines</i> (SAE, 1999).
       </ExpandableInfo>
 
-      <ExpandableInfo title="27. Further reading, if you want the fundamentals first">
+      <ExpandableInfo title="22. Further reading, if you want the fundamentals first">
         This app starts partway up. If the ideal cycle or the chemistry is new to you, these are better first stops.
         <br /><br /><b className={styles.em}>The ideal cycle.</b> NASA Glenn's Beginner's Guide sets out the Otto cycle and names its assumptions. PhysSandbox has interactive P–V comparisons of the Otto, Diesel, Carnot and Stirling cycles. New3JCN publishes 350+ browser physics simulations under CC BY 4.0, including gas laws and P–V diagrams.
         <br /><br /><b className={styles.em}>Combustion chemistry.</b> Argonne National Laboratory's combustion programme, for how detailed reaction kinetics and fuel autoignition are actually modelled — the research-grade version of what article 5 approximates.
-        <br /><br /><b className={styles.em}>Engines and emissions generally.</b> The US Department of Energy's internal combustion engine overview, and the Royal Society of Chemistry's material on the chemistry of car engines, for combustion products and aftertreatment — the subject article 28 explains this app leaves out.
+        <br /><br /><b className={styles.em}>Engines and emissions generally.</b> The US Department of Energy's internal combustion engine overview, and the Royal Society of Chemistry's material on the chemistry of car engines, for combustion products and aftertreatment — the subject article 23 explains this app leaves out.
       </ExpandableInfo>
 
-      <ExpandableInfo title="28. What this model does not do">
+      <ExpandableInfo title="23. What this model does not do">
         An accurate simulator is worth more if it is honest about its edges. Three matter.
         <br /><br /><b className={styles.em}>Autoignition is a correlation, not chemistry.</b> Article 5's survival time comes from a published empirical fit — the standard engineering approach, good across normal running. But real autoignition is a branching chain reaction through hundreds of intermediate species, and it does something the fit cannot: over one band of temperature gasoline gets <i>harder</i> to ignite as it gets hotter, and can light in two stages. Laboratories model this with detailed kinetic mechanisms and large computers. A browser cannot.
         <br /><br /><b className={styles.em}>There is no emissions chemistry.</b> Nothing here computes NOx, carbon monoxide or unburned hydrocarbons. So the app can say what lambda does to power and to knock, but never what it does to what leaves the pipe. Worth knowing: the narrow band around lambda 1.00 exists mainly because a three-way catalyst only converts all three pollutants at once inside it. Closed loop is an emissions strategy first.
         <br /><br /><b className={styles.em}>Fuel is a few properties, not a mixture.</b> Pump gasoline blends hundreds of hydrocarbons. Here each fuel carries a stoichiometric ratio, density, heating value, latent heat and antiknock index — enough for a tuner's decisions, not enough to say anything about distillation or seasonal blending.
       </ExpandableInfo>
 
-      <ExpandableInfo title="29. Why the engine sounds the way it does">
+      <ExpandableInfo title="24. Why the engine sounds the way it does">
         The sound here is not a recording. It is built live from what the engine is doing, so the things you change are the things you hear.
         <br /><br /><b className={styles.em}>An exhaust note is a train of pulses.</b> Every time a cylinder's exhaust valve opens, the gas still inside it at several bar rushes out — the blowdown — and then the piston pushes out what is left. A pipe radiates the <i>rate of change</i> of the flow leaving it, so each event is heard as a sharp edge as the valve cracks, a rush of turbulence while the gas leaves near the speed of sound, and a softer swell as the piston pushes. How often they come is set by engine speed and cylinder count:
         <br /><span className={styles.formula}>firing Hz = RPM ÷ 60 × cylinders ÷ 2</span>
@@ -298,7 +298,7 @@ function LearnScreenInner({ active, onToggle }) {
         <br /><br />This matters beyond the game. Tuners diagnose by ear constantly — a lumpy idle, a lean rasp, a knock rattle. The sound is data.
       </ExpandableInfo>
 
-      <ExpandableInfo title="30. Further reading on engine sound">
+      <ExpandableInfo title="25. Further reading on engine sound">
         The ideas above are standard acoustics. These explain them properly.
         <br /><br /><b className={styles.em}>Burns Stainless, "Exhaust Header Theory".</b> How pressure waves travel through a header and reflect at an open end — as a negative pressure wave, which is what header tuning uses to scavenge the cylinder — and why collector design changes the wave that comes back.
         <br /><br /><b className={styles.em}>Flatirons, "Resonance and Reverberation".</b> The plain-language version: resonance when tube length matches the wavelength, interference setting tone, and larger diameter giving a louder, more open note.
@@ -308,7 +308,7 @@ function LearnScreenInner({ active, onToggle }) {
         <br /><br /><b className={styles.em}>ScienceDirect, engine noise and vibration.</b> Reference material on exhaust system acoustics, for the level above this app.
       </ExpandableInfo>
 
-      <ExpandableInfo title="31. The rest of the ECU, and why you can mostly leave it alone">
+      <ExpandableInfo title="26. The rest of the ECU, and why you can mostly leave it alone">
         <b className={styles.em}>In short:</b> your three tables are the tune. Everything else on TUNE starts at a working factory setting and only needs you when a log points to it.
         <br /><br />A real ECU reads a base value from each of your tables (air, spark, mixture) and then adjusts it for conditions: engine temperature, intake air temperature, altitude, ethanol, each cylinder. On top of that it runs controllers for boost, cams, idle and knock, and protections that step in when something goes wrong.
         <br /><br />None of these adds power by itself. A correction only changes what the ECU <i>asks for</i>; the engine answers with the same physics as always. Twenty degrees of advance from a correction is worth exactly what twenty degrees in your SPARK table would be.
@@ -316,7 +316,7 @@ function LearnScreenInner({ active, onToggle }) {
         <br /><br /><b className={styles.em}>What to do:</b> tune the three tables first. When a number in the log looks wrong, look at WHERE THE NUMBERS COME FROM on LIVE, which appears while the engine is running (or the engine-management block in the dyno datalog). It lists every adjustment in order, so you can see which one moved it.
       </ExpandableInfo>
 
-      <ExpandableInfo title="32. Sensors: the ECU only knows what it measures">
+      <ExpandableInfo title="27. Sensors: the ECU only knows what it measures">
         <b className={styles.em}>In short:</b> the ECU sees voltages, not the truth. If its setting for a sensor does not match the sensor fitted, it acts confidently on a wrong number.
         <br /><br />Every sensor sends a voltage. The ECU turns it back into pressure, mixture or temperature using the setting it was given for that part. The part is chosen on BUILD; the setting is on TUNE › SENSORS.
         <br /><br /><b className={styles.em}>MAP sensor.</b> A 1-bar sensor reads up to atmospheric and stops. On a turbo engine the ECU never sees boost, so it fuels and times every boosted point as if it were at 100 kPa. The engine runs lean and over-advanced exactly where it can least afford it.
@@ -325,7 +325,7 @@ function LearnScreenInner({ active, onToggle }) {
         <br /><br /><b className={styles.em}>What to do:</b> whenever you change a sensor on BUILD, look at the note under it. If it says the ECU does not match, press <b className={styles.em}>Set ECU to match</b>. TUNE › SENSORS lists any mismatch too. To see what a broken sensor does, inject a fault on LIVE.
       </ExpandableInfo>
 
-      <ExpandableInfo title="33. Fuel over time: pressure, injector delay and the port wall">
+      <ExpandableInfo title="28. Fuel over time: pressure, injector delay and the port wall">
         <b className={styles.em}>In short:</b> the ECU does not squirt a weight of fuel; it holds an injector open for a time. Pressure, voltage and a film of fuel on the port walls all change what actually arrives.
         <br /><br /><b className={styles.em}>Fuel pressure.</b> An injector flows as the square root of the pressure across it. A return-style regulator keeps that pressure constant. A returnless system does not: at 20 psi of boost a 43 psi rail has only 23 psi left across the injector, so it flows about 27% less, unless the ECU corrects for it (TUNE › INJECTORS). A pump that cannot keep up lets pressure sag and leans every cylinder at once.
         <br /><br /><b className={styles.em}>Injector delay.</b> An injector takes about a millisecond to open, longer on low battery voltage. The ECU adds that delay to every pulse from its dead-time table. A wrong table throws off every short pulse, so idle suffers most.
@@ -334,7 +334,7 @@ function LearnScreenInner({ active, onToggle }) {
         <br /><br /><b className={styles.em}>What to do:</b> after fitting injectors, set the injector scaling on TUNE › INJECTORS to match. On a returnless turbo build, set pressure compensation to &ldquo;Fixed rail&rdquo;. If the LIVE log goes lean for a moment on a throttle stab, add acceleration enrichment.
       </ExpandableInfo>
 
-      <ExpandableInfo title="34. Knock control listens; it does not know">
+      <ExpandableInfo title="29. Knock control listens; it does not know">
         <b className={styles.em}>In short:</b> knock control is a microphone with a volume threshold. Set the threshold wrong and it either pulls timing for noise, or misses real knock.
         <br /><br />The knock sensor is a microphone bolted to the block. It hears knock, but it also hears the valves closing, louder at high RPM and with stiff springs. The ECU calls anything louder than its threshold &ldquo;knock&rdquo;.
         <br /><br /><b className={styles.em}>Threshold too low:</b> valve noise counts as knock, so the ECU pulls timing from an engine that is fine, and power goes flat at the top end. This often appears after a cam or spring change.
@@ -343,7 +343,7 @@ function LearnScreenInner({ active, onToggle }) {
         <br /><br /><b className={styles.em}>What to do:</b> never rely on knock control to make a tune safe. Take timing out until the log shows no knock. If the log shows retard at high RPM but no real knock, raise the threshold there.
       </ExpandableInfo>
 
-      <ExpandableInfo title="35. Controllers: boost, idle and cams">
+      <ExpandableInfo title="30. Controllers: boost, idle and cams">
         <b className={styles.em}>In short:</b> each controller compares what it wants with what it measures and nudges an actuator. Push too hard and it overshoots; too gently and it never gets there.
         <br /><br /><b className={styles.em}>Boost.</b> The ECU never sets boost directly. It sets how hard the wastegate is held shut, and the turbo makes what it can under that. In closed loop the ECU corrects the wastegate until boost matches the target. The integral part builds up while the turbo spools and can overshoot when boost arrives; overboost protection catches that. A spring-type wastegate cannot hold less than its spring, whatever the ECU asks.
         <br /><br /><b className={styles.em}>Idle.</b> With your foot off, the ECU holds the engine up on its own: air for slow drift, spark for quick dips, and a kick of extra air the moment the A/C or lights come on. The intake takes about a fifth of a second to respond at idle, so an over-eager controller chases its own delay and hunts.
@@ -351,7 +351,7 @@ function LearnScreenInner({ active, onToggle }) {
         <br /><br /><b className={styles.em}>What to do:</b> change one controller setting at a time and watch it on the LIVE log. Put boost next to its target, or RPM next to the idle target, and look for overshoot.
       </ExpandableInfo>
 
-      <ExpandableInfo title="36. Protections, limiters, launch and map switching">
+      <ExpandableInfo title="31. Protections, limiters, launch and map switching">
         <b className={styles.em}>In short:</b> protections are the ECU saving the engine from a problem. When one trips, fix the problem; do not switch the protection off.
         <br /><br /><b className={styles.em}>Protections</b> watch what the ECU measures: lean mixture under boost, hot exhaust (it adds fuel to cool it), heavy knock, injectors nearly flat out, low oil or fuel pressure, overheating. The Pull Log names any that stepped in.
         <br /><br /><b className={styles.em}>Rev limiters.</b> Fuel cut is smooth and cool. Spark cut sends unburned fuel into a hot exhaust, where it lights; those are the pops, and the extra heat reaches the turbo. A throttle cut just before the limit eases the engine onto it.
@@ -361,17 +361,17 @@ function LearnScreenInner({ active, onToggle }) {
         <br /><br /><b className={styles.em}>What to do:</b> keep protections on. If one trips, read what it says, fix the cause, and pull again.
       </ExpandableInfo>
 
-      <ExpandableInfo title="37. Horsepower and torque: two views of one number">
+      <ExpandableInfo title="32. Horsepower and torque: two views of one number">
         Torque is the twist on the crank. Power is how fast that twist does work — torque times how fast the crank turns. They are not two things an engine makes; they are the same measurement, read two ways:
         <br /><br /><span className={styles.formula}>hp = lb-ft × RPM ÷ 5252</span><br />
         <span className={styles.formula}>kW = N·m × RPM ÷ 9549</span>
         <br /><br />So the two curves always cross at 5252 RPM, and peak power always sits above peak torque: past the torque peak, torque falls more slowly than RPM rises, until it does not. A tune that adds torque at 7000 RPM adds more power than the same torque at 3000.
         <br /><br /><b className={styles.em}>Units.</b> Metric horsepower (PS) is 735.5 W, a little smaller than the 745.7 W imperial horsepower: 1 hp ≈ 1.014 PS. Most of the world quotes kW. None of it changes the engine.
         <br /><br /><b className={styles.em}>Where it is measured.</b> Brake horsepower is measured at the crank, against an engine dyno&apos;s brake. A chassis dyno measures at the wheels, after the gearbox, driveshaft and differential have taken their share. This app reports wheel figures — crank power less a flat 15% — which is why its numbers read lower than a manufacturer&apos;s brochure for the same engine. Compare like with like: a wheel figure against a wheel figure, on the same kind of dyno.
-        <br /><br /><b className={styles.em}>Which one you feel.</b> Acceleration comes from wheel torque, and gearing trades RPM for torque (article 18). That is why power, not peak torque, decides how fast a car can go: in the right gear, more power is always more torque at the wheel. Torque low down is what makes an engine easy to drive; power is what makes it fast.
+        <br /><br /><b className={styles.em}>Which one you feel.</b> Acceleration comes from wheel torque, and gearing trades RPM for torque. That is why power, not peak torque, decides how fast a car can go: in the right gear, more power is always more torque at the wheel. Torque low down is what makes an engine easy to drive; power is what makes it fast.
       </ExpandableInfo>
 
-      <ExpandableInfo title="38. Further reading on engine management">
+      <ExpandableInfo title="33. Further reading on engine management">
         <b className={styles.em}>UpRev, &ldquo;Nissan Tuning Guide&rdquo;.</b> How a production ECU is actually calibrated: base fuel schedule and the K-fuel multiplier, the fuel compensation table, cranking enrichment, injector latency as a line against voltage, the fuel target lookup delay, knock listening thresholds and high-detonation maps, cam phasing, throttle-cut rev limits, launch control, flat-foot shifting and map switching.
         <br /><br /><b className={styles.em}>HP Tuners, &ldquo;Switch on the Fly&rdquo; user guide.</b> Map slots on a production ECU: a default slot, a maximum, which tables switch, and the active slot remembered across a restart.
         <br /><br /><b className={styles.em}>HP Tuners, &ldquo;A Beginner&apos;s Guide to Engine Tuning&rdquo;.</b> Horsepower, torque and their units; mixture, timing and exhaust flow as the three things a tune works on; and the split every tuning suite has between an editor that changes the calibration and a scanner that logs what the engine did with it — TUNE and the dyno datalog here.
@@ -380,24 +380,24 @@ function LearnScreenInner({ active, onToggle }) {
         <br /><br /><b className={styles.em}>J. B. Heywood, <i>Internal Combustion Engine Fundamentals</i>.</b> The engine side of all of it — including why a spark needs more voltage the denser the gas across the gap.
       </ExpandableInfo>
 
-      <ExpandableInfo title="39. What this simulator simplifies">
+      <ExpandableInfo title="34. What this simulator simplifies">
         <b className={styles.em}>In short:</b> the directions are right everywhere and the sizes are close, but this is a teaching model, not a replacement for a real dyno. The app&apos;s own figures below are checked by its tests on every change; the real-engine figures come from published sources, listed in the project&apos;s docs/accuracy.md.
-        <br /><br /><b className={styles.em}>Checked and close to real engines:</b> full-throttle mixture (λ 0.83–0.87), timing, how late the burn lands, torque per litre, friction, the air and fuel each horsepower takes, how much a rich mixture cools the exhaust, and how much power boost adds with and without an intercooler. Most presets make their published power within 5%; the Nissan VQ35DE Rev-Up reads about 9% under it, the VQ35HR and the GM LS6 about 5% under, the BMW B58 (M340i) about 8% under, and the VW GTI about 10% under its rated torque.
-        <br /><br /><b className={styles.em}>Fuel used per horsepower.</b> The presets burn about 0.44–0.50 lb of fuel per horsepower-hour at full throttle and make 9.3–10.7 hp per lb/min of air. Real NA engines use about 0.45–0.50 (the best modern ones about 0.42), turbo engines about 0.50–0.60, and the rule of thumb is 10–11 hp per lb/min. The app used to read 10–15% more power per pound of air than that, because it gave a rich flame credit for heat its leftover carbon monoxide and hydrogen never release; it now works that chemistry out, and the gap closed. Turbo engines still read a little light on fuel, so leave injector headroom on a real car.
-        <br /><br /><b className={styles.em}>Turbos come in a little late.</b> Below 2000 RPM the turbo presets make 5–26% less torque than the makers&apos; published figures (it was 16–54% until the app learned two things from real data: how well a real engine fills its cylinders at low speed, read from GM&apos;s own factory calibrations, and the exhaust pulse each cylinder hands the turbine when its valve opens). What is left is mostly spark: at full boost and low speed the app&apos;s knock limit holds them near top dead centre. Their torque also does not stay perfectly flat the way a factory torque limit holds it.
-        <br /><br /><b className={styles.em}>Exhaust temperature reads low at full throttle.</b> About 750–770 °C on an NA engine and 755–785 °C boosted, where production turbos run up to about 950 °C at the turbine. How it moves is right: richer cools it, about 60 °C from 13.5 to 11:1, and retarded spark heats it. It peaks near λ 0.95, a little richer than a real engine&apos;s, which peaks at or just lean of stoichiometric.
+        <br /><br /><b className={styles.em}>Checked and close to real engines:</b> full-throttle mixture (each engine&apos;s own factory mixture, λ 0.76–1.0, read from stock calibrations and logs), timing, how late the burn lands, torque per litre, friction, the air and fuel each horsepower takes, how much a rich mixture cools the exhaust, and how much power boost adds with and without an intercooler. Twelve of the thirteen factory engines make their published power within 5%, and every one peaks within 500 RPM of where its maker says; the Nissan VQ35HR is 8–9% under, and no cam closes it. The VW GTI reads about 7% under its rated torque, and the BMW N54 about 10% over it, as measured stock ones do.
+        <br /><br /><b className={styles.em}>Fuel used per horsepower.</b> The presets burn about 0.39–0.51 lb of fuel per horsepower-hour at full throttle (the rich GM trucks the most, the stoichiometric direct-injection engines the least) and make 9.8–11.4 hp per lb/min of air. Real NA engines use about 0.45–0.50 (the best modern ones about 0.42), turbo engines about 0.50–0.60, and the rule of thumb is 10–11 hp per lb/min. The app used to read 10–15% more power per pound of air than that, because it gave a rich flame credit for heat its leftover carbon monoxide and hydrogen never release; it now works that chemistry out, and the gap closed. Turbo engines still read a little light on fuel, so leave injector headroom on a real car.
+        <br /><br /><b className={styles.em}>Turbos come in a little late.</b> Below 2000 RPM the turbo presets make from 1% more to 21% less torque than the makers&apos; published figures (it was 16–54% until the app learned two things: how a real engine fills its cylinders at low speed, now worked out valve by valve from the engine&apos;s own cams and ports, and the exhaust pulse each cylinder hands the turbine when its valve opens). What is left is mostly spark: at full boost and low speed the app&apos;s knock limit holds them near top dead centre. Their torque also does not stay perfectly flat the way a factory torque limit holds it.
+        <br /><br /><b className={styles.em}>Exhaust temperature reads low at full throttle.</b> About 725–760 °C on an NA engine and 760–825 °C boosted, where production turbos run up to about 950 °C at the turbine. How it moves is right: richer cools it, about 60 °C from 13.5 to 11:1, and retarded spark heats it. It peaks near λ 0.95, a little richer than a real engine&apos;s, which peaks at or just lean of stoichiometric.
         <br /><br /><b className={styles.em}>The compressor heats the air at one fixed efficiency.</b> A real compressor pushed off the middle of its map heats the charge more, which costs density and knock margin. Here the charge heats as if the compressor were always at 70% efficiency, so past its ceiling you get a warning on the pull log, not hotter air.
-        <br /><br /><b className={styles.em}>Cylinder pressure runs low under boost.</b> The factory turbo engines peak at about 72–86 bar here; practitioners quote about 100–120 for real ones. The app&apos;s own &ldquo;past what the bottom end takes&rdquo; limit is set on the same scale, so its warnings still land in the right place relative to each other.
-        <br /><br /><b className={styles.em}>Best power sits a little lean.</b> With spark at its best, this model makes its most power near λ 0.94 and about 1% less at λ 0.88; a real engine is best at about λ 0.86–0.91. The reason is that the hottest flames break water and carbon dioxide apart, holding back energy until late in the stroke. The app now works that out for carbon dioxide, water and hydroxyl, which costs a stoichiometric mixture about 2% (a real engine loses 3–5%); the rarer pieces it leaves out are the rest of the gap. Very rich costs power, as it should: about 11% from λ 0.88 to 0.70.
+        <br /><br /><b className={styles.em}>Cylinder pressure runs low under boost.</b> The factory turbo engines peak at about 69–82 bar here; practitioners quote about 100–120 for real ones. The app&apos;s own &ldquo;past what the bottom end takes&rdquo; limit is set on the same scale, so its warnings still land in the right place relative to each other.
+        <br /><br /><b className={styles.em}>Best power, where a real engine has it.</b> With spark at its best, this model makes its most power near λ 0.90, and about 3% less at stoichiometric; a real engine is best at about λ 0.86–0.91 and loses 3–5% there. Two things put it there: burning turns the charge into more molecules than it started as, a rich charge most of all, which pushes harder on the piston; and the hottest flames break water and carbon dioxide apart, holding back energy until late in the stroke. Very rich costs power, as it should: about 7% from λ 0.88 to 0.70.
         <br /><br /><b className={styles.em}>Best-torque timing.</b> The advisors aim for the textbook best-torque timing (the burn half done 8–10° after top dead centre). The model&apos;s own torque usually peaks about 3° later (occasionally much more, mostly at low RPM); following the advice costs under 3%.
         <br /><br /><b className={styles.em}>Cold starts on E85.</b> Flood an engine with fuel and it cranks without firing, as a real one does. But ethanol&apos;s reluctance to evaporate in the cold is not modelled: a real E85 engine is hard to start in freezing weather (which is why winter E85 is blended down to around E70), while here it starts like gasoline.
-        <br /><br /><b className={styles.em}>Superchargers make a little more per psi than real kits.</b> About 7 psi on an intercooled engine adds about 48% here; published kits of that boost add 35–50% at the crank (ProCharger quotes 40–44%). The stock exhaust&apos;s backpressure rises in step with the extra flow here, where a real one rises faster, so a supercharged engine breathes out a little too easily.
+        <br /><br /><b className={styles.em}>Superchargers make what real kits make.</b> About 7 psi on an intercooled engine adds about 44% here; published kits of that boost add 35–50% at the crank (ProCharger quotes 40–44%).
         <br /><br /><b className={styles.em}>Nitrous adds about its rating.</b> A 50, 100 or 150 shot adds 0.9–1.0 times its rating at the crank here, as kits do. The flow through the jet is priced as plain liquid through an orifice; real nitrous starts boiling in the jet, which the kit makers&apos; charts account for and this does not. And the extra oxygen does not speed the burn here: its knock comes through pressure and temperature alone. The bottle is one liquid temperature and a wall: a real bottle chills at the liquid&apos;s surface first, so its pressure can sag faster at the start of a pass than it does here.
         <br /><br /><b className={styles.em}>Wheel horsepower.</b> The app takes a flat 15% off for the drivetrain. Real dynos vary: a stock 350Z reads 22–28% under its rating, while BMW&apos;s and VW&apos;s turbo engines often read close to their rating, because they are rated low.
         <br /><br /><b className={styles.em}>What to do:</b> trust the directions (what knocks, what leans out, which way a change moves power) and treat the absolute numbers as a good estimate. On a real car, a real dyno and a real wideband have the last word.
       </ExpandableInfo>
 
-      <ExpandableInfo title="40. Superchargers: boost off the crank">
+      <ExpandableInfo title="35. Superchargers: boost off the crank">
         <b className={styles.em}>In short:</b> a supercharger is a compressor turned by a belt from the crank. It has no turbine to spool, so its boost is there as soon as the throttle opens — and the crank pays for every psi of it.
         <br /><br /><b className={styles.em}>Roots and twin-screw.</b> Both move a fixed volume of air every turn (an Eaton M90 1.47 L, a TVS R1900 1.9 L, a Whipple 2.9 L), and the manifold pressure rises until the engine swallows exactly what the blower pumps. So they make boost from just off idle. A Roots does not compress the air inside itself and runs about 50–55% efficient; a TVS reaches about 75% and a twin-screw 78%, which is less heat in the charge and less power to drive them at the same boost.
         <br /><br /><b className={styles.em}>Centrifugal.</b> A ProCharger is a turbo compressor driven through a belt and a 4.1:1 step-up gearbox, up to 65,000 rpm at the impeller. Its pressure comes from tip speed, so boost climbs with RPM and peaks at redline — little down low, a lot at the top.
@@ -406,7 +406,7 @@ function LearnScreenInner({ active, onToggle }) {
         <br /><br /><b className={styles.em}>What to do:</b> fit one on BUILD › INDUCTION and start with the starter pulley (about 8 psi). The stock spark table was never tuned for boost, so take timing out of the boost rows on TUNE › SPARK, then pull and read the log. Raise the ratio a step at a time, watching knock, blower speed and injector duty.
       </ExpandableInfo>
 
-      <ExpandableInfo title="41. Nitrous oxide: oxygen from a bottle">
+      <ExpandableInfo title="36. Nitrous oxide: oxygen from a bottle">
         <b className={styles.em}>In short:</b> nitrous oxide is 36% oxygen by weight, against air&apos;s 23%. Spray it in with fuel to match and the engine burns more fuel in the same cylinders. It also comes apart as it heats, releasing heat of its own, and boils in the intake, chilling the charge.
         <br /><br /><b className={styles.em}>The shot.</b> A &ldquo;100 shot&rdquo; is a jet sized to add about 100 hp. It flows 5–6 lb of nitrous a minute, so a 10 lb bottle is a handful of passes. A <b className={styles.em}>wet</b> kit sprays its own fuel through a second jet; a <b className={styles.em}>dry</b> kit sprays nitrous only and the ECU adds the fuel through the injectors — which must have room for it.
         <br /><br /><b className={styles.em}>The bottle.</b> Nitrous is stored as a liquid under its own vapour pressure, set by temperature, not by how full it is: about 590 psi at 50 °F, 760 at 70 °F, 920 at 85 °F. The jets are sized for 900–950 psi, so a cold bottle flows short. Spraying makes some of what is left boil to fill the room the spray left, and that cools the bottle, so pressure falls through a pass — far more when the bottle is nearly empty and there is little liquid left to share the cooling. That is why racers run bottle heaters: not to hold the pressure mid-pass, which they are too slow to do, but to start every pass at the same pressure. A wet kit&apos;s fuel does not follow the bottle, so the kit&apos;s own mixture runs rich when the bottle is cold and lean when it is hot.

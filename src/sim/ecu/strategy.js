@@ -16,6 +16,7 @@
  * from.
  */
 
+import { throttleBoreM } from '../throttle.js';
 import { BARO_KPA, DRIVETRAIN_EFF, KELVIN_OFFSET, PSI_TO_KPA } from '../constants.js';
 import { trappedAirGrams } from '../cycle.js';
 import { OCTANE_OPTS } from '../hardware.js';
@@ -51,6 +52,8 @@ const NM_PER_LBFT = 1 / 0.7376;
  * @property {{regulator: string, basePressureKpa: number, pumpIdx: number}} fuelSystem
  * @property {{map: string, wideband: string, iat: string, ect: string, flex: boolean}} sensorHw
  * @property {{type: string, springPsi: number}} gate
+ * @property {{ringLeakFrac: number, cylLossFrac: number, deadFrac: number, oilConductance?: number}|null} [wear] the
+ *   engine's worn parts (damage.js `wearEffects`)
  * @property {string} vvt VVT hardware id
  * @property {string} coil coil id
  * @property {number} plugGapMm
@@ -69,6 +72,7 @@ const NM_PER_LBFT = 1 / 0.7376;
  * @property {number[][][]} veTruthByPhase hardware VE at each VE_PHASE_SAMPLES intake phase
  * @property {object} [cfg] the engine config, for the cylinder layout
  * @property {object|null} [blower] a supercharger (a BLOWER_OPTS entry), instead of a turbo
+ * @property {number|null} [exhaustDia] the exhaust pipe fitted, inches (its pressure drop, breathing.js)
  * @property {number} [blowerRatio] crank pulley ÷ blower pulley
  * @property {{kit: 'wet'|'dry', shotHp: number, heater?: boolean, bottleLb?: number}|null} [nitrous]
  *   a nitrous kit
@@ -88,6 +92,28 @@ const NM_PER_LBFT = 1 / 0.7376;
  * @property {{armed: boolean, bottleK: number, setK?: number}} [nitrous] a nitrous kit's arming
  *   switch and the bottle's temperature, which sets its pressure
  */
+
+/**
+ * A manifold pressure, read against the table as a factory ECU's "normalized load" does:
+ * as a share of the air pressure outside, so a wide-open throttle is a wide-open throttle
+ * at any altitude. The fuel table is indexed by absolute pressure, and its enrichment rows
+ * sit at the top of it: wide open at 2000 m the engine sees 78 kPa, which an unnormalized
+ * lookup reads as a cruise cell, and a stock engine went to lambda 1.00 at full throttle
+ * and lost far more power than the air alone takes. Above ambient (boost) the table is read
+ * as it is, from ambient up. At sea level the scale is exactly 1.
+ *
+ * Only for the fuel lookup. VE is physical, indexed by the pressure the cylinder sees, and
+ * spark has its own barometric correction (`ignition.baroCorr`).
+ * @param {number} mapKpa sensed manifold pressure
+ * @param {number} baroKpa the barometric pressure the ECU saw at key-on
+ * @returns {{mapKpa: number, scale: number}} the pressure to read at, and the factor it
+ *   was scaled by (1 above ambient, or at sea level)
+ */
+export function ambientNormalized(mapKpa, baroKpa) {
+  if (!(baroKpa < BARO_KPA)) return { mapKpa, scale: 1 };
+  const scale = BARO_KPA / baroKpa;
+  return mapKpa <= baroKpa ? { mapKpa: mapKpa * scale, scale } : { mapKpa: BARO_KPA + (mapKpa - baroKpa), scale: 1 };
+}
 
 /**
  * The fuel the ECU believes is in the tank.
@@ -209,7 +235,8 @@ export function resolveEcuPoint({
     ? trappedAirGrams({ veActual: veVal, mapKpa: sMap, chargeK: sIatC + KELVIN_OFFSET, sweptM3: (hw.derived.displacementL / hw.derived.cyl) / 1000 })
     : 0;
   const timingBase = readEcuTable(tables, 'timing', rpm, { mapKpa: sMap, airmassG: ecuAirG });
-  const afrBase = readEcuTable(tables, 'afr', rpm, { mapKpa: sMap, airmassG: ecuAirG });
+  const afrLoad = ambientNormalized(sMap, env.baroKpa);
+  const afrBase = readEcuTable(tables, 'afr', rpm, { mapKpa: afrLoad.mapKpa, airmassG: ecuAirG * afrLoad.scale });
 
   // ---- SPARK: base, then every correction in the order the ECU stacks them.
   const timingSteps = [{ label: 'Base table', value: timingBase }];
@@ -238,6 +265,9 @@ export function resolveEcuPoint({
   if (dyn.cranking) {
     timing = cal.ignition.crankingDeg;
     timingSteps.push({ label: 'Cranking timing (overrides)', value: timing });
+  } else if (dyn.burble) {
+    timing = cal.ignition.burbleSparkDeg ?? -15;
+    timingSteps.push({ label: 'Overrun burble timing (overrides)', value: timing });
   } else if (dyn.launch) {
     timing = cal.arc.launchTiming;
     timingSteps.push({ label: 'Launch control timing (overrides)', value: timing });
@@ -381,12 +411,14 @@ export function resolveEcuPoint({
       mafScalar: hw.mafScalar, mafErrorBase: hw.mafErrorBase,
       injectorCc: hw.injectorCc, ecuInjectorCc: hw.ecuInjectorCc,
       derived: hw.derived, compressor: hw.compressor,
-      turbine: hw.turboOn ? hw.turbine : null,
+      turbine: hw.turboOn ? hw.turbine : null, exhaustDia: hw.exhaustDia ?? null,
       ...(empKpa != null ? { empKpa } : {}),
       ...(blower ? { blower } : {}),
       // A wet kit's fuel jet is an orifice on the same rail as the injectors, so it flows
       // with the pressure the pump holds.
       ...(nitrous ? { nitrous: { n2oKgS: nitrous.n2oKgS, fuelKgS: nitrous.wetFuelKgS * rail.flowScale, frac: nFrac, bottleK: cond.nitrous?.bottleK ?? env.ambientK, bottlePsi: nitrous.bottlePsi } } : {}),
+      // Worn parts (damage.js), when the engine has any.
+      ...(hw.wear ? { wear: hw.wear } : {}),
       ecu: ctx,
     },
     sensed: {
@@ -473,9 +505,10 @@ export function evaluateEcu(args) {
  * @param {{ve: number[][], timing: number[][], afr: number[][], layout?: import('../layouts.js').Layout|null}} input.tables
  * @param {number} input.rpm
  * @param {number} input.loadKpa the dyno's throttle, as sea-level kPa
+ * @param {boolean} [input.traceCycle] keep the closed cycle's pressure trace, as `cycleTrace`
  * @returns {object} the datalog record, with ECU channels and the correction breakdown
  */
-export function ecuSteadyPoint({ cal, hw, cond, tables, rpm, loadKpa }) {
+export function ecuSteadyPoint({ cal, hw, cond, tables, rpm, loadKpa, traceCycle = false }) {
   const throttleFrac = clamp(loadKpa / BARO_KPA, 0, 1);
   const throttlePct = throttleFrac * 100;
   const gear = cond.gear ?? DYNO_GEAR;
@@ -485,6 +518,9 @@ export function ecuSteadyPoint({ cal, hw, cond, tables, rpm, loadKpa }) {
   // the log say "λ 0.96, leaner than the λ 1.02 limit".
   let leanTripLambda = 0;
   const mod = { ...NO_INTERVENTION };
+  // The pump's delivery against how freely the system leaks: a weak pump or low oil, and
+  // worn crank bearings (damage.js `oilConductance`).
+  const oilFlow = (cond.oilHealth ?? 1) / (hw.wear?.oilConductance ?? 1);
 
   // Nitrous: the controller's window and, on the dyno, its progressive ramp in RPM — the
   // pull sweeps at a known rate, so seconds since the window opened are RPM travelled.
@@ -556,7 +592,7 @@ export function ecuSteadyPoint({ cal, hw, cond, tables, rpm, loadKpa }) {
     if (P.sensorLimp && resolved.sensed.fault && hw.turboOn && mod.boostCutPsi < E.BOOST_CUT_ALL_PSI) {
       protect.add('limp'); mod.boostCutPsi = E.BOOST_CUT_ALL_PSI; changed = true;
     }
-    if (P.oilEnabled && oilPressureKpa(rpm, cond.oilC, cond.oilHealth ?? 1) < read1(P.oilMinKpa, rpm) && mod.cutFrac < 1) {
+    if (P.oilEnabled && oilPressureKpa(rpm, cond.oilC, oilFlow) < read1(P.oilMinKpa, rpm) && mod.cutFrac < 1) {
       protect.add('oil'); mod.cutFrac = 1; mod.cutType = 'fuel'; changed = true;
     }
     // ---- TORQUE LIMIT, reduced by the calibrated method until it fits.
@@ -574,7 +610,7 @@ export function ecuSteadyPoint({ cal, hw, cond, tables, rpm, loadKpa }) {
   // Intake-temperature protection acts inside the spark resolve, not in the loop above,
   // so it is named here — a retard the player cannot see the reason for teaches nothing.
   if (cal.protect.iatEnabled && pt.sensedIat > cal.protect.iatLimitC) protect.add('iat');
-  const oil = oilPressureKpa(rpm, cond.oilC, cond.oilHealth ?? 1);
+  const oil = oilPressureKpa(rpm, cond.oilC, oilFlow);
   return {
     ...pt,
     boostTarget: Number(solved.target.toFixed(1)),
@@ -595,6 +631,9 @@ export function ecuSteadyPoint({ cal, hw, cond, tables, rpm, loadKpa }) {
     protect: [...protect],
     ...(leanTripLambda > 0 ? { leanTripLambda: Number(leanTripLambda.toFixed(3)) } : {}),
     breakdown: { ...resolved.breakdown, boost: solved.steps },
+    // The closed cycle's pressure trace at the settled point, for the Physics page: the same
+    // resolved inputs evaluated once more with the trace kept.
+    ...(traceCycle && resolved?.input ? { cycleTrace: evaluatePoint({ .../** @type {any} */ (resolved.input), traceCycle: true }).cycleTrace } : {}),
   };
 }
 
@@ -709,6 +748,8 @@ export function solveOperatingPoint({ cal, hw, cond, rpm, loadKpa, throttlePct, 
       derived: hw.derived,
       intakeKAt: (b) => chargeTempK(b, hw.mods.intercooler, env),
       lambda: 1, exhaustK: INDUCTION_REF_EXHAUST_K, baroKpa: env.baroKpa,
+      throttle: { boreM: throttleBoreM(hw.derived), coldAirIntake: !!hw.mods.intake },
+      exhaust: { pipeDiaIn: hw.exhaustDia ?? 3.0, mods: hw.mods },
       ...(hw.blower ? { blower: hw.blower, blowerRatio: hw.blowerRatio, intakeKAtEff: (b, eta) => chargeTempK(b, hw.mods.intercooler, env, eta) } : {}),
     });
     const next = camTargets({ cal: cal.vvt, vvt: hw.vvt, rpm, mapKpa: man.mapKpa });

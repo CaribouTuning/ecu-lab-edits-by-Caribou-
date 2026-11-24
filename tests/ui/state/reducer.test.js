@@ -568,11 +568,11 @@ describe('APPLY_PRESET — exact write surface (catches drift in both directions
   // the old test only compared a hand-built map against the local fixture's own key
   // set — never against what the reducer actually writes. This test instead seeds
   // EVERY field of EVERY slice with a sentinel a real write can never produce, dispatches
-  // for real, and asserts the walked set of changed fields against the 36-field
-  // contract this action documents: a stray write grows the changed set past 36, a
-  // dropped write shrinks it below 36, and the failure message names the field either
+  // for real, and asserts the walked set of changed fields against the 39-field
+  // contract this action documents: a stray write grows the changed set past 39, a
+  // dropped write shrinks it below 39, and the failure message names the field either
   // way.
-  it('changes exactly the 36 documented fields, plus the two history fields', () => {
+  it('changes exactly the 39 documented fields, plus the two history fields', () => {
     const before = makeSentinelState();
     const after = reducer(before, { type: ACTIONS.APPLY_PRESET, preset: N54_PRESET });
     const changed = changedFieldKeys(before, after);
@@ -584,6 +584,8 @@ describe('APPLY_PRESET — exact write surface (catches drift in both directions
       'build.presetId', 'build.presetPrompt',
       // An engine now exists: SANDBOX's first launch has none until one is chosen.
       'build.engineReady', 'build.assumed',
+      // The induction the engine left the factory with, for RESET ALL TO STOCK.
+      'build.factoryInduction', 'build.originPresetId',
       // The factory car's ECU-side parts, which its factory calibration is set up for.
       'build.fuelSystem', 'build.sensorHw', 'build.wastegate', 'build.coil',
       'build.plugGapMm', 'build.ethanolPct',
@@ -598,6 +600,8 @@ describe('APPLY_PRESET — exact write surface (catches drift in both directions
       // A preset's factory tables are on the ECU Lab grid (sim/layouts.js), whatever
       // layout the last calibration sat on.
       'tune.layout',
+      // A new engine's tables are its factory calibration: no cell is waiting to be tuned.
+      'tune.untuned',
       'session.result', 'session.pullScores',
       // APPLY_PRESET is undoable, so it records a snapshot in the same pass. These two
       // belong in the exact-write-surface contract like any other field it touches.
@@ -1722,16 +1726,16 @@ describe('snapshot field coverage', () => {
   // module iterates over would let a key deleted from both the list AND this
   // expectation pass vacuously. That is exactly the vulnerability a reviewer found —
   // cutting BUILD_KEYS to 3 entries and TUNE_KEYS to 2 left all 871 tests green.
-  it('snapshots exactly the documented 25 build and 9 tune fields', () => {
+  it('snapshots exactly the documented 27 build and 10 tune fields', () => {
     const snap = snapshot(makeInitialState());
     expect(Object.keys(snap.build).sort()).toEqual([
       'assumed', 'blowerId', 'blowerRatio', 'boostCurve', 'coil', 'compressorIdx', 'ecuInjectorCc',
-      'engineConfig', 'engineReady', 'ethanolPct', 'exhaustDiaIdx', 'fuelSystem', 'injIdx', 'mafScalar',
-      'mods', 'nitrous', 'octaneIdx', 'plugGapMm', 'portKit', 'presetId', 'sensorHw', 'turbineCount',
+      'engineConfig', 'engineReady', 'ethanolPct', 'exhaustDiaIdx', 'factoryInduction', 'fuelSystem', 'injIdx', 'mafScalar',
+      'mods', 'nitrous', 'octaneIdx', 'originPresetId', 'plugGapMm', 'portKit', 'presetId', 'sensorHw', 'turbineCount',
       'turbineIdx', 'turboOn', 'wastegate',
     ]);
     expect(Object.keys(snap.tune).sort()).toEqual([
-      'activeMap', 'afr', 'baseline', 'ecu', 'layout', 'maps', 'tablesDirty', 'timing', 've',
+      'activeMap', 'afr', 'baseline', 'ecu', 'layout', 'maps', 'tablesDirty', 'timing', 'untuned', 've',
     ]);
   });
 
@@ -1748,6 +1752,7 @@ describe('snapshot field coverage', () => {
   const UNDOABLE_EXAMPLES = {
     [ACTIONS.APPLY_PRESET]: { type: ACTIONS.APPLY_PRESET, preset: N54_PRESET },
     [ACTIONS.RESET_TO_STOCK]: { type: ACTIONS.RESET_TO_STOCK, ve: [[1]] },
+    [ACTIONS.LOAD_BASE_MAP]: { type: ACTIONS.LOAD_BASE_MAP, ve: [[1]], timing: [[2]], afr: [[3]], layout: null },
     [ACTIONS.SET_TABLE]: { type: ACTIONS.SET_TABLE, table: 've', value: [[42]] },
     [ACTIONS.SET_ECU]: { type: ACTIONS.SET_ECU, value: { loaded: true } },
     [ACTIONS.SWITCH_MAP]: { type: ACTIONS.SWITCH_MAP, index: 1 },
