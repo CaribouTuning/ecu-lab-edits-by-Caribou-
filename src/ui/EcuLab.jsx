@@ -56,7 +56,10 @@ import { PullTraceContext } from './components/surface/TableSurface.jsx';
 import { ROUTES } from './routing.js';
 import { useRoute } from './useRoute.js';
 import { ACTIONS } from './state/reducer.js';
-import { baseMapAction, buildName, offersBaseMap, originPreset } from './state/baseMap.js';
+import { buildName, offersBaseMap, originPreset } from './state/baseMap.js';
+import { buildSignature as tuneStartSignature, offersTuneStart, useGuideStep, useTuneStartChoice } from './state/tuneStart.js';
+import { safeBaseMap, turboWithoutBoost } from './state/safeBaseMap.js';
+import { TuneStart } from './components/TuneStart.jsx';
 import { redoLabel, undoLabel } from './state/history.js';
 import { diffMeasuredInputs, pullSignature, measuredInputs } from './state/pullSignature.js';
 import { ghostLabel, ghostRun, makeRunRecord } from './state/runLog.js';
@@ -281,6 +284,11 @@ export function EcuLabApp({ startWith = null, startShown = false } = {}) {
   const inCareer = mode === 'career' && career != null;
   // SANDBOX opens with no engine: the engine screens ask for one (EngineStart) until it is chosen.
   const engineMissing = !inCareer && build.engineReady === false;
+  // SANDBOX: a new build whose way into the tune is not chosen yet (TuneStart). Hidden in tests, as the card is.
+  const tuneStartChoice = useTuneStartChoice(tuneStartSignature(build));
+  const guideNow = useGuideStep(tuneStartSignature(build));
+  const tuneStartOpen = offersTuneStart({ mode: session.mode, build }) && tuneStartChoice == null
+    && /** @type {any} */ (import.meta).env?.MODE !== 'test';
   // A failed engine (src/sim/damage.js): it neither pulls nor starts until it is rebuilt.
   const blown = failedPart(health);
   // An engine-building job opens BUILD: the customer pays for parts. Every other job's
@@ -1452,9 +1460,10 @@ export function EcuLabApp({ startWith = null, startShown = false } = {}) {
                     full
                     part={buildSection ?? 'engine'} onPart={(id) => goSection('build', id)}
                     preset={originPreset(build)} derived={engineDerived} rpm={session.live.running ? session.live.rpm : 0}
-                    onBaseMap={offersBaseMap(build) && !inCareer ? () => dispatch(baseMapAction(build)) : null}
+                    onBaseMap={offersBaseMap(build) && !inCareer ? () => dispatch(/** @type {any} */ (safeBaseMap({ build, tune, session }).action)) : null}
                     // Back to the factory engine as built: asked first when the tables hold work.
                     onRun={() => { setStandScreen('bars'); goTab('live'); }}
+                    onTune={offersTuneStart({ mode: session.mode, build }) ? () => goSection('tune', 'airflow') : null}
                     locked={inCareer && !buildOpen}
                     onStock={(p) => dispatch(tune.tablesDirty ? { type: ACTIONS.SET_PRESET_PROMPT, value: p } : { type: ACTIONS.APPLY_PRESET, preset: applyPreset(p) })}
                     notice={inCareer ? (buildOpen
@@ -1546,6 +1555,7 @@ export function EcuLabApp({ startWith = null, startShown = false } = {}) {
             </nav>
             <div className={deskApps.tuneMain}>
             {/* SANDBOX, an engine just built: how to start (a safe base map, a guide, or the advice). */}
+            {!inCareer && <div style={{ padding: '12px 16px 0' }}><TuneStart advice={calAdvice} page={tuneView} onGo={(id) => (id === 'dyno' ? changeTab('dyno') : id.startsWith('build:') ? goSection('build', id.slice(6)) : goSection('tune', id))} /></div>}
             {tuneOpen && lockedPage && (() => {
               const course = trainingFor(lockedPage);
               return (
@@ -1798,6 +1808,9 @@ export function EcuLabApp({ startWith = null, startShown = false } = {}) {
     buildJob: buildOpen,
     failed: blown ? FAILURE_MODES[blown].title.toLowerCase() : null,
     running,
+    startTune: tuneStartOpen,
+    noBoost: !inCareer && turboWithoutBoost(build),
+    guide: tuneStartChoice === 'guided' && offersTuneStart({ mode: session.mode, build }) ? guideNow : null,
   });
   // Already where the step happens: it is only said, with nothing to press.
   const stepHere = appView === 'app' && (

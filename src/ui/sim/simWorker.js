@@ -4,6 +4,7 @@ import {
   applyPreset, breathingSnapshot, calibrationAdvice, intakeCamAt, presetById, seedBreathing, simulateSweep,
 } from '../../sim/index.js';
 import { pullInputs } from '../state/pullInputs.js';
+import { safeBaseMap } from '../state/safeBaseMap.js';
 import * as SCENARIOS from '../tutorial/scenarios.js';
 
 /** The grids this task added to: only those go back. */
@@ -31,6 +32,8 @@ function run({ task, payload }) {
       exhaustDia: args.exhaustDia, injectorCc: args.injectorCc, ecuInjectorCc: args.ecuInjectorCc, mafScalar: args.mafScalar,
       mafErrorBase, pull,
     });
+  } else if (task === 'safemap') {
+    safeBaseMap(payload.state);
   } else if (task === 'demo') {
     // `veHalfPasses` takes its pass count: the four the guide shows.
     for (const name of payload.names) { const f = /** @type {any} */ (SCENARIOS)[name]; if (typeof f === 'function') f(name === 'veHalfPasses' ? 4 : undefined); }

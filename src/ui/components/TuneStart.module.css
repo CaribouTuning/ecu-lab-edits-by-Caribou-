@@ -1,0 +1,118 @@
+/* TUNE's "Start the tune" card (SANDBOX): three ways in, then the base map's result or the
+   guide's steps. A grouped card on the app's greys; blue only on the thing to do. */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--ink);
+}
+.card[data-tone='ok'] { box-shadow: inset 3px 0 0 var(--ok); }
+.card[data-tone='warn'] { box-shadow: inset 3px 0 0 var(--warn); }
+
+.title { margin: 0; font-size: var(--fs-md); font-weight: 600; }
+.lead { margin: 0; font-size: var(--fs-sm); line-height: 1.5; color: var(--ink2); }
+.lead b { color: var(--ink); font-weight: 600; }
+.note { margin: 0; font-size: var(--fs-sm); color: var(--ink2); }
+
+.head { display: flex; flex-direction: column; gap: 2px; }
+
+/* The three ways in: one grouped list, rows split by hairlines, as a settings list is. */
+.list { margin: 0; padding: 0; list-style: none; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--panel2); }
+.list > li + li { border-top: 1px solid var(--line); }
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.row:hover { background: var(--panel3); }
+.row:focus-visible { outline: 2px solid var(--acc); outline-offset: -2px; }
+.row:disabled { cursor: progress; opacity: 0.6; }
+.rowIcon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--panel3);
+  color: var(--ink2);
+}
+.row[data-option='base'] .rowIcon { background: var(--acc-fill); color: var(--acc-on); }
+.rowBody { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.rowName { font-size: var(--fs-sm); font-weight: 600; }
+.rowText { font-size: var(--fs-xs); line-height: 1.4; color: var(--ink2); }
+.rowChev { flex: none; color: var(--ink2); }
+
+.steps { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.step { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
+.step:first-child { border-top: 0; padding-top: 0; }
+.stepMark { flex: none; margin-top: 2px; color: var(--ink2); }
+.step[data-done='true'] .stepMark { color: var(--ok); }
+.stepBody { flex: 1; min-width: 0; }
+.stepName { font-size: var(--fs-sm); font-weight: 600; }
+.stepText { margin-top: 2px; font-size: var(--fs-sm); line-height: 1.5; color: var(--ink2); }
+
+.parts { display: flex; flex-direction: column; gap: 4px; }
+.partsTitle { font-size: var(--fs-xs); font-weight: 600; color: var(--warn-ink); }
+.partsList { margin: 0; padding-left: 18px; font-size: var(--fs-sm); line-height: 1.5; color: var(--ink2); }
+.partsList b { color: var(--ink); font-weight: 600; }
+
+.actions { display: flex; justify-content: flex-end; }
+
+.again { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 8px; font-size: var(--fs-sm); color: var(--ink2); }
+
+/* The safe base map's work, in the order it was done: the workflow, to read and copy. */
+.workLog { margin: 0; padding-left: 20px; font-size: var(--fs-sm); line-height: 1.5; color: var(--ink2); }
+.workLog li + li { margin-top: 2px; }
+
+/* The guide and the base map's result once chosen: one line over the page, its detail on tap. */
+.bar {
+  margin: 0 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--ink);
+}
+.bar[data-tone='ok'] { box-shadow: inset 3px 0 0 var(--ok); }
+.bar[data-tone='warn'] { box-shadow: inset 3px 0 0 var(--warn); }
+.barRow { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 4px 6px 4px 12px; }
+.barText { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); }
+.barText b { font-weight: 600; }
+.barMeta { color: var(--ink2); font-variant-numeric: tabular-nums; }
+.dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+.bar[data-tone='warn'] .dot { background: var(--warn); }
+.progress {
+  flex: none; min-width: 34px; padding: 2px 6px; border-radius: 999px;
+  background: var(--panel3); color: var(--ink); font-size: var(--fs-xs); font-weight: 600;
+  font-variant-numeric: tabular-nums; text-align: center;
+}
+.barToggle, .barClose {
+  flex: none; display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 8px;
+  border: 0; border-radius: 6px; background: transparent; color: var(--ink2);
+  font: inherit; font-size: var(--fs-xs); cursor: pointer;
+}
+.barToggle:hover, .barClose:hover { background: var(--panel3); color: var(--ink); }
+.barToggle:focus-visible, .barClose:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
+.chev { transition: transform 0.15s ease; }
+.chev[data-open='true'] { transform: rotate(180deg); }
+.barStep { margin: 0; padding: 0 12px 10px; font-size: var(--fs-xs); line-height: 1.5; color: var(--ink2); }
+/* Clamped inside the padded paragraph, so the cut falls on a line, not through one. */
+.clamp { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.barBody { display: flex; flex-direction: column; gap: 10px; padding: 0 12px 12px; border-top: 1px solid var(--line); padding-top: 10px; }
+.step[data-now='true'] .stepName { color: var(--acc); }

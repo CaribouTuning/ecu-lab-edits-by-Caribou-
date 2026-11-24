@@ -25,6 +25,7 @@ export function LayoutSwitch() {
   // the edge there until the player extends the axes. Offered in the career too, where the
   // layout itself is not the player's to choose.
   const outgrown = engineOutgrowsTables({ build, tune });
+  // A base map for a built engine is TuneStart's (components/TuneStart.jsx), above the pages.
   const extend = outgrown ? (
     <div data-testid="extend-axes" style={{ display: 'flex', flexDirection: 'column', gap: 8, margin: '4px 0 10px' }}>
       {outgrown && (

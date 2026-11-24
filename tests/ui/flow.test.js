@@ -27,8 +27,31 @@ describe('SANDBOX, step by step', () => {
     expect(sandbox({ heard: true, pulled: true, fresh: true, peakHp: 251.4 }).text).toMatch(/251 whp/);
   });
 
+  it('keeps naming the guide\'s step through its pulls, never seeming to drop it', () => {
+    // From a play test: "step 4 of 7: Safe timing", then "Start it on the stand", then "a clean
+    // pull: build more", with the boost steps still to do.
+    const guide = { n: 6, of: 7, title: 'First pull', go: 'dyno', checkable: false };
+    expect(sandbox({ guide }).text).toMatch(/^Base map guide, step 6 of 7: First pull\. First start it on the stand/);
+    expect(sandbox({ guide, heard: true }).text).toMatch(/^Base map guide, step 6 of 7: First pull\. Put it on the dyno/);
+    const boost = { n: 7, of: 7, title: 'Raise the boost', go: 'boost', checkable: false };
+    const six = { n: 6, of: 7, title: 'First pull', go: 'boost', checkable: false };
+    expect(sandbox({ guide: six, heard: true, pulled: true, fresh: true, peakHp: 297 })).toMatchObject({ id: 'guide', go: 'tune:boost' });
+    expect(sandbox({ guide: six, heard: true, pulled: true, fresh: true, peakHp: 297 }).text).toMatch(/A clean pull, 297 whp\. Base map guide, step 6 of 7/);
+    // On its last step, a clean pull is the end of the guide: the bar moves on.
+    expect(sandbox({ guide: boost, heard: true, pulled: true, fresh: true, peakHp: 297 }).id).toBe('more');
+  });
+
   it('does not send a player at the dyno back to the stand to hear it first', () => {
     expect(sandbox({ atDyno: true }).go).toBe('dyno');
+  });
+
+  it('asks how to start the tune of a new build before it is started, and the Next bar says what the card offers', () => {
+    const s = sandbox({ startTune: true });
+    expect(s).toMatchObject({ id: 'start-tune', label: 'Start the tune', go: 'tune:airflow' });
+    // The three starts by the names the card gives them.
+    expect(s.text).toMatch(/safe base map.*with the guide.*tune it yourself/);
+    // Chosen: on to the stand as before.
+    expect(sandbox({ startTune: false }).go).toBe('live');
   });
 
   it('does not ask to hear an engine again once it has a fresh pull', () => {

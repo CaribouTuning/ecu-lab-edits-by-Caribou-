@@ -97,7 +97,7 @@ function ask(lane, task, payload) {
  * Solve a task's breathing off the drawing thread. Resolves, when it has been handed back, with
  * what the task returns (a preset's patch; nothing for the others); null where there is no
  * worker, for the caller to go straight on as it always did (and stay synchronous where it was).
- * @param {'preset'|'advice'|'demo'} task
+ * @param {'preset'|'advice'|'demo'|'safemap'} task
  * @param {object} payload
  * @returns {Promise<any>|null}
  */
