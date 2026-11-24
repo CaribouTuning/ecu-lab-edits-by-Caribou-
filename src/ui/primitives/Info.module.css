@@ -1,0 +1,13 @@
+.info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.line { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.button {
+  flex: none; display: inline-grid; place-items: center; width: 24px; height: 24px; margin: -4px 0;
+  padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--ink2); cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.button:hover, .button[aria-expanded='true'] { color: var(--acc-ink); }
+.button:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; }
+.text {
+  padding: 8px 10px; border-radius: 6px; background: var(--panel2); border: 1px solid var(--line);
+  font-size: var(--fs-sm); line-height: 1.5; color: var(--ink2);
+}

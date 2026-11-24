@@ -1,8 +1,28 @@
 .panel {
-  background: var(--panel2);
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
+  /* A group: a faint pane on the window's glass, its edge a hairline highlight, no border. */
+  background: var(--glass-soft);
+  border: 0;
+  box-shadow: inset 0 0 0 1px var(--glass-edge);
+  border-radius: 14px;
   padding: var(--sp-lg);
 }
 
 .tight { padding: var(--sp-md) var(--sp-lg); }
+
+/* A technical panel: a title strip along the top, the name centred in it, the body under it. */
+.titled { padding: 0; overflow: hidden; }
+.strip {
+  display: grid; grid-template-columns: 1fr minmax(0, max-content) 1fr; align-items: center; gap: 8px;
+  min-height: 28px; padding: 0 6px 0 10px;
+  background: linear-gradient(var(--strip-hi), var(--strip-lo));
+  box-shadow: inset 0 -1px 0 var(--glass-edge);
+}
+.stripTitle { min-width: 0; padding: 4px 0; font-size: 12.5px; font-weight: 600; line-height: 1.3; color: var(--ink); text-align: center; }
+.stripLead { min-width: 0; font-size: 11.5px; font-weight: 500; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stripTools { justify-self: end; display: flex; align-items: center; gap: 4px; }
+.body { padding: var(--sp-md) var(--sp-lg) var(--sp-lg); }
+.titled.tight .body { padding: var(--sp-sm) var(--sp-lg) var(--sp-md); }
+/* A phone has no width to spare round a table: the body's sides come in. */
+@media (max-width: 560px) {
+  .body, .titled.tight .body { padding-left: var(--sp-sm); padding-right: var(--sp-sm); }
+}

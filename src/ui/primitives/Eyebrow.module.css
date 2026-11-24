@@ -1,19 +1,16 @@
+/* A group's name in a title strip, as a technical panel names its parts: the body face in
+   sentence case, on a band a step lighter than the glass under it. No tracking, no capitals. */
 .eyebrow {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 8px;
+  min-height: 26px;
+  margin: 0 0 10px;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: linear-gradient(var(--strip-hi), var(--strip-lo));
+  box-shadow: inset 0 0 0 1px var(--glass-edge);
   font-family: var(--sans);
-  font-size: var(--fs-xs);
-  font-weight: 800;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  color: var(--acc-ink);
-}
-
-.rule {
-  width: 3px;
-  height: 13px;
-  border-radius: var(--r-xs);
-  background: var(--acc);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
 }

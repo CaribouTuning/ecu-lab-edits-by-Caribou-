@@ -1,4 +1,8 @@
-/** Small uppercase section label with an accent rule. Labels a group; never a status. */
+/**
+ * A group's name, set plainly: the body face a step smaller. It used to be tracked
+ * capitals behind an accent rule and an icon, the label every generated page wears; the
+ * words do the labelling. `icon` is accepted and ignored, so call sites need not change.
+ */
 
 import React from 'react';
 
@@ -7,15 +11,9 @@ import styles from './Eyebrow.module.css';
 /**
  * @param {object} props
  * @param {React.ReactNode} props.children
- * @param {React.ElementType} [props.icon] optional Lucide icon component
+ * @param {React.ElementType} [props.icon] ignored
  * @returns {React.ReactElement}
  */
-export function Eyebrow({ children, icon: Icon }) {
-  return (
-    <div className={styles.eyebrow}>
-      <span className={styles.rule} />
-      {Icon && <Icon size={13} />}
-      <span>{children}</span>
-    </div>
-  );
+export function Eyebrow({ children }) {
+  return <div className={styles.eyebrow}>{children}</div>;
 }

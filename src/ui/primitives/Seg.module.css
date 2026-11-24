@@ -1,37 +1,41 @@
+/* A segmented control as Apple draws one now: a capsule well, the chosen segment a raised
+   glass thumb. */
 .seg {
   display: inline-flex;
   flex-wrap: wrap;
-  gap: 4px;
-  padding: var(--sp-xs);
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
+  gap: 0;
+  padding: 2px;
+  /* An opaque well (the field colour), so an unselected option's contrast holds on any pane. */
+  background: var(--input);
+  border: 0;
+  border-radius: 999px;
+  box-shadow: inset 0 1px 2px var(--glass-shade), inset 0 0 0 1px var(--glass-edge);
 }
 
 .item {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: var(--sp-sm) var(--sp-lg);
+  /* At least 24 px to hit (WCAG 2.5.8); the padding alone made 21. */
+  min-height: 24px;
+  padding: 3px 12px;
   border: none;
-  border-radius: var(--r-sm);
+  border-radius: 999px;
   background: transparent;
-  color: var(--ink2);
+  color: var(--mac-label2);
   font-family: var(--sans);
-  font-size: var(--fs-xs);
-  font-weight: 800;
-  letter-spacing: 0.06em;
+  font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.14s ease, color 0.14s ease;
 }
 
-.item:hover { color: var(--ink); }
-.item:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.item:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 
+.item:hover { color: var(--mac-label); }
 .item[aria-pressed='true'] {
-  background: var(--acc-bg);
-  color: var(--acc-ink);
-  box-shadow: inset 0 0 0 1px var(--acc);
+  background: var(--mac-selected);
+  color: var(--mac-sel-ink);
+  box-shadow: inset 0 1px 0 var(--glass-hi), 0 1px 4px var(--glass-shade);
 }
 
 /* --- equal, opt-in --- */
@@ -50,4 +54,30 @@
 .equal .item {
   flex: 1;
   min-width: 64px;
+  justify-content: center;
 }
+
+/* --- rule, opt-in --- */
+/* No well, no raised chip: equal-width options over a hairline, the chosen one underscored.
+   Declared last so it wins over .seg, .item and .equal at equal specificity. */
+
+.rule { display: flex; flex-wrap: nowrap; width: 100%; padding: 0; background: transparent; border-radius: 0; box-shadow: none; border-bottom: 1px solid var(--line-hi); }
+.rule .item {
+  flex: 1 1 0; min-width: 0; justify-content: center; padding: 9px 4px 8px; margin-bottom: -1px;
+  border-radius: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--ink2);
+  font-size: 12.5px; font-weight: 500; white-space: normal; text-align: center; line-height: 1.25;
+}
+.rule .item:hover { color: var(--ink); }
+.rule .item[aria-pressed='true'] { background: transparent; box-shadow: none; color: var(--ink); font-weight: 700; border-bottom-color: var(--acc); }
+.rule .item:focus-visible { outline-offset: -2px; }
+
+/* --- tabs, opt-in: the rule at the options' own width, several to a row --- */
+.tabs { display: inline-flex; flex-wrap: nowrap; width: auto; padding: 0; background: transparent; border-radius: 0; box-shadow: none; border-bottom: 1px solid var(--line-hi); }
+.tabs .item {
+  padding: 8px 10px 7px; margin-bottom: -1px; border-radius: 0; border-bottom: 2px solid transparent;
+  background: transparent; color: var(--ink2); font-size: 12.5px; font-weight: 500; white-space: nowrap;
+}
+.tabs .item:hover { color: var(--ink); }
+.tabs .item[aria-pressed='true'] { background: transparent; box-shadow: none; color: var(--ink); font-weight: 700; border-bottom-color: var(--acc); }
+.tabs .item:focus-visible { outline-offset: -2px; }
+@media (pointer: coarse) { .tabs .item, .rule .item { min-height: 40px; } }
