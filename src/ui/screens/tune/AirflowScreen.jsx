@@ -8,7 +8,6 @@
 
 import React from 'react';
 
-import { Grid3x3 } from 'lucide-react';
 
 import { AdvisorPanel } from '../../components/AdvisorPanel.jsx';
 import { veLogReport } from '../../components/advisorReports.js';
@@ -20,7 +19,7 @@ import { GridOrSurface } from '../../components/surface/GridOrSurface.jsx';
 import { VeLogCorrection } from '../../components/VeLogCorrection.jsx';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
 import { UndoControls } from '../../components/UndoControls.jsx';
-import { Eyebrow } from '../../primitives/Eyebrow.jsx';
+import { Panel } from '../../primitives/Panel.jsx';
 import { layoutById, mafErrorPct, veCorrections } from '../../../sim/index.js';
 import { LayoutSwitch } from '../../components/LayoutSwitch.jsx';
 import { ACTIONS } from '../../state/reducer.js';
@@ -35,7 +34,7 @@ import styles from './AirflowScreen.module.css';
  * @typedef {object} VeLog
  * @property {import('../../../sim/veLearn.js').VeSample[]} pull from the last dyno pull, if it still describes this tune
  * @property {import('../../../sim/veLearn.js').VeSample[]} live from the LIVE datalog
- * @property {'blend'|'sd'|'maf'} airModel the ECU's air-mass strategy
+ * @property {'blend'|'sd'|'maf'|'alphan'} airModel the ECU's air-mass strategy
  * @property {{state: 'none'|'stale'|'part-load'|'unused'|'ok', changed?: string[]}} pullInfo
  *   why the last pull is or is not in the numbers
  * @property {(share: number) => void} onApply applies that share of the correction
@@ -81,31 +80,33 @@ export function AirflowScreen({ children, veLog }) {
     <>
       <div className={styles.wrap}>
         <div className={styles.main}>
-          <div className={styles.gridHead}>
-            <Eyebrow icon={Grid3x3}>Volumetric Efficiency</Eyebrow>
-            <UndoControls />
-          </div>
-          <div className={styles.intro}>How completely the cylinder fills at each engine speed and load. Rows are manifold pressure (MAP kPa &mdash; about 100 is wide open, higher is boost); columns are RPM. Tap any cell for reference data; drag or shift-click for a range.</div>
-          <LayoutSwitch />
-          <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} diffView={diffView} setDiffView={setDiffView} dims={dims} />
-          <GridOrSurface data={ve} min={10} max={130} decimals={0} unit="%" title="Volumetric efficiency" axes={axes}>
-            <TuningGrid data={ve} min={10} max={130} decimals={0} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.ve} diffView={diffView} diffScale={10} axes={axes} untuned={tune.untuned?.ve ?? null} unreached={unreached} />
-          </GridOrSurface>
+          <Panel title="Volumetric Efficiency" tools={<UndoControls />} className={styles.tablePanel}>
+            <div className={styles.intro}>How full each cylinder gets, by rpm (columns) and manifold kPa (rows; 100 is wide open). Tap a cell for its numbers.</div>
+            {/* One toolbar, as a table editor has: the axes, how a tap selects, what the cells show. */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 6, margin: '8px 0 10px' }}>
+              <LayoutSwitch />
+              <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} diffView={diffView} setDiffView={setDiffView} dims={dims} />
+            </div>
+            <GridOrSurface data={ve} min={10} max={130} decimals={0} unit="%" title="Volumetric efficiency" axes={axes}>
+              <TuningGrid data={ve} min={10} max={130} decimals={0} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.ve} diffView={diffView} diffScale={10} axes={axes} untuned={tune.untuned?.ve ?? null} unreached={unreached} />
+            </GridOrSurface>
+          </Panel>
+          {/* The advisor reads this table: right under it, where the eye is, not after the settings. */}
+          <AdvisorPanel headline={report.headline} tone={report.tone}>
+            <TuneAdvisory kind="ve" report={report} />
+          </AdvisorPanel>
           {veLog && (
             <VeLogCorrection corr={corr} axes={axes} pullCount={veLog.pull.length} liveCount={veLog.live.length}
               pullInfo={veLog.pullInfo} mafPct={mafErrorPct(samples)} airModel={veLog.airModel} onApply={veLog.onApply} />
           )}
 
-          <ExpandableInfo title="What VE actually means">
+          <ExpandableInfo quiet title="What VE actually means">
             VE compares the air trapped in the cylinder to the theoretical maximum the swept volume could hold. It rises with RPM as intake tuning matches resonance, then falls as the valves cannot flow fast enough — that fall is why every N/A engine has a torque peak. More air here means more fuel needed to hit a given AFR and more potential torque; VE is really the master variable, and timing/AFR are how you extract power from whatever air is already there.
             <br /><br /><b className={styles.em}>As a beginner:</b> leave VE alone at first. It is set by real hardware (intake, heads, cams) — fitting an intake, headers or a cat-back on BUILD already moves it for you. Spend your early pulls learning TIMING and AFR before you start hand-editing VE.
-            <br /><br /><b className={styles.em}>How it is really tuned:</b> no ECU and no tuner can see the engine&apos;s true VE. What you can see is the wideband. Wherever the engine ran leaner than the AFR table asked, it got more air than the VE table thought, by that ratio; the fuel trims say the same thing in closed loop. Tuning software sorts that error into the cells the car was driven through and corrects only those. Log a pull or a drive, apply about half from <b className={styles.em}>Correct VE from logs</b>, log again, and repeat until the cells you use are within 2–3%. On a speed-density ECU this is the job after every change that moves air: intake, cam, exhaust, boost.
+            <br /><br /><b className={styles.em}>How it is really tuned:</b> no ECU and no tuner can see the engine&apos;s true VE. What you can see is the wideband. Wherever the engine ran leaner than the AFR table asked, it got more air than the VE table thought, by that ratio; the fuel trims say the same thing in closed loop. Tuning software sorts that error into the cells the car was driven through and corrects only those. Log a pull or a drive, apply about half from <b className={styles.em}>Correct VE from logs</b>, log again, and repeat until the cells you use are within 1%, where the pull log stops pointing at this page. On a speed-density ECU this is the job after every change that moves air: intake, cam, exhaust, boost.
           </ExpandableInfo>
           {children}
         </div>
-        <AdvisorPanel headline={report.headline} tone={report.tone}>
-          <TuneAdvisory kind="ve" report={report} />
-        </AdvisorPanel>
       </div>
       <div className={styles.spacer} />
       <SelectionDock data={ve} setData={setTable} selection={selection} min={10} max={130} decimals={0} unit="%" onClose={() => setSelection(null)} kind="ve" baseline={baseline.ve} axes={axes} />

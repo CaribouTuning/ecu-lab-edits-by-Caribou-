@@ -164,7 +164,7 @@ describe('the rhythm, which is the layout', () => {
       schedulePulseExhaust(m.a, m.ctx, frame);
       m.ctx.currentTime += 0.02;
     }
-    expect(m.a.stream.lookahead).toBeCloseTo(0.06, 6);
+    expect(m.a.stream.lookahead).toBeCloseTo(0.04, 6);
     const before = m.played.length;
     m.ctx.currentTime += 0.1;
     await new Promise((resolve) => { setTimeout(resolve, 120); });
@@ -173,17 +173,86 @@ describe('the rhythm, which is the layout', () => {
     expect(m.a.pumpTimer).toBeNull();
   });
 
-  it('queues just enough further after a stall, and the most once stalls repeat', () => {
+  it('does not trail the revs after a one-off stall, and covers stalls once they repeat', () => {
     const m = model();
     const frame = { rpm: 3000, level: 1, load: 1, audible: true, evoKpa: 350, portKpa: 110 };
     const call = (dt) => { m.ctx.currentTime += dt; schedulePulseExhaust(m.a, m.ctx, frame); };
-    for (let i = 0; i < 20; i++) call(0.02);
-    call(0.2); // the page held the thread for 200 ms and the queue ran dry
+    for (let i = 0; i < 200; i++) call(0.02);
+    // The page held the thread for 200 ms once (an engine going on the bench) and the queue
+    // ran dry. Queueing 250 ms ahead now would cover a gap that is over, and every rev for
+    // seconds afterwards would be heard that late.
+    call(0.2);
+    expect(m.a.stream.lookahead).toBeLessThan(0.1);
+    for (let i = 0; i < 100; i++) call(0.02);
+    expect(m.a.stream.lookahead).toBeCloseTo(0.04, 6);
+    // Again within a few seconds: the page is busy for a while, so cover the gap.
+    call(0.2);
     expect(m.a.stream.lookahead).toBeGreaterThan(0.2);
     expect(m.a.stream.lookahead).toBeLessThan(0.4);
     for (let i = 0; i < 20; i++) call(0.02);
-    call(0.6); // and again, within a few seconds
+    call(0.6); // and longer, within a few seconds
     expect(m.a.stream.lookahead).toBeCloseTo(0.6, 6);
+    // Neither was the device's own timers, so it comes back to the shortest queue.
+    for (let i = 0; i < 300; i++) call(0.02);
+    expect(m.a.stream.lookahead).toBeCloseTo(0.04, 6);
+  });
+
+  it('keeps the queue that covers a device whose timers fire late, rather than running dry again and again', () => {
+    const m = model();
+    const frame = { rpm: 3000, level: 1, load: 1, audible: true, evoKpa: 350, portKpa: 110 };
+    const call = (dt) => { m.ctx.currentTime += dt; schedulePulseExhaust(m.a, m.ctx, frame); };
+    let dry = 0;
+    // A phone that fires the 20 ms top-up 65 ms late every couple of seconds, for a minute.
+    for (let i = 0; i < 3000; i++) {
+      const before = m.a.stream.lastDry;
+      call(i % 100 === 99 ? 0.085 : 0.02);
+      if (m.a.stream.lastDry !== before) dry += 1;
+    }
+    // Twice to learn it, and once more after most of a minute, the floor having eased back to
+    // see whether the phone still needs it. Easing straight back to the shortest queue ran
+    // dry, a stutter each time, 16 times in the minute.
+    expect(dry).toBeLessThanOrEqual(3);
+    // And what it keeps is a short queue, not the most.
+    expect(m.a.stream.floor).toBeLessThanOrEqual(0.15);
+    expect(m.a.stream.lookahead).toBeLessThan(0.2);
+  });
+
+  /** A rev on the LIVE stand: the engine speed handed over twenty times a second, the stream
+   * topping itself up every 20 ms between, and the note's crank speed at each event. */
+  function rev(speedAt) {
+    const m = model(geom({ configuration: 'I6', cyl: 6, displacementL: 3.0 }), 'rev');
+    const heard = []; let last = -1;
+    for (let i = 0; i < 300; i++) {
+      m.ctx.currentTime = i * 0.01;
+      if (i % 5 === 0) {
+        schedulePulseExhaust(m.a, m.ctx, { rpm: speedAt(i * 0.01), level: 1, load: 1, audible: true, evoKpa: 350, portKpa: 110 });
+      } else if (i % 2 === 0) {
+        schedulePulseExhaust(m.a, m.ctx, m.a.frame);
+      }
+      for (const e of m.a.log) if (e.at > last) { heard.push([e.at, 120 / (6 * e.gapSeconds)]); last = e.at; }
+    }
+    return heard;
+  }
+
+  it('is heard with the tach on a rev, not a tenth of a second behind it', () => {
+    // 1000 to 6000 and back, as a blip does: the tach shows the speed it is handed.
+    const speedAt = (t) => (t < 0.5 || t > 2.0 ? 1000 : 3500 - 2500 * Math.cos((2 * Math.PI * (t - 0.5)) / 1.5));
+    const heard = rev(speedAt).filter(([t]) => t > 0.4 && t < 2.2);
+    const tach = (t) => speedAt(Math.floor(t / 0.05) * 0.05);
+    const misfit = (lag) => heard.reduce((sum, [t, r]) => sum + (r - tach(t - lag)) ** 2, 0);
+    let best = 0;
+    for (let lag = 0; lag <= 0.2; lag += 0.005) if (misfit(lag) < misfit(best)) best = lag;
+    expect(best).toBeLessThan(0.06);
+  });
+
+  it('goes no more than a little past where a rev turns round', () => {
+    // Straight into a flat top, the hardest turn there is: a rev into the limiter.
+    const speedAt = (t) => (t < 0.5 ? 1000 : Math.min(6000, 1000 + (t - 0.5) * 10000));
+    const heard = rev(speedAt);
+    const top = Math.max(...heard.map(([, r]) => r));
+    expect(top).toBeLessThan(6000 * 1.03);
+    const late = heard.filter(([t]) => t > 1.5).map(([, r]) => r);
+    for (const r of late) expect(Math.abs(r - 6000)).toBeLessThan(30);
   });
 
   it('starts again cleanly after falling behind the clock', () => {

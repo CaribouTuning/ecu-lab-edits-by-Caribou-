@@ -44,21 +44,22 @@
  */
 
 import {
-  Activity, Flame, Gauge, Grid3x3, Home, Info, Search, Settings, Store, Wrench,
+  Activity, Flame, Grid3x3, Home, Info, Search, Settings, Store, Wrench,
 } from 'lucide-react';
 import React, { useMemo } from 'react';
 
 import {
-  INJECTOR_OPTS, FUEL_CHOICES, blowerCurve, blowerOf, deriveEngine, presetById, tankFuel,
+  FUEL_CHOICES, blowerCurve, blowerOf, deriveEngine, tankFuel, injectorLabel, stockInjectorIdx,
 } from '../sim/index.js';
-import { BUILD_VERSION } from '../version.js';
 import { Button } from './primitives/Button.jsx';
 import { isApplePlatform } from './commands.js';
 import { TAB_NAMES } from './routing.js';
-import { useBuild, useRoadTest, useSession } from './state/StoreProvider.jsx';
+import { buildName } from './state/baseMap.js';
+import { useBuild, useSession } from './state/StoreProvider.jsx';
 import { statusTone } from './theme.js';
 
 import styles from './AppShell.module.css';
+import { useUnits } from './units.js';
 
 /** @typedef {import('./routing.js').Route} Route */
 
@@ -79,7 +80,6 @@ import styles from './AppShell.module.css';
 // measure it. LIVE used to be a collapsed section on HOME, several taps down and easy
 // never to find — a poor place for the one screen that shows a calibration running.
 const NAV_ITEMS = [
-  { id: 'dash', label: TAB_NAMES.dash, icon: Gauge },
   { id: 'build', label: TAB_NAMES.build, icon: Settings },
   { id: 'tune', label: TAB_NAMES.tune, icon: Grid3x3 },
   { id: 'live', label: TAB_NAMES.live, icon: Flame },
@@ -92,7 +92,7 @@ const NAV_ITEMS = [
  */
 const CAREER_NAV_ITEMS = [
   { id: 'shop', label: 'SHOP', icon: Store },
-  ...NAV_ITEMS.filter((n) => n.id !== 'dash'),
+  ...NAV_ITEMS,
 ];
 
 /**
@@ -173,7 +173,7 @@ function HealthFieldInner({ pct }) {
   const tone = statusTone(pct);
   return (
     <div className={styles.field} data-tour="strip-health">
-      <span className={styles.fieldLabel}>HEALTH</span>
+      <span className={styles.fieldLabel}>Health</span>
       <span className={styles.healthTrack}>
         <span className={styles.healthFill} data-tone={tone} style={{ width: `${pct}%` }} />
       </span>
@@ -198,7 +198,7 @@ function EngineRunLight() {
   // engine starts; see `.run` in AppShell.module.css for how it keeps its width.
   return (
     <span className={styles.run}>
-      {session.live.running && <span>● RUNNING</span>}
+      {session.live.running && <span>Engine running</span>}
     </span>
   );
 }
@@ -233,23 +233,25 @@ function fuelLabel(fuel, ethanolPct) {
  * @param {() => void} [props.onRepair]
  * @param {() => void} [props.onSearch] opens the command palette
  * @param {() => void} [props.onMenu] back to the start screen
+ * @param {boolean} [props.actions] the icon buttons; SANDBOX's laptop has them on its taskbar instead
+ * @param {boolean} [props.bar] drawn as a Mac window's status bar along its bottom: one quiet
+ *   line, without the maker's name (the menu bar names the app)
+ * @param {boolean} [props.buildLine] the build's name; a station's HUD shows only the readouts
  * @returns {React.ReactElement}
  */
-export function StatusStrip({ onTutorial, onRepair, onSearch, onMenu }) {
+export function StatusStrip({ onTutorial, onRepair, onSearch, onMenu, actions = true, bar = false, buildLine = true }) {
   const [build] = useBuild();
   const [session] = useSession();
-  const { engineConfig, presetId, turboOn, boostCurve, octaneIdx, injIdx } = build;
+  const { engineConfig, turboOn, boostCurve, octaneIdx, injIdx } = build;
   const { health, result } = session;
-  const roadTest = useRoadTest();
+  const U = useUnits();
 
   // Keyed on `engineConfig` so the 20 Hz re-render does not re-derive the engine
   // twenty times a second to print the same string.
   const derived = useMemo(() => deriveEngine(engineConfig), [engineConfig]);
-  const preset = presetId ? presetById(presetId) : null;
   const noEngine = build.engineReady === false;
-  const engineName = preset
-    ? preset.name
-    : `${derived.displacementL.toFixed(1)}L ${engineConfig.configuration}`;
+  // The factory engine it started as, "(modified)" once its parts differ; else its size.
+  const engineName = buildName(build) ?? `${derived.displacementL.toFixed(1)}L ${engineConfig.configuration}`;
 
   const overallHealth = Math.min(health.piston, health.bearing, health.valve);
   // Peak of the curve, not the value at any one RPM: this is "how much boost is this
@@ -266,35 +268,38 @@ export function StatusStrip({ onTutorial, onRepair, onSearch, onMenu }) {
   const induction = turboOn ? 'Turbo' : blower ? 'Supercharged' : 'NA';
 
   return (
-    <div className={styles.strip}>
+    <div className={styles.strip} data-bar={bar ? 'true' : undefined}>
       <div className={styles.stripInner}>
         {/* The maker + product name. The old hand-rolled header (deleted with it,
             d5d9f66) carried these as its own two-line block; StatusStrip had no
             equivalent, so once a player pressed START the app was nameless. Restored
             here at the strip's leading edge, sized for a slim strip rather than a
             transplant of the header's larger type scale — see AppShell.module.css. */}
-        <div className={styles.brand}>
-          <span className={styles.brandMaker}>CARIBOU TUNING</span>
-          <span className={styles.brandProduct}>ECU Lab</span>
-        </div>
+        {!bar && (
+          <div className={styles.brand}>
+            <span className={styles.brandMaker}>Caribou Tuning</span>
+            <span className={styles.brandProduct}>ECU Lab</span>
+          </div>
+        )}
         {/* The build line, moved here from the header. Its shape is pinned by
             characterisation.test.jsx and build-store.test.jsx, both of which find it
-            by `data-testid="build-line"` and split the engine name off its first `·`
-            segment. Query by this testid rather than by text — BUILD's accordion
+            by `data-testid="build-line"` and split the engine name off its first
+            comma (the fields were split by `·`; no preset name holds a comma). Query
+            by this testid rather than by text — BUILD's accordion
             sections stay mounted when collapsed, so any BUILD-tab prose containing
             "oct" (e.g. an octane explainer) would otherwise be an ambiguous match
             for a text-based query. */}
-        <div className={styles.engine} data-testid="build-line">
+        {buildLine && <div className={styles.engine} data-testid="build-line">
           {noEngine
-            ? `No engine chosen yet · ${BUILD_VERSION}`
-            : `${engineName} · ${induction}${build.nitrous ? ` + ${build.nitrous.shotHp} shot` : ''} · ${fuelLabel(FUEL_CHOICES[octaneIdx], build.ethanolPct)} · ${INJECTOR_OPTS[injIdx].label} · ${BUILD_VERSION}`}
-        </div>
+            ? 'No engine chosen yet'
+            : `${engineName}, ${induction}${build.nitrous ? ` + ${build.nitrous.shotHp} shot` : ''}, ${fuelLabel(FUEL_CHOICES[octaneIdx], build.ethanolPct)}, ${injectorLabel(injIdx, stockInjectorIdx(build))}`}
+        </div>}
         {/* Grouped so they wrap as one unit — see `.readouts` in AppShell.module.css
             for how the strip fits a phone. */}
         <div className={styles.readouts}>
-          <StripField label="BOOST" value={noEngine ? '—' : turboOn || blower ? `${peakBoost.toFixed(1)} psi` : 'none'} />
-          {noEngine ? <StripField label="HEALTH" value="—" /> : <HealthField pct={overallHealth} />}
-          <StripField label="LAST PULL" value={result ? (roadTest ? 'road test' : `${Math.round(result.peakHp)} whp`) : '—'} />
+          <StripField label="Boost" value={noEngine ? '—' : turboOn || blower ? U.fmtBoost(peakBoost) : 'none'} />
+          {noEngine ? <StripField label="Health" value="—" /> : <HealthField pct={overallHealth} />}
+          <StripField label="Last pull" value={result ? U.fmtWheel(result.peakHp) : '—'} />
           <EngineRunLight />
         </div>
         {/* Icon-only, so the label has to be spelled out: `title` alone leaves a
@@ -304,7 +309,7 @@ export function StatusStrip({ onTutorial, onRepair, onSearch, onMenu }) {
             here verbatim from the header this strip replaced; Search came with the
             command palette (issue 63), its tooltip naming the shortcut this platform
             uses (see the Cmd-K handler in EcuLab.jsx). */}
-        <div className={styles.actions}>
+        {actions && <div className={styles.actions}>
           {onMenu && (
             <Button variant="ghost" size="sm" title="Main menu" aria-label="Main menu" onClick={onMenu}>
               <Home size={16} aria-hidden="true" />
@@ -323,7 +328,7 @@ export function StatusStrip({ onTutorial, onRepair, onSearch, onMenu }) {
           <Button variant="ghost" size="sm" title="Repair engine" aria-label="Repair engine" onClick={onRepair}>
             <Wrench size={16} aria-hidden="true" />
           </Button>
-        </div>
+        </div>}
       </div>
     </div>
   );

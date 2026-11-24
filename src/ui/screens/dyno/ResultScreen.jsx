@@ -19,21 +19,20 @@
  * neutral grey. `T.ink3` — what they used to use — was also the axis, tick-label and
  * `afrCommanded` colour, so the previous pull was not too dim to see so much as
  * indistinguishable from the chart's furniture. The axes, tick labels and the
- * `afrCommanded` reference line are now `T.ink2` (issue 79, text contrast): recharts
+ * `afrCommanded` reference line are now `--ink2` (issue 79, text contrast): recharts
  * colours a series' legend and tooltip text with its stroke, so a series is text too.
  * Hue now carries series identity and opacity carries time.
  */
 
-import React from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 
-import { CartesianGrid, Legend, Line, LineChart, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { CartesianGrid, Legend, Line, LineChart, ReferenceArea, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 import { resolveBandRpm } from '../../components/eventBands.js';
 import { Panel } from '../../primitives/Panel.jsx';
-import { useRoadTest } from '../../state/StoreProvider.jsx';
-import { T } from '../../theme.js';
 
 import styles from './ResultScreen.module.css';
+import { useUnits } from '../../units.js';
 
 /**
  * One event band. Rendered through `ReferenceArea`'s `shape` so it can carry the
@@ -96,6 +95,60 @@ function Band({ band, onSelectRpm, x, y, width, height, focusable = true }) {
   );
 }
 
+/* The dyno charts' shared drawing: gridlines across only (values are read across), speed
+   along the bottom in thousands, quiet axes, and a tooltip that names its units. */
+const GRID = { stroke: 'var(--line)', vertical: false };
+const RPM_AXIS = {
+  dataKey: 'rpm', type: /** @type {const} */ ('number'), stroke: 'var(--line-hi)', tickLine: false,
+  tick: { fill: 'var(--ink2)', fontSize: 11 }, tickFormatter: (v) => `${(Number(v) / 1000).toLocaleString('en-US', { maximumFractionDigits: 1 })}k`,
+};
+/** Ticks every 1000 rpm across the chart, as a dyno sheet marks them. */
+const rpmTicks = (hi) => { const t = []; for (let r = 2000; r <= hi; r += 1000) t.push(r); return t; };
+/**
+ * A value axis that ends on a round number, with round steps (1, 2 or 5 times a power of
+ * ten, about four of them): 0, 70, 140 is a scale nobody reads off.
+ * @param {number} top the largest value plotted
+ */
+function niceScale(top) {
+  const rough = Math.max(top, 1) / 4; const mag = 10 ** Math.floor(Math.log10(rough));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((v) => v >= rough) ?? 10 * mag;
+  const max = Math.ceil(top / step) * step;
+  return { domain: [0, max], ticks: Array.from({ length: Math.round(max / step) + 1 }, (_, k) => k * step) };
+}
+/**
+ * The mixture axis: at least two ratios tall, on half-ratio steps. Left to 'auto', a pull
+ * held within 0.2 of its target filled the chart and repeated 12.7 down the axis, so a 1%
+ * wander read as a miss.
+ * @param {Array<object>} rows the chart data, with `afr` and `afrCommanded`
+ */
+export function afrScale(rows) {
+  const vals = rows.flatMap((d) => [d.afr, d.afrCommanded]).filter(Number.isFinite);
+  if (!vals.length) return { domain: [10, 15], ticks: [10, 11, 12, 13, 14, 15] };
+  let lo = Math.min(...vals); let hi = Math.max(...vals);
+  const mid = (lo + hi) / 2;
+  if (hi - lo < 2) { lo = mid - 1; hi = mid + 1; }
+  lo = Math.floor(lo * 2) / 2; hi = Math.ceil(hi * 2) / 2;
+  const step = hi - lo > 4 ? 1 : 0.5;
+  const ticks = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) ticks.push(Math.round(v * 10) / 10);
+  return { domain: [lo, hi], ticks };
+}
+/** How far the measured mixture sits from the one asked for, as a tuner reads it: 1% lean. */
+function afrMiss(d) {
+  if (!Number.isFinite(d.afrCommanded) || d.afrCommanded <= 0) return '';
+  const pct = (d.afr / d.afrCommanded - 1) * 100;
+  if (Math.abs(pct) < 0.5) return ' · on target';
+  return ` · ${Math.abs(pct).toFixed(1)}% ${pct > 0 ? 'lean' : 'rich'}`;
+}
+const VALUE_AXIS = { stroke: 'var(--line-hi)', tickLine: false, axisLine: false, tick: { fill: 'var(--ink2)', fontSize: 11 } };
+const TOOLTIP = {
+  contentStyle: { background: 'var(--panel2)', border: '1px solid var(--line-hi)', borderRadius: 6, fontSize: 12, padding: '6px 10px' },
+  labelStyle: { color: 'var(--ink)', fontWeight: 600, marginBottom: 2 },
+  itemStyle: { padding: 0, fontVariantNumeric: 'tabular-nums' },
+  labelFormatter: (v) => `${Number(v).toLocaleString('en-US')} rpm`,
+  cursor: { stroke: 'var(--ink2)', strokeDasharray: '3 3' },
+};
+
 /**
  * @param {object} props
  * @param {Array<object>} props.chartData the shell's, shared with TUNE's ECU screen
@@ -105,90 +158,136 @@ function Band({ band, onSelectRpm, x, y, width, height, focusable = true }) {
  * @param {import('../../components/eventBands.js').EventBand[]} [props.bands]
  * @param {number} [props.wholePullCount] how many findings have no RPM at all
  * @param {(rpm: number|null) => void} [props.onSelectRpm]
+ * @param {boolean} [props.running] a pull is drawing: the cursor follows the sweep
  * @returns {React.ReactElement}
  */
-export function ResultScreen({ chartData, engineDerived, ghostLabel, bands = [], wholePullCount = 0, onSelectRpm = () => {} }) {
+export function ResultScreen({ chartData, engineDerived, ghostLabel, bands = [], wholePullCount = 0, onSelectRpm = () => {}, running = false }) {
   // The live tach needle and this chart's RPM axis both used to top out at a
   // hardcoded 7500 — correct only for the one preset whose redline happened to
   // match it. 1.05x redline gives the sweep's last point a little headroom
   // without the axis running away for a low-redline build.
   const dynoChartMaxRpm = engineDerived.redline * 1.05;
+  // The value axis rounded to the tallest of everything drawn, the previous pull included.
+  // chartData arrives in the units on screen (EcuLab converts it); only labels are set here.
+  const U = useUnits();
+  const whp = U.metric ? 'Wheel kW' : 'WHP';
+  const powerScale = niceScale(Math.max(1, ...chartData.flatMap((d) => [d.hp, d.torque, d.prevHp, d.prevTorque].filter((v) => Number.isFinite(v)))));
+
+  // The dyno cursor. Dyno software reads a curve at one speed: a line you drag along it, the
+  // power and torque at that speed beside it.
+  const [picked, setPicked] = useState(/** @type {number|null} */ (null));
+  const drag = useRef({ down: false, moved: false });
+  const first = chartData[0]?.rpm ?? 1500;
+  const last = chartData.at(-1)?.rpm ?? first;
+  const peakAt = chartData.reduce((b, d) => (d.hp > (b?.hp ?? -Infinity) ? d : b), null)?.rpm ?? last;
+  const sweeping = !!running;
+  const cursorRpm = sweeping ? last : Math.min(last, Math.max(first, picked ?? peakAt));
+  const afrAxis = useMemo(() => afrScale(chartData), [chartData]);
+  const at = chartData.reduce((b, d) => (!b || Math.abs(d.rpm - cursorRpm) < Math.abs(b.rpm - cursorRpm) ? d : b), null);
+  const moveTo = (state) => { const r = Number(state?.activeLabel); if (Number.isFinite(r)) setPicked(r); };
+  const dragProps = {
+    onMouseDown: (state) => { drag.current = { down: true, moved: false }; moveTo(state); },
+    onMouseMove: (state) => { if (drag.current.down) { drag.current.moved = true; moveTo(state); } },
+    onMouseUp: () => { drag.current.down = false; },
+    onMouseLeave: () => { drag.current.down = false; },
+  };
 
   // Shared by both charts below — see `resolveBandRpm`'s own doc for why the decision
   // lives there rather than inline here, and why it resolves by RPM rather than by band.
+  // A drag that ends over a band is the cursor being moved, not a click on the band.
   const handleChartClick = (state) => {
+    if (drag.current.moved) { drag.current.moved = false; return; }
     const rpm = resolveBandRpm(state?.activeLabel, bands);
     if (rpm !== null) onSelectRpm(rpm);
   };
-
-  const roadTest = useRoadTest();
+  const cursorLine = (yAxisId) => (at ? <ReferenceLine x={at.rpm} {...(yAxisId ? { yAxisId } : {})} stroke="var(--ink)" strokeWidth={1.2} strokeDasharray="4 3" ifOverflow="extendDomain" /> : null);
 
   return (
     <>
-      {roadTest ? (
-        <Panel tight className={styles.panel} data-tour="dyno-power">
-          <div className={styles.chartLabel}>POWER &amp; TORQUE</div>
-          <p className={styles.roadNote}>
-            Road test: the wideband and the ECU log everything below, but nothing on a road measures power. A dyno does.
-          </p>
-        </Panel>
-      ) : (
-      <Panel tight className={styles.panel} data-tour="dyno-power">
-        <div className={styles.chartLabel}>POWER &amp; TORQUE</div>
+      <Panel tight title="Power and torque against rpm" className={styles.panel} data-tour="dyno-power">
+        {at && (
+          <div className={styles.cursorRead} aria-live="polite" data-testid="dyno-cursor">
+            <span className={styles.cursorRpm}>{at.rpm.toLocaleString('en-US')} <small>rpm</small></span>
+            <span className={styles.cursorHp}>{Math.round(at.hp)} <small>{U.metric ? 'kW' : 'whp'}</small></span>
+            <span className={styles.cursorTq}>{Math.round(at.torque)} <small>{U.torqueUnit}</small></span>
+            {Number.isFinite(at.prevHp) && <span className={styles.cursorPrev}>{at.hp - at.prevHp >= 0 ? '+' : ''}{Math.round(at.hp - at.prevHp)} vs {ghostLabel}</span>}
+          </div>
+        )}
         <ResponsiveContainer width="100%" height={200}>
           <LineChart
             data={chartData} margin={{ top: 4, right: 12, left: -14, bottom: 0 }}
-            onClick={handleChartClick}
+            onClick={handleChartClick} {...dragProps}
           >
-            <CartesianGrid stroke={T.line} />
-            <XAxis dataKey="rpm" stroke={T.ink2} fontSize={10} type="number" domain={[1500, dynoChartMaxRpm]} />
-            <YAxis stroke={T.ink2} fontSize={10} />
-            <Tooltip contentStyle={{ background: T.panel2, border: `1px solid ${T.line}`, fontSize: 11 }} />
-            <Legend wrapperStyle={{ fontSize: 11 }} />
+            <CartesianGrid {...GRID} />
+            <XAxis {...RPM_AXIS} domain={[1500, dynoChartMaxRpm]} ticks={rpmTicks(dynoChartMaxRpm)} />
+            <YAxis {...VALUE_AXIS} width={44} {...powerScale} />
+            {cursorLine(null)}
+            <Tooltip {...TOOLTIP} formatter={(v, name) => [Math.round(Number(v)), /TQ$|Torque/.test(String(name)) ? `${name}, ${U.torqueUnit}` : `${name}, ${U.powerUnit}`]} />
+            {/* Above the chart, where it is read first: at the foot of a small screen it was missed. */}
+            <Legend verticalAlign="top" height={26} iconType="plainline" wrapperStyle={{ fontSize: 12.5 }} />
             {bands.map((b) => (
               <ReferenceArea
                 key={b.id} x1={b.rpmStart} x2={b.rpmEnd}
                 shape={(shapeProps) => <Band {...shapeProps} band={b} onSelectRpm={onSelectRpm} />}
               />
             ))}
-            {ghostLabel && <Line dataKey="prevHp" name={`${ghostLabel} WHP`} stroke={T.acc} strokeWidth={1.5} strokeDasharray="5 4" opacity={0.5} dot={false} isAnimationActive={false} />}
-            {ghostLabel && <Line dataKey="prevTorque" name={`${ghostLabel} TQ`} stroke={T.cyan} strokeWidth={1.5} strokeDasharray="5 4" opacity={0.5} dot={false} isAnimationActive={false} />}
-            <Line dataKey="hp" name="WHP" stroke={T.acc} strokeWidth={2} dot={false} isAnimationActive={false} />
-            <Line dataKey="torque" name="Torque" stroke={T.cyan} strokeWidth={2} dot={false} isAnimationActive={false} />
+            {ghostLabel && <Line dataKey="prevHp" name={`${ghostLabel} ${whp}`} stroke="var(--acc)" strokeWidth={1.5} strokeDasharray="5 4" opacity={0.5} dot={false} isAnimationActive={false} />}
+            {ghostLabel && <Line dataKey="prevTorque" name={`${ghostLabel} TQ`} stroke="var(--data2)" strokeWidth={1.5} strokeDasharray="5 4" opacity={0.5} dot={false} isAnimationActive={false} />}
+            <Line dataKey="hp" name={whp} stroke="var(--acc)" strokeWidth={2} dot={false} isAnimationActive={false} />
+            <Line dataKey="torque" name="Torque" stroke="var(--data2)" strokeWidth={2} dot={false} isAnimationActive={false} />
+            {at && <ReferenceDot x={at.rpm} y={at.hp} r={4.5} fill="var(--acc)" stroke="var(--bg)" strokeWidth={2} />}
+            {at && <ReferenceDot x={at.rpm} y={at.torque} r={4.5} fill="var(--data2)" stroke="var(--bg)" strokeWidth={2} />}
           </LineChart>
         </ResponsiveContainer>
+        {chartData.length > 1 && !sweeping && (
+          <input
+            type="range" className={styles.cursorSlider} min={first} max={last} step={chartData[1].rpm - chartData[0].rpm}
+            value={at?.rpm ?? first} onChange={(e) => setPicked(Number(e.target.value))}
+            aria-label="Dyno cursor" aria-valuetext={at ? `${at.rpm} rpm, ${Math.round(at.hp)} ${U.metric ? 'kilowatts' : 'wheel horsepower'}, ${Math.round(at.torque)} ${U.torqueUnit}` : undefined}
+          />
+        )}
       </Panel>
-      )}
 
-      <Panel tight className={styles.panel} data-tour="dyno-afr-timing">
-        <div className={styles.chartLabel}>AFR (COMMANDED VS ACTUAL) / TIMING</div>
+      <Panel tight title="Air-fuel ratio, asked for and measured, and spark timing" className={styles.panel} data-tour="dyno-afr-timing">
+        {at && Number.isFinite(at.afr) && (
+          <div className={styles.cursorRead}>
+            <span className={styles.cursorRpm}>{at.rpm.toLocaleString('en-US')} <small>rpm</small></span>
+            <span className={styles.cursorHp}>{Number(at.afr).toFixed(1)} <small>:1 measured</small></span>
+            <span className={styles.cursorPrev}>{Number(at.afrCommanded).toFixed(1)}:1 asked{afrMiss(at)}</span>
+            <span className={styles.cursorTq}>{Number(at.timing).toFixed(1)}<small>° spark</small></span>
+          </div>
+        )}
         <ResponsiveContainer width="100%" height={180}>
           <LineChart
             data={chartData} margin={{ top: 4, right: 12, left: -14, bottom: 0 }}
-            onClick={handleChartClick}
+            onClick={handleChartClick} {...dragProps}
           >
-            <CartesianGrid stroke={T.line} />
-            <XAxis dataKey="rpm" stroke={T.ink2} fontSize={10} type="number" domain={[1500, dynoChartMaxRpm]} />
-            <YAxis stroke={T.ink2} fontSize={10} />
-            <Tooltip contentStyle={{ background: T.panel2, border: `1px solid ${T.line}`, fontSize: 11 }} />
-            <Legend wrapperStyle={{ fontSize: 11 }} />
+            <CartesianGrid {...GRID} />
+            <XAxis {...RPM_AXIS} domain={[1500, dynoChartMaxRpm]} ticks={rpmTicks(dynoChartMaxRpm)} />
+            {cursorLine('afr')}
+            {/* Mixture and spark on their own scales: on one axis, AFR around 12 against
+                timing up to 30 degrees drew the mixture as a flat line. */}
+            <YAxis {...VALUE_AXIS} yAxisId="afr" width={44} {...afrAxis} tickFormatter={(v) => Number(v).toFixed(1)} />
+            <YAxis {...VALUE_AXIS} yAxisId="deg" orientation="right" width={36} tickFormatter={(v) => `${v}°`} />
+            <Tooltip {...TOOLTIP} formatter={(v, name) => [Number(v).toFixed(1), /Timing/.test(String(name)) ? `${name}, ° BTDC` : `${name}, :1`]} />
+            <Legend iconType="plainline" wrapperStyle={{ fontSize: 12 }} />
             {bands.map((b) => (
               <ReferenceArea
-                key={b.id} x1={b.rpmStart} x2={b.rpmEnd}
+                key={b.id} x1={b.rpmStart} x2={b.rpmEnd} yAxisId="afr"
                 // This chart's bands are the second copy of every event — see the
-                // POWER & TORQUE chart above for the first. Both stay visible (the
+                // power and torque chart above for the first. Both stay visible (the
                 // overlap is the intended visual), but only one copy should be a tab
                 // stop: two focusable nodes per event with identical accessible names
                 // would double every announcement in the a11y tree.
                 shape={(shapeProps) => <Band {...shapeProps} band={b} onSelectRpm={onSelectRpm} focusable={false} />}
               />
             ))}
-            <Line dataKey="afrCommanded" name="AFR commanded" stroke={T.ink2} strokeDasharray="3 3" dot={false} isAnimationActive={false} />
+            <Line yAxisId="afr" dataKey="afrCommanded" name="AFR commanded" stroke="var(--ink2)" strokeDasharray="3 3" dot={false} isAnimationActive={false} />
             {/* Series identity colours, not status: both lines are on screen for
                 every pull, so green and amber here reported a health this chart
                 never measures. */}
-            <Line dataKey="afr" name="AFR actual" stroke={T.cyan} strokeWidth={2} dot={false} isAnimationActive={false} />
-            <Line dataKey="timing" name="Timing used" stroke={T.violet} strokeWidth={2} dot={false} isAnimationActive={false} />
+            <Line yAxisId="afr" dataKey="afr" name="AFR actual" stroke="var(--acc)" strokeWidth={2} dot={false} isAnimationActive={false} />
+            <Line yAxisId="deg" dataKey="timing" name="Timing used" stroke="var(--data2)" strokeWidth={2} dot={false} isAnimationActive={false} />
           </LineChart>
         </ResponsiveContainer>
       </Panel>

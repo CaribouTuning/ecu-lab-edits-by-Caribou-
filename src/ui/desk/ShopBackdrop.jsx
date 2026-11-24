@@ -1,0 +1,258 @@
+/**
+ * Your shop, drawn behind the laptop (shopScene.js), and its things to use when the laptop is
+ * shut: the dyno, the build bench, the engine stand and the laptop itself.
+ */
+
+import React, { useEffect, useRef } from 'react';
+
+import { THREE } from '../world/gfx.js';
+
+import { buildShopScene } from './shopScene.js';
+import { useStage } from './useStage.js';
+
+import styles from './Desk.module.css';
+
+/** The shop's three hotspots: what each is called and what it opens. */
+export const HOTSPOTS = [
+  { id: 'dyno', label: 'Dyno', hint: 'Make a pull on the dyno' },
+  { id: 'build', label: 'Build bench', hint: 'Build the engine, a part at a time' },
+  { id: 'stand', label: 'Engine stand', hint: 'Start the engine and run it on the stand' },
+  { id: 'laptop', label: 'Open the laptop', hint: 'Back to the desktop' },
+];
+
+/**
+ * @param {object} props
+ * @param {'desk'|'bay'|'page'|'dyno'|'stand'|'build'} props.mode the laptop open, the shop with it shut, a
+ *   page over it all, or walked up to one thing in it (the camera on it, the page see-through)
+ * @param {import('../world/models/engine.js').EngineSpec} props.engineSpec the engine on the stand
+ * @param {number} props.rpm the stand's engine speed, 0 when it is off
+ * @param {number} [props.dynoRpm] the car on the dyno's engine speed during a pull, 0 between
+ * @param {import('./shopScene.js').ShopCars} [props.cars] who is on the dyno and the lift (default: the shop's own two)
+ * @param {{piston: number, bearing: number, valve: number, failed: 'piston'|'bearing'|'valve'|null, where: 'stand'|'dyno'|null, key: string|null}|null} [props.damage]
+ *   the engine's condition, drawn on it; `key` names a failure, which plays once where it happened
+ * @param {boolean} [props.phone] the device is a phone, not the laptop
+ * @param {boolean} [props.covered] an app fills the screen over it: it is not drawn
+ * @param {(s: Record<string, HTMLElement>|null) => void} [props.onSurfaces] the faces the page renders into
+ * @param {string|null} [props.nextSpot] the hotspot the game's next step is at: its marker is lit
+ * @param {(id: string) => void} props.onPick a hotspot was chosen
+ * @param {() => void} props.onLook the backdrop was clicked with the laptop open: look up at the shop
+ * @param {() => void} [props.onFlat] the 3D could not draw and the flat shop is showing instead
+ * @returns {React.ReactElement}
+ */
+export function ShopBackdrop({ mode, phone = false, covered = false, engineSpec, rpm, dynoRpm = 0, cars, damage = null, nextSpot = null, onSurfaces, onPick, onLook, onFlat }) {
+  const live = useRef({ mode, rpm, dynoRpm, spec: engineSpec, specDirty: false, cars, carsDirty: false, damage, damageDirty: true, onSurfaces, onPick, covered, moving: false, next: nextSpot, nextDirty: true });
+  live.current.mode = mode;
+  live.current.covered = covered;
+  live.current.onSurfaces = onSurfaces;
+  live.current.onPick = onPick;
+  if (live.current.next !== nextSpot) { live.current.next = nextSpot; live.current.nextDirty = true; }
+  live.current.rpm = rpm;
+  live.current.dynoRpm = dynoRpm;
+  const key = JSON.stringify(engineSpec);
+  useEffect(() => { live.current.spec = engineSpec; live.current.specDirty = true; }, [key]); // eslint-disable-line react-hooks/exhaustive-deps -- keyed on the content: the object is new every render, and re-sending it would rebuild the 3D model each frame
+  const damageKey = JSON.stringify(damage);
+  useEffect(() => { live.current.damage = damage; live.current.damageDirty = true; }, [damageKey]); // eslint-disable-line react-hooks/exhaustive-deps -- keyed on the content, as the engine is
+  const carsKey = JSON.stringify(cars ?? null);
+  useEffect(() => { live.current.cars = cars; live.current.carsDirty = true; }, [carsKey]); // eslint-disable-line react-hooks/exhaustive-deps -- keyed on the content, as the engine is
+  /** @type {React.MutableRefObject<Record<string, HTMLButtonElement|null>>} */
+  const spots = useRef({});
+  const v = new THREE.Vector3();
+
+  const { canvasRef, failed } = useStage((stage) => {
+    const shop = buildShopScene(stage, { engineSpec: live.current.spec, cars: live.current.cars });
+    live.current.carsDirty = false;
+    let idle = 0;
+
+    // ---- the faces the page's controls are laid on ---- Each is an ordinary page element
+    // laid FLAT over where its face is on screen: placed and sized from the face's projected
+    // corners every frame, never turned in 3-D.
+    const host = stage.canvas.parentElement;
+    // In the shop view the stations themselves are what you click: a cart, an engine on its
+    // stand, the car on the dyno. Pointed at, one lights its screen and the cursor says so.
+    const ndc = (/** @type {PointerEvent} */ e) => {
+      const r = stage.canvas.getBoundingClientRect();
+      return /** @type {[number, number]} */ ([((e.clientX - r.left) / r.width) * 2 - 1, -(((e.clientY - r.top) / r.height) * 2 - 1)]);
+    };
+    let hovered = null;
+    const onMove = (/** @type {PointerEvent} */ e) => {
+      if (live.current.mode !== 'bay' || e.pointerType === 'touch') return;
+      const at = shop.pickAt(...ndc(e));
+      const id = at;
+      if (id === hovered) return;
+      hovered = id;
+      shop.hover(id ?? live.current.next);
+      stage.canvas.style.cursor = id ? 'pointer' : '';
+      for (const [k, el] of Object.entries(spots.current)) el?.toggleAttribute('data-hover', k === id);
+    };
+    let down = null;
+    const onDown = (/** @type {PointerEvent} */ e) => { down = [e.clientX, e.clientY]; };
+    const onUp = (/** @type {PointerEvent} */ e) => {
+      // A tap or a click, not the end of a drag.
+      if (live.current.mode !== 'bay' || live.current.moving || !down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 8) return;
+      const id = shop.pickAt(...ndc(e));
+      if (id) live.current.onPick?.(id);
+    };
+    stage.canvas.addEventListener('pointermove', onMove);
+    stage.canvas.addEventListener('pointerdown', onDown);
+    stage.canvas.addEventListener('pointerup', onUp);
+    const layer = document.createElement('div');
+    layer.className = styles.surfaceLayer;
+    host?.appendChild(layer);
+    /** Which place each face belongs to: it shows only there. */
+    const PLACE = { dynoMonitor: 'dyno', dynoConsole: 'dyno', standMonitor: 'stand', standConsole: 'stand', buildMonitor: 'build' };
+    const faces = Object.entries(shop.surfaces).map(([name, sf]) => {
+      const el = document.createElement('div');
+      el.className = styles.surface;
+      el.dataset.surface = name;
+      el.style.position = 'absolute';
+      el.style.left = '0';
+      el.style.top = '0';
+      el.style.pointerEvents = 'auto';
+      el.style.transformOrigin = '0 0';
+      el.style.display = 'none';
+      layer.appendChild(el);
+      return { name, sf, el, pw: 0, ph: 0 };
+    });
+    let sizeW = 0; let sizeH = 0;
+    const fit = () => {
+      sizeW = host?.clientWidth ?? 0;
+      sizeH = host?.clientHeight ?? 0;
+    };
+    fit();
+    live.current.onSurfaces?.(Object.fromEntries(faces.map((f) => [f.name, f.el])));
+    const corner = new THREE.Vector3();
+    /** What of the view the page leaves clear at a station: below its header and the job bar. */
+    const measureFrame = () => {
+      const station = host?.parentElement?.querySelector('[data-station]');
+      const hr = host?.getBoundingClientRect();
+      if (!station || !hr) return;
+      const r = station.getBoundingClientRect();
+      shop.setFrame({ top: r.top - hr.top, bottom: hr.bottom - r.bottom, left: r.left - hr.left, right: hr.right - r.right, w: hr.width, h: hr.height });
+    };
+
+    return {
+      dispose() {
+        live.current.onSurfaces?.(null);
+        layer.remove();
+        stage.canvas.removeEventListener('pointermove', onMove);
+        stage.canvas.removeEventListener('pointerdown', onDown);
+        stage.canvas.removeEventListener('pointerup', onUp);
+      },
+      update(dt) {
+        const l = live.current;
+        fit();
+        // The next step's station shows itself: its screen a little brighter than the rest.
+        if (l.nextDirty) { l.nextDirty = false; shop.hover(l.next); shop.mark(l.next); }
+        // Behind a page the shop is dimmed and still, and walked up to the dyno or the stand
+        // nothing moves until it runs: draw it a few times a second, not sixty, so the
+        // page's own numbers have the machine to themselves.
+        const station = l.mode === 'dyno' || l.mode === 'stand' || l.mode === 'build';
+        const scene = station;
+        if (scene) measureFrame();
+        shop.setPose(l.mode === 'page' ? 'desk' : l.mode);
+        // Wholly behind an app (a phone's app fills its screen): nothing of it shows, so it is
+        // not drawn at all until it is uncovered (or the camera is still on its way).
+        if (l.covered && !shop.moving()) return false;
+        const busy = scene && (shop.moving() || shop.busy() || l.damageDirty || l.specDirty
+          || (l.mode === 'dyno' && l.dynoRpm > 0) || (l.mode === 'stand' && l.rpm > 0));
+        // While it runs, thirty frames a second is plenty for a turning engine or wheels,
+        // and leaves the readouts over it the rest of the machine.
+        if (l.mode === 'page' || scene) {
+          idle += dt;
+          if (idle < (busy ? 1 / 30 : 0.25)) return false;
+          dt = idle;
+          idle = 0;
+        }
+        if (l.specDirty) { l.specDirty = false; shop.setEngine(l.spec); }
+        if (l.carsDirty) { l.carsDirty = false; shop.setCars(l.cars ?? { dyno: {}, lift: {} }); }
+        if (l.damageDirty) {
+          l.damageDirty = false;
+          const d = l.damage;
+          shop.setDamage(d ? { piston: d.piston, bearing: d.bearing, valve: d.valve, failed: d.failed } : null, d?.where ?? null, d?.key ?? null);
+        }
+        shop.update(dt, l.rpm, l.dynoRpm);
+        shop.camera.updateMatrixWorld();
+        const moving = shop.moving();
+        // Nothing is a button until the camera has stopped: a tap that lands as the view
+        // swings is on whatever has just arrived under the finger.
+        const flipped = l.moving !== moving;
+        l.moving = moving;
+        for (const f of faces) {
+          const on = PLACE[/** @type {keyof typeof PLACE} */ (f.name)] === l.mode;
+          f.el.style.display = on ? '' : 'none';
+          if (flipped) f.el.style.pointerEvents = moving ? 'none' : 'auto';
+          if (!on) continue;
+          // The face's four corners on screen, and the box round them.
+          let x0 = Infinity; let x1 = -Infinity; let y0 = Infinity; let y1 = -Infinity;
+          f.sf.at.updateWorldMatrix(true, false);
+          for (const [cx, cy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+            corner.set((cx * f.sf.w) / 2, (cy * f.sf.h) / 2, 0).applyMatrix4(f.sf.at.matrixWorld).project(shop.camera);
+            const sx = ((corner.x + 1) / 2) * sizeW; const sy = ((1 - corner.y) / 2) * sizeH;
+            x0 = Math.min(x0, sx); x1 = Math.max(x1, sx); y0 = Math.min(y0, sy); y1 = Math.max(y1, sy);
+          }
+          const bw = Math.max(1, x1 - x0); const bh = Math.max(1, y1 - y0);
+          // Laid out at the size it shows at, so its words are the page's own size there, once
+          // the camera has stopped (not again every frame on the way).
+          const minPx = f.name.endsWith('Console') ? (bh > bw ? 220 : 420) : 340;
+          if (!moving || f.pw === 0) {
+            const pw = Math.round(Math.max(minPx, bw));
+            const ph = Math.round((pw * bh) / bw);
+            if (Math.abs(pw - f.pw) > 2 || Math.abs(ph - f.ph) > 2) {
+              f.pw = pw; f.ph = ph;
+              f.el.style.width = `${pw}px`;
+              f.el.style.height = `${ph}px`;
+            }
+          }
+          f.el.style.transform = `translate(${x0.toFixed(1)}px, ${y0.toFixed(1)}px) scale(${(bw / f.pw).toFixed(4)}, ${(bh / f.ph).toFixed(4)})`;
+        }
+        // Keep each button on its object.
+        const canvas = canvasRef.current;
+        if (!canvas || l.mode !== 'bay') return;
+        const w = canvas.clientWidth;
+        const h = canvas.clientHeight;
+        shop.camera.updateMatrixWorld();
+        for (const [id, at] of Object.entries(shop.anchors)) {
+          const el = spots.current[id];
+          if (!el) continue;
+          v.copy(at).project(shop.camera);
+          // Kept on screen, however narrow it is: a marker never goes past the edge.
+          const pad = 48;
+          el.style.left = `${Math.min(w - pad, Math.max(pad, ((v.x + 1) / 2) * w))}px`;
+          el.style.top = `${Math.min(h - pad, Math.max(pad, ((1 - v.y) / 2) * h))}px`;
+        }
+      },
+    };
+  }, { shadows: true, real: true });
+
+  // Settings offers to turn the 3D back on once it has fallen back to the flat shop.
+  useEffect(() => { if (failed) onFlat?.(); }, [failed, onFlat]);
+  return (
+    <div className={styles.backdrop} data-mode={mode}>
+      {failed ? <div className={styles.backdropFallback} /> : <canvas ref={canvasRef} className={styles.backdropCanvas} />}
+      {mode === 'desk' && (
+        <button type="button" className={styles.lookUp} onClick={onLook} aria-label="Look up at the shop" />
+      )}
+      {mode === 'bay' && (
+        <div className={failed ? styles.spotRow : styles.spotLayer} role={failed ? 'list' : undefined} aria-label={failed ? 'The shop' : undefined}>
+          {failed && <h2 className={styles.spotRowHead}>The shop</h2>}
+          {HOTSPOTS.map((h) => (
+            <button
+              key={h.id}
+              ref={(el) => { spots.current[h.id] = el; }}
+              type="button"
+              className={styles.spot}
+              data-spot={h.id}
+              data-next={h.id === nextSpot ? 'true' : undefined}
+              onClick={(e) => { if (!live.current.moving || e.detail === 0) onPick(h.id); }}
+              title={h.hint}
+            >
+              <span className={`${styles.spotLabel} ink-frame`}>{h.id === 'laptop' && phone ? 'Pick up the phone' : h.label}</span>
+              {/* With no 3D room the places are a list, each saying what it is for. */}
+              {failed && <span className={styles.spotHint} aria-hidden="true">{h.id === 'laptop' && phone ? 'Tune, messages and search' : h.hint}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

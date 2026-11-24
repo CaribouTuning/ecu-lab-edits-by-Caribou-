@@ -26,11 +26,11 @@ import { ROUTES, TAB_NAMES } from './routing.js';
  * nav's, so the palette prints exactly what the nav does.
  */
 export const TAB_KEYWORDS = {
-  dash: ['dashboard'],
-  build: ['garage', 'hardware'],
+  build: ['garage', 'hardware', 'engine model'],
   tune: ['calibration', 'tables'],
-  live: ['engine', 'sound', 'rev'],
+  live: ['engine', 'sound', 'rev', 'stand'],
   dyno: ['pull', 'power'],
+  learn: ['guide', 'articles', 'how to tune'],
 };
 
 /**
@@ -38,20 +38,29 @@ export const TAB_KEYWORDS = {
  * headings. A tab with one section (LIVE) has no entry: its tab command is the page.
  */
 export const SECTION_LABELS = {
-  'dash/stats': { label: 'Sandbox Stats & Last Pull', keywords: ['stats', 'best'] },
-  'dash/health': { label: 'Engine Health', keywords: ['wear', 'repair'] },
-  'dash/learn': { label: 'Learn How It Works', keywords: ['guide', 'articles'] },
-  'dash/realcar': { label: 'Taking It To A Real Car', keywords: ['software', 'real'] },
-  'build/engine': { label: 'Engine Architecture', keywords: ['preset', 'cam', 'bore', 'stroke'] },
-  'build/induction': { label: 'Induction', keywords: ['turbo', 'boost', 'intake'] },
-  'build/fuel': { label: 'Fuel System', keywords: ['octane', 'pump'] },
-  'build/exhaust': { label: 'Exhaust', keywords: ['pipe', 'header'] },
+  'learn/start': { label: 'Start here', keywords: ['basics', 'loop', 'horsepower', 'torque'] },
+  'learn/air': { label: 'Air and VE', keywords: ['ve', 'maf', 'speed density', 'sensors'] },
+  'learn/fuel': { label: 'Fuel', keywords: ['lambda', 'afr', 'injectors', 'trims'] },
+  'learn/spark': { label: 'Spark and knock', keywords: ['timing', 'mbt', 'knock', 'octane'] },
+  'learn/pull': { label: 'Reading a pull', keywords: ['logs', 'dyno sheet', 'troubleshooting'] },
+  'learn/job': { label: 'A whole job', keywords: ['worked example', 'session', 'habits'] },
+  'learn/boost': { label: 'Boost and adders', keywords: ['turbo', 'supercharger', 'nitrous'] },
+  'learn/ecu': { label: 'The rest of the ECU', keywords: ['engine computer', 'controllers', 'limiters'] },
+  'learn/engine': { label: 'Engine science', keywords: ['heat', 'otto cycle', 'sound'] },
+  'learn/model': { label: 'The model and sources', keywords: ['references', 'reading', 'simulator'] },
+  'build/engine': { label: 'Engine', keywords: ['preset', 'factory engine', 'custom'] },
+  'build/block': { label: 'Short block', keywords: ['bore', 'stroke', 'compression', 'pistons', 'rods'] },
+  'build/head': { label: 'Heads and cam', keywords: ['cam', 'springs', 'valves', 'vvt', 'ports', 'runner'] },
+  'build/ignition': { label: 'Ignition', keywords: ['spark plugs', 'coils', 'plug gap', 'ignition'] },
+  'build/induction': { label: 'Induction', keywords: ['turbo', 'boost', 'supercharger', 'nitrous', 'intercooler'] },
+  'build/fuel': { label: 'Fuel system', keywords: ['octane', 'pump', 'injectors'] },
+  'build/boltons': { label: 'Bolt-ons', keywords: ['intake', 'exhaust', 'pipe', 'header', 'cat-back', 'catalytic converter'] },
   'tune/airflow': { label: 'Airflow', keywords: ['ve', 'volumetric'] },
   'tune/spark': { label: 'Spark', keywords: ['timing', 'ignition', 'knock'] },
   'tune/fuel': { label: 'Fuel', keywords: ['afr', 'lambda', 'mixture'] },
   'tune/injectors': { label: 'Injectors', keywords: ['duty', 'scaling'] },
   'tune/sensors': { label: 'Sensors', keywords: ['maf'] },
-  'tune/boost': { label: 'Boost Control', keywords: ['wastegate', 'turbo', 'overboost'] },
+  'tune/boost': { label: 'Boost Control', keywords: ['boost target', 'wastegate', 'turbo', 'overboost'] },
   'tune/vvt': { label: 'Variable Cam Timing', keywords: ['vvt', 'vanos', 'cam', 'phaser'] },
   'tune/idle': { label: 'Idle Control', keywords: ['stall', 'hunt', 'rpm'] },
   'tune/protect': { label: 'Engine Protection', keywords: ['rev limiter', 'limp', 'safety'] },
@@ -113,7 +122,8 @@ export function pageCommands(flags, go) {
     out.push({ id: 'page:shop', label: 'SHOP', kind: 'page', keywords: ['career', 'customers', 'garage', 'jobs'], run: () => go('shop', null) });
   }
   for (const [tab, sections] of Object.entries(ROUTES)) {
-    if (flags.career && tab === 'dash') continue;
+    // LEARN is SANDBOX's laptop app; CAREER's nav does not have it.
+    if (flags.career && tab === 'learn') continue;
     const name = TAB_NAMES[tab];
     out.push({ id: `page:${tab}`, label: name, kind: 'page', keywords: TAB_KEYWORDS[tab], run: () => go(tab, null) });
     if (sections.length < 2) continue;

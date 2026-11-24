@@ -101,10 +101,16 @@ export const utilisationTone = (v) => (v > 90 ? 'danger' : v > 75 ? 'warn' : 'ok
 export const utilisationColor = (v) => T[utilisationTone(v)];
 
 /**
- * Heat-map colour for a table cell, cool (low) through warm (high).
+ * Heat-map colour for a table cell, low to high: green, through yellow, to red.
  *
- * Deliberately its own ramp rather than the status scale: a hot VE cell is not a
- * fault, and it must never compete visually with a real warning.
+ * The way tuning software shades a table: the cell's value sets its hue, and the higher
+ * the value the redder the cell. RomRaider's table editor blends the hue from its
+ * minimum colour to its maximum, light blue (153, 153, 255) to light red (255, 102, 102),
+ * which runs through green and yellow on the way (src/main/java/com/romraider/util/
+ * ColorScaler.java and Settings.java); TunerStudio's cells run blue - green - yellow -
+ * red (MSExtra forum, "Cell-value colors when increasing/decreasing Ign advance"). This
+ * ramp is that sweep's green-to-red part, which is what a tuner reads as a table's heat.
+ * Each step is dark enough that the cell's text (--ink) keeps 4.5:1 or better on it.
  *
  * @param {number} value cell value
  * @param {number} min low end of the scale
@@ -112,9 +118,16 @@ export const utilisationColor = (v) => T[utilisationTone(v)];
  * @returns {string} an hsl() colour
  */
 function heat(value, min, max) {
-  const t = clamp((value - min) / (max - min), 0, 1);
-  const hue = 214 - t * 214;
-  return `hsl(${hue.toFixed(0)}, 68%, ${26 + t * 12}%)`;
+  const t = max > min ? clamp((value - min) / (max - min), 0, 1) : 0.5;
+  // [t, hue, saturation %, lightness %]: green, yellow-green, yellow, orange, red.
+  const stops = [[0, 130, 50, 26], [0.33, 85, 55, 26], [0.5, 55, 65, 25], [0.75, 28, 70, 32], [1, 0, 68, 38]];
+  let i = 1;
+  while (i < stops.length - 1 && t > stops[i][0]) i += 1;
+  const [t0, h0, s0, l0] = stops[i - 1];
+  const [t1, h1, s1, l1] = stops[i];
+  const k = (t - t0) / (t1 - t0);
+  const mix = (x, y) => x + (y - x) * k;
+  return `hsl(${mix(h0, h1).toFixed(0)}, ${mix(s0, s1).toFixed(0)}%, ${mix(l0, l1).toFixed(1)}%)`;
 }
 
 /**

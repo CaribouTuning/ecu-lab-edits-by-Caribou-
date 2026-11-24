@@ -114,17 +114,6 @@ export function useSandboxStash() {
 }
 
 /**
- * Whether a pull is a road test: in CAREER, until the shop owns a dyno. A road test logs
- * everything a wideband and the ECU see, but nothing measures power, so every screen
- * that would show horsepower asks this first.
- * @returns {boolean}
- */
-export function useRoadTest() {
-  const [state] = useStore();
-  return state.session.mode === 'career' && !!state.career && !state.career.owned.includes('dyno');
-}
-
-/**
  * The HISTORY slice: the undo and redo stacks.
  * @returns {[HistoryState, React.Dispatch<StoreAction>]}
  */

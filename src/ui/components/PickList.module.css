@@ -1,0 +1,20 @@
+/* A ruled list: hairlines between the rows, the chosen one marked by a bar on its edge. */
+.list { display: flex; flex-direction: column; margin-bottom: 4px; border-top: 1px solid var(--line); }
+.option {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%;
+  padding: 10px 12px 10px 14px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0;
+  background: transparent; color: var(--ink2); font: inherit; font-size: 13px; font-weight: 600; text-align: left; cursor: pointer;
+}
+.option:hover { color: var(--ink); background: var(--panel); }
+.option:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.option[aria-pressed='true'] { color: var(--ink); background: var(--panel2); box-shadow: inset 3px 0 0 var(--acc); }
+.sub { font-size: 11.5px; font-weight: 400; color: var(--ink2); line-height: 1.4; }
+
+/* Short choices as a compact grid of keys: the chosen one a lighter key with a blue edge. */
+.list[data-grid] { display: grid; gap: 6px; border-top: 0; }
+.list[data-grid] .option {
+  align-items: center; justify-content: center; min-height: 40px; padding: 6px 4px;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--panel);
+  font-size: 12px; font-variant-numeric: tabular-nums; text-align: center;
+}
+.list[data-grid] .option[aria-pressed='true'] { background: var(--mac-selected); border-color: var(--acc); box-shadow: none; }

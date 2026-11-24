@@ -124,10 +124,14 @@ describe('the sensor note on BUILD', () => {
 });
 
 describe('the page guide', () => {
-  it('says what the page is for and that nothing has been changed', () => {
+  it('says that nothing has been changed, and what the page is for one tap away', () => {
     mount(<EcuSection section="idle" title="Idle" />);
-    expect(screen.getByText(PAGE_GUIDES.idle.does)).toBeTruthy();
     expect(screen.getByText(/All factory settings/)).toBeTruthy();
+    // The page reads as names and controls: its guide is folded behind an info button.
+    expect(screen.queryByText(PAGE_GUIDES.idle.does)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'About this page' }));
+    expect(screen.getByText(PAGE_GUIDES.idle.does)).toBeTruthy();
+    expect(screen.getByText('Come here when')).toBeTruthy();
   });
 
   it('counts a changed setting, and Factory puts it back', () => {
@@ -136,6 +140,20 @@ describe('the page guide', () => {
     expect(screen.getByText(/1 setting changed from factory/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Factory/ }));
     expect(screen.getByText(/All factory settings/)).toBeTruthy();
+  });
+
+  it('calls a factory engine factory on every page, its tables sized to it', () => {
+    // A factory engine's ECU tables sit on its own breakpoints. Judged against the generic
+    // grid, a freshly loaded N54 opened BOOST and TORQUE with "1 setting changed", and
+    // their Factory button moved the breakpoints off the ones RESET ALL TO STOCK writes.
+    function LoadN54() {
+      const [, dispatch] = useBuild();
+      return <button type="button" onClick={() => dispatch({ type: ACTIONS.APPLY_PRESET, preset: S.applyPreset(S.presetById('n54')) })}>load-n54</button>;
+    }
+    const sections = [...new Set(S.ECU_META.map((m) => m.section))];
+    mount(<><LoadN54 />{sections.map((s) => <EcuSection key={s} section={s} title={s} />)}</>);
+    fireEvent.click(screen.getByText('load-n54'));
+    expect(screen.queryAllByText(/changed from factory/)).toEqual([]);
   });
 
   it('records nothing for a press that changes nothing', () => {
@@ -167,12 +185,15 @@ describe('the page guide', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
-  it('shows a short tip, with the full explanation one tap away', () => {
+  it('shows each setting by name, with its tip and full explanation one tap away', () => {
     mount(<EcuSection section="idle" title="Idle" />);
-    expect(screen.getByText(FIELD_TIPS['idle.acAirAdd'], { exact: false })).toBeTruthy();
-    const whys = screen.getAllByRole('button', { name: 'Why?' });
-    fireEvent.click(whys[0]);
-    expect(screen.queryAllByRole('button', { name: 'Why?' })).toHaveLength(whys.length - 1);
+    const tip = FIELD_TIPS['idle.acAirAdd'];
+    expect(screen.queryByText(tip, { exact: false })).toBeNull();
+    const about = screen.getByRole('button', { name: 'About A/C air feed-forward' });
+    fireEvent.click(about);
+    expect(screen.getByText(tip, { exact: false })).toBeTruthy();
+    fireEvent.click(about);
+    expect(screen.queryByText(tip, { exact: false })).toBeNull();
   });
 });
 

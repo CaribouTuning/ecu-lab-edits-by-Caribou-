@@ -104,12 +104,7 @@ export const boostSparkAndFuel = (st, degPer20 = 4, afr = 12.0) => ({
 /** Scaling, then airflow, then mixture: the order a tuner works in. */
 const airAndFuel = (st) => veFix(mafFix(veFix(mafFix(scaleFix(st)), 2)), 2);
 
-/**
- * The full-load rows taken to best power where the factory ran them richer. Factory fuel
- * goes to about lambda 0.82 near redline for component protection (src/sim/factoryFuel.js);
- * with a bigger cam that much fuel runs stock injectors out of time at the top, and the
- * tuner's answer is the one that also makes power: best-power mixture, about 12.8:1.
- */
+/** The full-load rows taken to best power where the factory ran them richer. */
 export const bestPowerTop = (st, afr = 12.8) => ({
   ...st,
   tune: { ...st.tune, afr: st.tune.afr.map((row, ri) => row.map((v) => (axesOf(st, 'afr').load[ri] >= 95 && v < afr ? afr : v))) },
@@ -196,5 +191,7 @@ export const STORY_FIXES = {
   'full-session': (s) => zmul(storyVeFromLogs(setBuild(s, { ecuInjectorCc: S.INJECTOR_OPTS[s.build.injIdx].cc, mafScalar: 1.11 })), 'ignition.knockThreshold', 1.4),
   'blower-power': (s) => boostSparkAndFuel(s, 3, 12.2),
   nitrous: (s) => setCal(setCal(s, 'nitrous.fuelTrimPct', getCal(s, 'nitrous.fuelTrimPct') - 25), 'nitrous.retardDeg', 12),
+  // The overrun burble switched on, at the calibration's own moderate timing and length.
+  'pops-bangs': (s) => setCal(s, 'ignition.burbleEnabled', true),
 };
 

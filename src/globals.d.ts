@@ -15,4 +15,21 @@ interface ArtifactStorage {
 interface Window {
   storage?: ArtifactStorage;
   webkitAudioContext?: typeof AudioContext;
+  /** Set by browser tests to expose the 3-D world and the save. */
+  __ECU_E2E__?: boolean;
+  __ecuWorld?: any;
+  __ecuUpdate?: (career: any) => void;
+  __ecuCareer?: any;
+}
+
+/** Vite's inline worker import (sim/warm.js): a Worker class built into the bundle as a blob. */
+declare module '*?worker&inline' {
+  const WorkerFactory: new () => Worker;
+  export default WorkerFactory;
+}
+
+/** Vite's raw import: a file's text, built into the bundle (ui/sim/breathingStore.js). */
+declare module '*?raw' {
+  const text: string;
+  export default text;
 }

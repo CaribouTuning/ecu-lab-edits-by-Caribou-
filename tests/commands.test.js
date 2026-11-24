@@ -34,13 +34,19 @@ describe('the label table', () => {
 describe('pageCommands', () => {
   it('lists each tab, then its sections, in nav order; a one-section tab is one command', () => {
     const list = ids(pages());
-    expect(list.slice(0, 7)).toEqual([
-      'page:dash', 'page:dash/stats', 'page:dash/health',
-      'page:dash/learn', 'page:dash/realcar', 'page:build', 'page:build/engine',
+    expect(list.slice(0, 10)).toEqual([
+      'page:build', 'page:build/engine', 'page:build/block', 'page:build/head', 'page:build/ignition', 'page:build/induction', 'page:build/fuel',
+      'page:build/boltons', 'page:tune', 'page:tune/airflow',
     ]);
     expect(list).toContain('page:live');
     expect(list.some((id) => id.startsWith('page:live/'))).toBe(false);
-    expect(list).toHaveLength(6 + 23);
+    // The laptop's reading app: LEARN's pages, one at a time as TUNE's.
+    expect(list.slice(-11)).toEqual([
+      'page:learn', 'page:learn/start', 'page:learn/air', 'page:learn/fuel', 'page:learn/spark', 'page:learn/pull',
+      'page:learn/job', 'page:learn/boost', 'page:learn/ecu', 'page:learn/engine', 'page:learn/model',
+    ]);
+    // Tabs and their sections (LEARN's ten pages among them).
+    expect(list).toHaveLength(5 + 33);
   });
 
   it('prints the tab before a section, and not before a tab', () => {
@@ -59,6 +65,8 @@ describe('pageCommands', () => {
     const list = pages({ ...ALL, career: true }, go);
     expect(list[0]).toMatchObject({ id: 'page:shop', label: 'SHOP' });
     expect(ids(list).some((id) => id.startsWith('page:dash') || id.startsWith('page:drag'))).toBe(false);
+    // LEARN and PHYSICS are SANDBOX's laptop apps.
+    expect(ids(list).some((id) => id.startsWith('page:learn') || id.startsWith('page:physics'))).toBe(false);
     expect(ids(list)).toContain('page:tune/spark');
     list[0].run();
     expect(go).toHaveBeenCalledWith('shop', null);

@@ -17,7 +17,7 @@
 
 /* Whether the MAF needs recalibrating is a two-state readout with its own colour
    each way, same convention as TurboScreen's data-selected/data-over. */
-.mafStatus { font-weight: 800; color: var(--ok); }
+.mafStatus { font-weight: 600; color: var(--ok); }
 .mafStatus[data-needs-recal='true'] { color: var(--warn); }
 
 .mafNote {
@@ -44,8 +44,8 @@
 
 .scalarValue {
   width: 52px;
-  font-family: var(--mono);
-  font-weight: 800;
+  font-family: var(--sans); font-variant-numeric: tabular-nums;
+  font-weight: 600;
   font-size: 15px;
   text-align: right;
   color: var(--ink);
@@ -56,7 +56,7 @@
 .trimLabel {
   margin-bottom: 6px;
   font-size: 10px;
-  letter-spacing: 1px;
+
   font-weight: 700;
   color: var(--ink2);
 }

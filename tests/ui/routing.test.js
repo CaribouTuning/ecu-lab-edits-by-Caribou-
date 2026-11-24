@@ -11,7 +11,7 @@ describe('parseRoute', () => {
   it('reads a tab with no section as that tab with everything collapsed', () => {
     // `null` is a real, reachable state: clicking an open accordion's own header
     // closes it. A default section here would make a section impossible to close.
-    expect(parseRoute('#/dash')).toEqual({ view: 'app', tab: 'dash', section: null });
+    expect(parseRoute('#/learn')).toEqual({ view: 'app', tab: 'learn', section: null });
   });
 
   it('reads a tab and section', () => {
@@ -32,9 +32,9 @@ describe('parseRoute', () => {
     expect(parseRoute('#/build/engine/extra')).toEqual({ view: 'app', tab: 'build', section: 'engine' });
   });
 
-  it('routes the eleven TUNE sections and the four BUILD sections', () => {
+  it('routes the eleven TUNE sections and the six BUILD parts', () => {
     expect(ROUTES.tune).toEqual(['airflow', 'spark', 'fuel', 'injectors', 'sensors', 'boost', 'vvt', 'idle', 'protect', 'torque', 'nitrous']);
-    expect(ROUTES.build).toEqual(['engine', 'induction', 'fuel', 'exhaust']);
+    expect(ROUTES.build).toEqual(['engine', 'block', 'head', 'ignition', 'induction', 'fuel', 'boltons']);
   });
 
   it('namespaces `fuel` by tab so the two never collide', () => {
@@ -47,7 +47,11 @@ describe('parseRoute', () => {
   it('degrades a stale deep link to the tab instead of rendering blank', () => {
     // `#/tune/ve` was a real URL before this change. A bookmark must not break the app.
     expect(parseRoute('#/tune/ve')).toEqual({ view: 'app', tab: 'tune', section: null });
-    expect(parseRoute('#/build/boltons')).toEqual({ view: 'app', tab: 'build', section: null });
+    expect(parseRoute('#/build/nothing')).toEqual({ view: 'app', tab: 'build', section: null });
+  });
+
+  it('opens a renamed section where it went: BUILD › Exhaust is Bolt-ons now', () => {
+    expect(parseRoute('#/build/exhaust')).toEqual({ view: 'app', tab: 'build', section: 'boltons' });
   });
 });
 
@@ -59,9 +63,10 @@ describe('formatRoute', () => {
     const cases = [
       { view: 'start', tab: null, section: null },
       { view: 'tutorial', tab: null, section: null },
-      { view: 'course', tab: null, section: null },
       { view: 'shop', tab: null, section: null },
-      { view: 'app', tab: 'dash', section: null },
+      { view: 'desk', tab: null, section: null },
+      { view: 'bay', tab: null, section: null },
+      { view: 'app', tab: 'learn', section: null },
       { view: 'app', tab: 'tune', section: 'spark' },
     ];
     cases.forEach((route) => {
@@ -75,9 +80,12 @@ describe('formatRoute', () => {
     // literal checks pin formatRoute's output to a concrete, independently-known shape.
     expect(formatRoute({ view: 'start', tab: null, section: null })).toBe('#/');
     expect(formatRoute({ view: 'tutorial', tab: null, section: null })).toBe('#/tutorial');
-    expect(formatRoute({ view: 'course', tab: null, section: null })).toBe('#/course');
+    // The Tuning Course is gone; an old link to it lands on the start screen.
+    expect(parseRoute('#/course')).toEqual({ view: 'start', tab: null, section: null });
     expect(formatRoute({ view: 'shop', tab: null, section: null })).toBe('#/shop');
-    expect(formatRoute({ view: 'app', tab: 'dash', section: null })).toBe('#/dash');
+    expect(formatRoute({ view: 'desk', tab: null, section: null })).toBe('#/desk');
+    expect(formatRoute({ view: 'bay', tab: null, section: null })).toBe('#/bay');
+    expect(formatRoute({ view: 'app', tab: 'learn', section: null })).toBe('#/learn');
     expect(formatRoute({ view: 'app', tab: 'tune', section: 'spark' })).toBe('#/tune/spark');
   });
 
@@ -97,3 +105,4 @@ describe('formatRoute', () => {
     });
   });
 });
+

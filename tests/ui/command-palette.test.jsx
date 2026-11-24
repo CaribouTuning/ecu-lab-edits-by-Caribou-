@@ -15,6 +15,7 @@ import { Wrench } from 'lucide-react';
 import { BuildSection } from '../../src/ui/components/BuildSection.jsx';
 import { CommandPalette } from '../../src/ui/components/CommandPalette.jsx';
 import EcuLab from '../../src/ui/EcuLab.jsx';
+import { enterSandbox, goTo } from './nav.js';
 
 class ResizeObserverStub { observe() {} unobserve() {} disconnect() {} }
 const hadResizeObserver = 'ResizeObserver' in window;
@@ -279,7 +280,7 @@ describe('the palette and a section it shuts', () => {
 describe('the palette in the app', () => {
   const launch = () => {
     render(<EcuLab />);
-    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
+    enterSandbox();
   };
   const cmdK = (init = {}) => fireEvent.keyDown(window, { key: 'k', code: 'KeyK', metaKey: true, ...init });
   const isOpen = () => Boolean(dialog()?.open);
@@ -317,7 +318,7 @@ describe('the palette in the app', () => {
     render(<EcuLab />);
     cmdK();
     expect(isOpen()).toBe(false);
-    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
+    enterSandbox();
     cmdK({ altKey: true });
     expect(isOpen()).toBe(false);
   });
@@ -330,12 +331,16 @@ describe('the palette in the app', () => {
     // Browser back to the start screen the palette was opened from. CommandPalette
     // unmounts with the view, but `paletteOpen` must not survive the round trip, or
     // re-entering the app reopens it at once.
+    // Two steps: BUILD is the build bench, reached from the shop floor, and the shop floor
+    // is where SANDBOX opens from the start.
+    window.history.back();
+    await waitFor(() => expect(window.location.hash).toBe('#/bay'));
     window.history.back();
     // jsdom dispatches the hashchange from a queued task, and the start screen renders the
     // whole app back down. Under a loaded full run that takes longer than waitFor's 1 s.
-    await waitFor(() => expect(screen.getByRole('button', { name: 'SANDBOX' })).toBeTruthy(), { timeout: 10000 });
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Sandbox/ })).toBeTruthy(), { timeout: 10000 });
 
-    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
+    enterSandbox();
     expect(isOpen()).toBe(false);
   }, 20000);
 
@@ -374,6 +379,8 @@ describe('the palette in the app', () => {
     it('names Cmd-K on the strip button on a Mac', () => {
       onPlatform('MacIntel');
       launch();
+      // The search button is the laptop's: the engine stand's computer has none.
+      goTo('TUNE');
       const button = screen.getByRole('button', { name: 'Search pages and actions' });
       expect(button.title).toBe('Search (⌘K)');
       expect(button.getAttribute('aria-keyshortcuts')).toBe('Meta+K');
@@ -382,6 +389,8 @@ describe('the palette in the app', () => {
     it('names Ctrl-K on the strip button anywhere else', () => {
       onPlatform('Win32');
       launch();
+      // The search button is the laptop's: the engine stand's computer has none.
+      goTo('TUNE');
       const button = screen.getByRole('button', { name: 'Search pages and actions' });
       expect(button.title).toBe('Search (Ctrl+K)');
       expect(button.getAttribute('aria-keyshortcuts')).toBe('Control+K');
@@ -390,6 +399,8 @@ describe('the palette in the app', () => {
 
   it('opens from the status strip button', () => {
     launch();
+    // The search button is the laptop's: the engine stand's computer has none.
+    goTo('TUNE');
     fireEvent.click(screen.getByRole('button', { name: 'Search pages and actions' }));
     expect(isOpen()).toBe(true);
     expect(document.activeElement).toBe(input());
@@ -434,7 +445,7 @@ describe('the palette in the app', () => {
     expect(screen.getByText('No matches')).toBeTruthy();
     key('Escape');
 
-    fireEvent.click(screen.getByRole('button', { name: /TUNE/ }));
+    goTo('TUNE');
     const cell = within(screen.getByTestId('tuning-grid')).getByRole('button', { name: '3500 RPM, 100 kPa' });
     fireEvent.click(cell);
     const before = cell.textContent;
@@ -454,12 +465,12 @@ describe('the palette in the app', () => {
     run('run dyno');
     expect(window.location.hash).toBe('#/dyno/result');
     // jsdom has no Web Audio, so the pull goes straight to the sweep.
-    expect(screen.getByRole('button', { name: 'SWEEPING…' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Sweeping…' })).toBeTruthy();
   });
 
   it('does nothing on Cmd-K from the tutorial view', () => {
     render(<EcuLab />);
-    fireEvent.click(screen.getByRole('button', { name: 'TUTORIAL' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Tutorial/ }));
     cmdK();
     expect(isOpen()).toBe(false);
   });
@@ -469,14 +480,14 @@ describe('the palette in the app', () => {
     cmdK();
     run('start engine');
     expect(window.location.hash).toBe('#/live/engine');
-    expect(screen.getByRole('button', { name: 'STOP' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Stop' })).toBeTruthy();
   });
 
   it('offers no DYNO page but Curves while a pull is running', () => {
     launch();
     cmdK();
     run('run dyno');
-    expect(screen.getByRole('button', { name: 'SWEEPING…' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Sweeping…' })).toBeTruthy();
     cmdK();
     type('datalog');
     expect(screen.getByText('No matches')).toBeTruthy();
@@ -486,19 +497,19 @@ describe('the palette in the app', () => {
 
   it('offers Stop engine once the engine is started, and running it stops it', () => {
     launch();
-    fireEvent.click(screen.getByRole('button', { name: 'LIVE' }));
-    fireEvent.click(screen.getByRole('button', { name: 'START ENGINE' }));
+    goTo('LIVE');
+    fireEvent.click(screen.getByRole('button', { name: 'Start engine' }));
 
     cmdK();
     const labels = options().map((o) => o.textContent);
     expect(labels).toContain('Stop engineAction');
     run('stop engine');
-    expect(screen.getByRole('button', { name: 'START ENGINE' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Start engine' })).toBeTruthy();
   });
 
   it('offers Redo after an undo, and running it redoes the edit', () => {
     launch();
-    fireEvent.click(screen.getByRole('button', { name: /TUNE/ }));
+    goTo('TUNE');
     const cell = within(screen.getByTestId('tuning-grid')).getByRole('button', { name: '3500 RPM, 100 kPa' });
     fireEvent.click(cell);
     const before = cell.textContent;

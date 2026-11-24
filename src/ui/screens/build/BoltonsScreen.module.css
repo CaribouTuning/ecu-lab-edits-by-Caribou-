@@ -18,7 +18,6 @@
   color: var(--ink2);
 }
 
-.raisedByBoost { color: var(--acc-ink); }
 
 /* Prose emphasis inside the ExpandableInfo panel. */
 .em { color: var(--ink); }
@@ -58,7 +57,7 @@
 
 .cardStatus {
   font-size: var(--fs-xs);
-  font-weight: 800;
+  font-weight: 600;
   color: var(--acc-ink);
 }
 
@@ -69,3 +68,6 @@
   font-size: 11.5px;
   color: var(--ink2);
 }
+
+/* The header tubes and the catalyst: set apart from the parts list, each control with room. */
+.specs { display: flex; flex-direction: column; gap: 16px; margin: 16px 0 20px; }

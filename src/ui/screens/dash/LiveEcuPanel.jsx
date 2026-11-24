@@ -23,9 +23,10 @@ import { useBuild, useSession } from '../../state/StoreProvider.jsx';
 import { T } from '../../theme.js';
 
 import styles from './LiveEcuPanel.module.css';
+import { useUnits } from '../../units.js';
 
 /** Series colours for the logger's small multiples: data hues, never status colours. */
-const SERIES = [T.acc, T.cyan, T.violet, T.ink2];
+const SERIES = ['var(--acc)', 'var(--data2)', T.violet, 'var(--ink2)'];
 const DEFAULT_CHANNELS = ['rpm', 'lambda', 'timing', 'boost'];
 /** Seconds of log the charts show. */
 const WINDOW_S = 20;
@@ -34,6 +35,7 @@ const WINDOW_S = 20;
 export function LiveEcuPanel() {
   const [session, dispatch] = useSession();
   const [build] = useBuild();
+  const U = useUnits();
   const kit = build.nitrous;
   const blowerFitted = !build.turboOn && !!build.blowerId;
   const portKitFitted = !!ecuHardwareOf(build).portKit;
@@ -70,7 +72,7 @@ export function LiveEcuPanel() {
   };
 
   return (
-    <Panel style={{ background: T.panel, marginBottom: 10 }}>
+    <Panel style={{ background: 'var(--panel)', marginBottom: 10 }}>
       <Eyebrow icon={Cpu}>Engine management</Eyebrow>
 
       {row && live.running ? (
@@ -82,9 +84,9 @@ export function LiveEcuPanel() {
           <StatTile label="Oil" value={row.oil} unit="kPa" tone={e.protect.includes('oil pressure') ? 'danger' : 'neutral'} />
           <StatTile label="Protections" value={e.protect.length ? e.protect.join(', ') : 'none'} tone={e.protect.length ? 'warn' : 'ok'} />
           {blowerFitted && <StatTile label="Blower" value={Math.round(row.blowerRpm).toLocaleString('en-US')} unit="rpm" />}
-          {kit && <StatTile label="Nitrous" value={row.nitrous.toFixed(2)} unit="lb/min" tone={row.nitrous > 0 ? 'warn' : 'neutral'} />}
+          {kit && <StatTile label="Nitrous" value={U.massFlow(row.nitrous).toFixed(2)} unit={U.massFlowUnit} tone={row.nitrous > 0 ? 'warn' : 'neutral'} />}
           {kit && (row.bottle > 0
-            ? <StatTile label="Bottle" value={String(row.bottle)} unit="psi" tone={row.bottle < 850 ? 'warn' : 'neutral'} />
+            ? <StatTile label="Bottle" value={U.metric ? U.boost(row.bottle).toFixed(0) : String(row.bottle)} unit={U.boostUnit} tone={row.bottle < 850 ? 'warn' : 'neutral'} />
             : <StatTile label="Bottle" value="empty" tone="danger" />)}
         </div>
       ) : (
@@ -114,7 +116,7 @@ export function LiveEcuPanel() {
       </div>
 
       <div className={styles.sectionHead}>
-        <span>DATA LOG</span>
+        <span>Data log</span>
         <span className={styles.flex} />
         <button type="button" className={styles.chip} aria-pressed={!!frozen} onClick={() => setFrozen(frozen ? null : [...(e?.log ?? [])])}>{frozen ? 'Resume' : 'Pause'}</button>
         <button type="button" className={styles.chip} onClick={exportCsv} disabled={!e?.log?.length}>Export CSV</button>
@@ -132,8 +134,8 @@ export function LiveEcuPanel() {
             <ResponsiveContainer width="100%" height={64}>
               <LineChart data={shown} margin={{ top: 2, right: 6, bottom: 0, left: 0 }}>
                 <XAxis dataKey="t" type="number" domain={['dataMin', 'dataMax']} hide />
-                <YAxis stroke={T.ink2} fontSize={9} width={34} domain={['auto', 'auto']} />
-                <Tooltip contentStyle={{ background: T.panel2, border: `1px solid ${T.line}`, fontSize: 11 }} labelFormatter={(t) => `${Number(t).toFixed(1)} s`} />
+                <YAxis stroke="var(--ink2)" fontSize={9} width={34} domain={['auto', 'auto']} />
+                <Tooltip contentStyle={{ background: 'var(--panel2)', border: `1px solid var(--line)`, fontSize: 11 }} labelFormatter={(t) => `${Number(t).toFixed(1)} s`} />
                 <Line dataKey={id} stroke={SERIES[i]} strokeWidth={1.5} dot={false} isAnimationActive={false} />
               </LineChart>
             </ResponsiveContainer>
@@ -143,7 +145,7 @@ export function LiveEcuPanel() {
 
       {e?.breakdown && live.running && live.live && (
         <>
-          <div className={styles.sectionHead}><span>WHERE THE NUMBERS COME FROM</span></div>
+          <div className={styles.sectionHead}><span>Where the numbers come from</span></div>
           <p className={styles.muted}>Each value starts from your table, then lists every adjustment the ECU made, in order. If a number surprises you, the line that moved it is here.</p>
           <CorrectionStack breakdown={{ ...e.breakdown, boost: e.boostSteps }} result={{ timing: live.live.timing, lambda: live.live.lambda }} />
         </>

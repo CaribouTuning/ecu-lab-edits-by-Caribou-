@@ -25,8 +25,10 @@
 import React from 'react';
 
 import { GAME_LAYOUT, addRect, diffTable } from '../../sim/index.js';
-import { T, diffTint, heat, shadowAlpha } from '../theme.js';
+import { diffTint, heat } from '../theme.js';
+import { Info } from '../primitives/Info.jsx';
 
+import styles from './TuningGrid.module.css';
 import { anchorOf, formatDelta, inRect, opLabel, rectOf, signed, spanSelection, stepsFor } from './selection.js';
 
 /** @typedef {import('./selection.js').Selection} Selection */
@@ -52,6 +54,40 @@ export const LOAD_UNIT_LABEL = Object.freeze({ kPa: 'MAP kPa', 'g/cyl': 'AIR g/c
 export const loadText = (unit, v) => (unit === 'g/cyl' ? v.toFixed(2) : String(v));
 
 /**
+ * True when the ECU reads its tables by THROTTLE (the alpha-N air-mass strategy). The
+ * rows are the same breakpoints (a load row of 101.3 kPa is a wide-open throttle, as a
+ * pull's load is), written as the throttle opening the ECU looks them up at.
+ */
+export const ThrottleLoadContext = React.createContext(false);
+
+/**
+ * How a table's load axis reads on screen: its label, and each breakpoint's text.
+ * @param {string} unit the axis's load unit
+ * @param {boolean} throttle the ECU reads this axis by throttle (alpha-N)
+ */
+export function loadAxisText(unit, throttle) {
+  if (!(throttle && unit === 'kPa')) {
+    return { label: LOAD_UNIT_LABEL[unit] ?? unit, unit: unit === 'kPa' ? 'kPa' : unit, word: unit === 'kPa' ? ' MAP' : ' air', text: (v) => loadText(unit, v) };
+  }
+  // Past a wide-open throttle the ECU reads the top row it can reach: rows above it are
+  // boost rows, which a throttle-indexed table cannot address.
+  return { label: 'THROTTLE %', unit: '%', word: ' throttle', text: (v) => (v > 101.5 ? `>${100}` : String(Math.round(Math.min(100, (v / 101.3) * 100)))) };
+}
+
+/**
+ * The cells an advice list names, as a grid's marks: `row:col` to the figure it gives.
+ * @param {Array<{ri?: number, ci?: number, suggested: number}>|null|undefined} cells
+ * @returns {Record<string, number>|null}
+ */
+export function advisedMarks(cells) {
+  if (!cells?.length) return null;
+  /** @type {Record<string, number>} */
+  const out = {};
+  for (const c of cells) if (c.ri != null && c.ci != null) out[`${c.ri}:${c.ci}`] = c.suggested;
+  return out;
+}
+
+/**
  * @param {object} props
  * @param {number[][]} props.data rows of values, indexed [row][col] against `axes`
  * @param {import('../../sim/layouts.js').TableAxes} [props.axes] the table's breakpoints:
@@ -73,9 +109,11 @@ export const loadText = (unit, v) => (unit === 'g/cyl' ? v.toFixed(2) : String(v
  *   nobody has tuned yet: drawn plain and dashed, so the work left shows
  * @param {string[]|null} [props.unreached] cells (`row:col`) above the boost the engine
  *   makes at that column's speed (state/reach.js): greyed, still editable
+ * @param {Record<string, number>|null} [props.marks] cells (`row:col`) TUNE's advisor names, with the
+ *   figure it gives: edged, the figure under the value, so the cells to change are found on the table
  * @returns {React.ReactElement}
  */
-export function TuningGrid({ data, min, max, decimals, selection, setSelection, rangeMode = false, setData, baseline, diffView = false, diffScale = 1, axes = GAME_LAYOUT.ve, untuned = null, unreached = null }) {
+export function TuningGrid({ data, min, max, decimals, selection, setSelection, rangeMode = false, setData, baseline, diffView = false, diffScale = 1, axes = GAME_LAYOUT.ve, untuned = null, unreached = null, marks = null }) {
   const notTuned = React.useMemo(() => new Set(untuned ?? []), [untuned]);
   const notReached = React.useMemo(() => new Set(unreached ?? []), [unreached]);
   const clampR = (r) => Math.min(Math.max(r, 0), axes.load.length - 1);
@@ -83,9 +121,13 @@ export function TuningGrid({ data, min, max, decimals, selection, setSelection, 
   // An engine computer's own grid has three or four times the cells: smaller ones, so
   // more of it is in view at once.
   const dense = axes.rpm.length > 12;
-  const cw = dense ? 42 : 51;
-  const ch = dense ? 28 : 37;
-  const fmt = (v) => (decimals ? v.toFixed(decimals) : Math.round(v));
+  // A whole-number table shows a fraction where the cell holds one (a slider, a pasted map):
+  // shown rounded, -0.49 read as 0 while the advisor said -0.49. Once any cell holds a
+  // fraction every cell shows its tenth, so a column reads 94.0 over 97.5, not 94 over 97.5.
+  const fractional = !decimals && data.some((row) => row.some((v) => Math.abs(v - Math.round(v)) >= 0.05));
+  const fmt = (v) => (decimals ? v.toFixed(decimals) : fractional ? v.toFixed(1) : Math.round(v));
+  // The advisor's figure to a tenth where it gives one: 19.5° is not 20°.
+  const fmtWant = (v) => (Number.isInteger(v) ? String(v) : v.toFixed(1));
   // 96 subtractions, on renders that already walk every cell — not memoised.
   const diff = diffView && baseline ? diffTable(data, baseline) : null;
   const rect = selection ? rectOf(selection, { rows: axes.load.length, cols: axes.rpm.length }) : null;
@@ -97,6 +139,30 @@ export function TuningGrid({ data, min, max, decimals, selection, setSelection, 
   // its click arrives, so that click must not select again — it would collapse a drag
   // back to one cell. A keyboard click carries `detail === 0` and always goes through.
   const lastPointer = React.useRef('');
+
+  // THE CELL STAYS IN SIGHT. On a phone the edit panel (SelectionDock, sticky at the
+  // bottom) slides up over the lower rows, and a tapped cell there was edited out of sight.
+  // Once the panel has drawn, the page scrolls just enough to lift the selected cell above it.
+  const gridRef = React.useRef(/** @type {HTMLDivElement|null} */ (null));
+  const selKey = selection?.type === 'cell' ? `${selection.row}:${selection.col}` : null;
+  React.useEffect(() => {
+    if (!selKey || typeof window === 'undefined') return undefined;
+    const raf = window.requestAnimationFrame(() => {
+      const cell = gridRef.current?.querySelector(`[data-rc="${selKey}"]`);
+      const dock = document.querySelector('[data-testid="selection-dock"]');
+      if (!cell || !dock) return;
+      const c = cell.getBoundingClientRect();
+      const dockTop = dock.getBoundingClientRect().top;
+      const over = c.bottom + 12 - dockTop;
+      if (over <= 0) return;
+      // The pane that scrolls: the nearest ancestor that can, else the page.
+      // (From outside the grid: the table's own sideways scroller computes overflow-y auto too.)
+      let el = gridRef.current?.parentElement ?? null;
+      while (el && !(el.scrollHeight > el.clientHeight + 4 && /(auto|scroll)/.test(window.getComputedStyle(el).overflowY))) el = el.parentElement;
+      (el ?? window).scrollBy({ top: over, behavior: 'smooth' });
+    });
+    return () => window.cancelAnimationFrame(raf);
+  }, [selKey]);
 
   // A drag ends wherever the button comes up, which need not be over the grid.
   React.useEffect(() => {
@@ -186,78 +252,107 @@ export function TuningGrid({ data, min, max, decimals, selection, setSelection, 
     }
   };
 
+  // The colour scale runs over this table's own values, so the shape of the data shows:
+  // over the field's whole legal range (10-130 % for VE) a real table sat in one band.
+  // A flat table (every cell alike) keeps the field's range rather than a scale of zero.
+  let lo = Infinity; let hi = -Infinity;
+  for (const row of data) for (const v of row) { if (v < lo) lo = v; if (v > hi) hi = v; }
+  if (!(hi - lo > (max - min) * 0.02)) { lo = min; hi = max; }
+  const cross = selection?.type === 'cell' ? { r: selection.row, c: selection.col } : null;
+  const lx = loadAxisText(axes.loadUnit, React.useContext(ThrottleLoadContext));
+  const loadUnit = lx.label;
+
   return (
     <div
       data-testid="tuning-grid"
+      ref={gridRef}
+      className={styles.grid}
+      data-dense={dense || undefined}
+      // The column count, so the cells can share out a phone's width (TuningGrid.module.css).
+      style={/** @type {any} */ ({ '--cols': axes.rpm.length })}
       tabIndex={0}
       onKeyDown={onKeyDown}
       aria-label="Calibration table: arrows move, Shift+arrows select a range, plus and minus adjust"
     >
-    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9.5, color: T.ink2, fontWeight: 700, letterSpacing: 0.8, marginBottom: 4 }}>
-      <span>{LOAD_UNIT_LABEL[axes.loadUnit]} &darr;</span><span>RPM &rarr;</span>
-    </div>
-    <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', border: `1px solid ${T.line}`, borderRadius: 10 }}>
-      <div style={{ display: 'inline-block', minWidth: '100%' }}>
-        {/* `data-tour` hooks are for the tutorial's callouts, which point at this grid. */}
-        <div style={{ display: 'flex' }} data-tour="grid-rpm-axis">
-          <div style={{ width: 44, flexShrink: 0, background: T.panel }} />
-          {axes.rpm.map((r, ci) => (
-            <button key={r} onClick={() => selectCol(ci)} style={{
-              width: cw, height: 30, flexShrink: 0, border: 'none', borderBottom: `1px solid ${T.line}`, borderLeft: `1px solid ${T.line}`,
-              background: selection?.type === 'col' && selection.col === ci ? T.acc : T.panel,
-              color: selection?.type === 'col' && selection.col === ci ? T.accOn : T.ink2,
-              fontFamily: T.mono, fontSize: 10, fontWeight: 700,
-            }}>{r}</button>
-          ))}
-        </div>
-        {axes.load.map((load, ri) => (
-          <div key={load} style={{ display: 'flex' }}>
-            <button onClick={() => selectRow(ri)} data-tour={axes.loadUnit === 'kPa' ? `grid-load-${load}` : undefined} style={{
-              width: 44, height: ch, flexShrink: 0, border: 'none', borderRight: `1px solid ${T.line}`, borderTop: `1px solid ${T.line}`,
-              background: selection?.type === 'row' && selection.row === ri ? T.acc : T.panel,
-              color: selection?.type === 'row' && selection.row === ri ? T.accOn : T.ink2,
-              fontFamily: T.mono, fontSize: 10, fontWeight: 700,
-            }}>{loadText(axes.loadUnit, load)}</button>
-            {data[ri].map((val, ci) => (
-              <button
-                key={ci}
-                aria-label={`${axes.rpm[ci]} RPM, ${loadText(axes.loadUnit, load)} ${axes.loadUnit}${notTuned.has(`${ri}:${ci}`) ? ', not tuned' : ''}${notReached.has(`${ri}:${ci}`) ? ', not reached yet' : ''}`}
-                data-untuned={notTuned.has(`${ri}:${ci}`) ? 'true' : undefined}
-                data-unreached={notReached.has(`${ri}:${ci}`) ? 'true' : undefined}
-                aria-pressed={isSelected(ri, ci)}
-                onPointerDown={(e) => onCellPointerDown(e, ri, ci)}
-                onPointerEnter={(e) => onCellPointerEnter(e, ri, ci)}
-                onClick={(e) => onCellClick(e, ri, ci)}
-                style={{
-                  width: cw, height: ch, flexShrink: 0,
-                  border: isAnchor(ri, ci) ? `2px solid ${T.acc}` : isSelected(ri, ci) ? `2px solid ${T.ink}`
-                    : notTuned.has(`${ri}:${ci}`) ? `1px dashed ${T.ink2}` : `1px solid ${shadowAlpha(0.35)}`,
-                  // Not tuned: no heat colour, so it does not pass for a value someone chose.
-                  background: notTuned.has(`${ri}:${ci}`) && !diff ? T.panel2
-                    : !diff ? heat(val, min, max) : diff[ri][ci] === 0 ? T.panel2 : diffTint(diff[ri][ci], diffScale),
-                  color: (diff && diff[ri][ci] === 0) || notTuned.has(`${ri}:${ci}`) ? T.ink2 : T.ink,
-                  fontFamily: T.mono, fontSize: dense ? 11 : 12, fontWeight: 700,
-                  // Past the boost the engine makes here: faded back, so the rows it runs
-                  // stand out. Still a cell: a tuner may write it ahead of the boost.
-                  opacity: notReached.has(`${ri}:${ci}`) && !isSelected(ri, ci) ? 0.35 : 1,
-                  // A mouse drag across cells must not start a text selection.
-                  userSelect: 'none',
-                }}
-              >{diff ? formatDelta(diff[ri][ci], decimals) : fmt(val)}</button>
+    <div className={styles.scroll}>
+      <table className={styles.table} role="presentation">
+        <thead>
+          {/* `data-tour` hooks are for the tutorial's callouts, which point at this grid. */}
+          <tr data-tour="grid-rpm-axis">
+            <th className={styles.corner} scope="col"><span>{loadUnit}</span><span>rpm</span></th>
+            {axes.rpm.map((r, ci) => (
+              <th key={r} scope="col" className={styles.colHead}>
+                <button type="button" onClick={() => selectCol(ci)}
+                  data-on={(selection?.type === 'col' && selection.col === ci) || undefined}
+                  data-cross={(cross?.c === ci) || undefined}>{r}</button>
+              </th>
             ))}
-          </div>
-        ))}
-      </div>
+          </tr>
+        </thead>
+        <tbody>
+          {axes.load.map((load, ri) => (
+            <tr key={load}>
+              <th scope="row" className={styles.rowHead}>
+                <button type="button" onClick={() => selectRow(ri)} data-tour={axes.loadUnit === 'kPa' ? `grid-load-${load}` : undefined}
+                  data-on={(selection?.type === 'row' && selection.row === ri) || undefined}
+                  data-cross={(cross?.r === ri) || undefined}>{lx.text(load)}</button>
+              </th>
+              {data[ri].map((val, ci) => {
+                const untunedHere = notTuned.has(`${ri}:${ci}`);
+                const want = marks?.[`${ri}:${ci}`];
+                const marked = want != null && !diff;
+                const selected = isSelected(ri, ci);
+                return (
+                  <td key={ci}>
+                    <button
+                      type="button"
+                      className={styles.cell}
+                      data-rc={`${ri}:${ci}`}
+                      aria-label={`${axes.rpm[ci]} RPM, ${lx.text(load)} ${lx.unit}${untunedHere ? ', not tuned' : ''}${notReached.has(`${ri}:${ci}`) ? ', not reached yet' : ''}${marked ? `, the advisor gives ${fmtWant(want)}` : ''}`}
+                      data-mark={marked ? 'true' : undefined}
+                      data-untuned={untunedHere ? 'true' : undefined}
+                      data-unreached={notReached.has(`${ri}:${ci}`) ? 'true' : undefined}
+                      data-anchor={isAnchor(ri, ci) || undefined}
+                      data-unchanged={(diff && diff[ri][ci] === 0) || undefined}
+                      aria-pressed={selected} data-cell
+                      onPointerDown={(e) => onCellPointerDown(e, ri, ci)}
+                      onPointerEnter={(e) => onCellPointerEnter(e, ri, ci)}
+                      onClick={(e) => onCellClick(e, ri, ci)}
+                      style={{
+                        // Not tuned: no heat colour, so it does not pass for a value someone chose.
+                        background: untunedHere && !diff ? undefined
+                          : !diff ? heat(val, lo, hi) : diff[ri][ci] === 0 ? undefined : diffTint(diff[ri][ci], diffScale),
+                      }}
+                    >{diff ? formatDelta(diff[ri][ci], decimals) : fmt(val)}{marked && <span className={styles.want} aria-hidden="true">→{fmtWant(want)}</span>}</button>
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
+    {!diff && (
+      <div className={styles.key} aria-hidden="true">
+        <span>{fmt(lo)}</span>
+        <span className={styles.ramp} style={{ background: `linear-gradient(to right, ${[0, 0.25, 0.5, 0.66, 0.83, 1].map((t) => heat(lo + t * (hi - lo), lo, hi)).join(', ')})` }} />
+        <span>{fmt(hi)}</span>
+        <span className={styles.keyNote}>this table&apos;s lowest to highest cell</span>
+      </div>
+    )}
     {notReached.size > 0 && (
-      <p data-testid="unreached-note" style={{ margin: '8px 0 0', fontSize: 12, lineHeight: 1.5, color: T.ink2 }}>
-        Faded cells are above the boost this engine makes at that speed (on its last full-throttle pull, or its boost target before the first). They brighten once the engine reaches them.
-      </p>
+      <div data-testid="unreached-note" className={styles.note}>
+        <Info label="About the faded cells" text="Faded cells are above the boost this engine makes at that speed (on its last full-throttle pull, or its boost target before the first). They brighten once the engine reaches them.">
+          <span>Faded: past what the engine reaches</span>
+        </Info>
+      </div>
     )}
     {notTuned.size > 0 && (
-      <p data-testid="untuned-note" style={{ margin: '8px 0 0', fontSize: 12, lineHeight: 1.5, color: T.ink2 }}>
-        Dashed cells are not tuned yet: they hold the edge row&apos;s values, which is what the ECU read there before the axes were extended. Each one is yours once you change it.
-      </p>
+      <div data-testid="untuned-note" className={styles.note}>
+        <Info label="About the dashed cells" text="Dashed cells are not tuned yet: they hold the edge row's values, which is what the ECU read there before the axes were extended. Each one is yours once you change it.">
+          <span>Dashed: not tuned yet</span>
+        </Info>
+      </div>
     )}
     </div>
   );

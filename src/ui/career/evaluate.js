@@ -8,10 +8,10 @@
  * danger it is, not as a success.
  */
 
-import { OCTANE_OPTS, busiestBank, computeTuningScore, simulateSweep } from '../../sim/index.js';
+import { FUEL_CHOICES, busiestBank, computeTuningScore, simulateSweep } from '../../sim/index.js';
 import { pullInputs } from '../state/pullInputs.js';
 
-import { customerCar, idleTest } from './cars.js';
+import { customerCar, idleTest, overrunTest } from './cars.js';
 
 /** @typedef {import('./jobs.js').Job} Job */
 /** @typedef {import('./jobs.js').Criterion} Criterion */
@@ -57,12 +57,14 @@ export const HOW_TO_SEE = {
   score: 'DYNO › SCORE: the Tuning Score of the last pull.',
   fuelIs: 'BUILD › FUEL SYSTEM: the fuel the customer asked for.',
   naOnly: 'BUILD › INDUCTION: no turbo, supercharger or nitrous.',
-  maxRedline: 'BUILD › ENGINE: the rev limit.',
+  maxRedline: 'BUILD › SHORT BLOCK: the rev limit.',
+  pops: 'TUNE › SPARK, Overrun burble. Then LIVE: rev it and lift off, with the Pops channel shown on the stand computer\'s ECU screen: what lights in the exhaust is what the customer hears.',
+  overrunEgt: 'LIVE: rev it and lift off, and watch the EGT channel on the stand computer\'s ECU screen while it pops. Later burble timing and a longer burble run it hotter.',
 };
 
 /**
  * @param {Criterion} c
- * @param {{r: any, state: any, delivered: any, idle: () => ReturnType<typeof idleTest>, score: number}} ctx
+ * @param {{r: any, state: any, delivered: any, idle: () => ReturnType<typeof idleTest>, overrun: () => ReturnType<typeof overrunTest>, score: number}} ctx
  * @returns {CheckResult}
  */
 function check(c, ctx) {
@@ -70,7 +72,9 @@ function check(c, ctx) {
   const wot = r.points.filter((p) => p.openLoop && !(p.nitrousLbMin > 0));
   switch (c.type) {
     case 'events': {
-      const hit = r.events.filter((e) => c.types.includes(e.type));
+      // A miss the log calls grid-bound is as close as the shop's fixed breakpoints go
+      // (sweep.js `gridBound`): the career offers no finer layout, so it is not held against you.
+      const hit = r.events.filter((e) => c.types.includes(e.type) && !e.gridBound);
       return { check: c, pass: hit.length === 0, measured: hit.length ? hit.map((e) => e.msg).join('; ') : 'none in the log' };
     }
     case 'mixture': {
@@ -115,7 +119,7 @@ function check(c, ctx) {
     }
     case 'fuelIs': {
       const idx = ctx.state.build.octaneIdx;
-      return { check: c, pass: idx === c.octaneIdx, measured: `on ${OCTANE_OPTS[idx]?.label ?? '?'}; ${OCTANE_OPTS[c.octaneIdx].label} asked for` };
+      return { check: c, pass: idx === c.octaneIdx, measured: `on ${FUEL_CHOICES[idx]?.label ?? '?'}; ${FUEL_CHOICES[c.octaneIdx].label} asked for` };
     }
     case 'naOnly': {
       const b = ctx.state.build;
@@ -128,6 +132,14 @@ function check(c, ctx) {
     }
     case 'score':
       return { check: c, pass: ctx.score >= c.min, measured: `Tuning Score ${ctx.score}; ${c.min} needed` };
+    case 'pops': {
+      const o = ctx.overrun();
+      return { check: c, pass: o.pops >= c.min, measured: o.pops > 0 ? `${Math.round(o.pops * 100)}% of each charge lights in the exhaust on the overrun; ${Math.round(c.min * 100)}% needed` : 'silent on the overrun: the fuel is cut' };
+    }
+    case 'overrunEgt': {
+      const o = ctx.overrun();
+      return { check: c, pass: o.peakEgtC <= c.max, measured: `peak ${Math.round(o.peakEgtC)} °C lifting off; ${c.max} °C allowed` };
+    }
     default:
       return { check: c, pass: true, measured: '' };
   }
@@ -168,7 +180,9 @@ export function evaluateJob(job, handedBack) {
   const score = computeTuningScore(r).score;
   let idleCache = null;
   const idle = () => (idleCache ??= idleTest(state));
-  const results = job.checks.map((c) => check(c, { r, state, delivered, idle, score }));
+  let overrunCache = null;
+  const overrun = () => (overrunCache ??= overrunTest(state));
+  const results = job.checks.map((c) => check(c, { r, state, delivered, idle, overrun, score }));
   // Judged on the calibration handed back, not on the pulls it took to find the fault:
   // a customer's car often arrives doing damage (that is why it came in), and a
   // diagnosis pull on it is not the shop's fault. What is the shop's fault is sending it

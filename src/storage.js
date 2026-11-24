@@ -136,6 +136,25 @@ export async function loadShop() {
 }
 
 /**
+ * Keeps a save this build cannot read, under a key of its own, before the shop starts anew
+ * over it: a player who opens an older build, or one whose save a bug damaged, does not lose
+ * it for good. One backup, the latest. Best-effort.
+ *
+ * @param {unknown} raw the unreadable save, as `loadShop` parsed it
+ * @returns {Promise<void>}
+ */
+export async function backupShop(raw) {
+  try {
+    const text = JSON.stringify(raw);
+    switch (storageBackend()) {
+      case 'artifact': await window.storage.set(`${SHOP_KEY}-backup`, text); break;
+      case 'local': localStorage.setItem(`${SHOP_KEY}-backup`, text); break;
+      default: memory.set(`${SHOP_KEY}-backup`, text);
+    }
+  } catch { /* best-effort */ }
+}
+
+/**
  * Writes the career shop's save. Best-effort, like `saveCareer`.
  *
  * @param {unknown} shop
@@ -148,6 +167,52 @@ export async function saveShop(shop) {
       case 'artifact': await window.storage.set(SHOP_KEY, raw); return true;
       case 'local': localStorage.setItem(SHOP_KEY, raw); return true;
       default: memory.set(SHOP_KEY, raw); return true;
+    }
+  } catch {
+    return false;
+  }
+}
+
+/** SANDBOX's own engine and calibration, kept apart from the score stats and the shop. */
+const SANDBOX_KEY = 'sandbox';
+/** Bumped when the saved shape changes in a way an older save cannot be read into. */
+export const SANDBOX_SAVE_VERSION = 1;
+
+/**
+ * Reads SANDBOX's saved engine and tables.
+ * @returns {Promise<{build: object, tune: object}|null>} the save, or null if there is none,
+ *   it is unreadable, or it is from a version this build cannot read
+ */
+export async function loadSandbox() {
+  try {
+    let raw;
+    switch (storageBackend()) {
+      case 'artifact': raw = (await window.storage.get(SANDBOX_KEY))?.value ?? null; break;
+      case 'local': raw = localStorage.getItem(SANDBOX_KEY); break;
+      default: raw = memory.get(SANDBOX_KEY) ?? null;
+    }
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    if (s?.v !== SANDBOX_SAVE_VERSION || !s.build || !s.tune) return null;
+    return { build: s.build, tune: s.tune };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Writes SANDBOX's engine and tables. Best-effort: a failure never interrupts play.
+ * @param {{build: object, tune: object}} sandbox
+ * @returns {Promise<boolean>}
+ */
+export async function saveSandbox({ build, tune }) {
+  try {
+    // A selection is where the player's cursor was, not part of the calibration.
+    const raw = JSON.stringify({ v: SANDBOX_SAVE_VERSION, build, tune: { ...tune, selection: null } });
+    switch (storageBackend()) {
+      case 'artifact': await window.storage.set(SANDBOX_KEY, raw); return true;
+      case 'local': localStorage.setItem(SANDBOX_KEY, raw); return true;
+      default: memory.set(SANDBOX_KEY, raw); return true;
     }
   } catch {
     return false;

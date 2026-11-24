@@ -25,10 +25,16 @@ describe('fixLinks', () => {
     expect(fixLinks(null)).toEqual([]);
   });
 
+  it('opens the BUILD stage that holds the part: short block, heads and cam, ignition', () => {
+    expect(fixLinks('lower static compression on BUILD → SHORT BLOCK')[0].href).toBe('#/build/block');
+    expect(fixLinks('raise the valve spring rate on BUILD → HEADS AND CAM')[0].href).toBe('#/build/head');
+    expect(fixLinks('fit higher-output coils on BUILD → IGNITION')[0].href).toBe('#/build/ignition');
+  });
+
   it('every link it can make is a route the app has', () => {
-    const all = 'BUILD → FUEL SYSTEM BUILD → INDUCTION BUILD → ENGINE BUILD → EXHAUST TUNE → AIRFLOW TUNE → SPARK TUNE → FUEL TUNE → INJECTORS TUNE → SENSORS TUNE → BOOST TUNE → VVT TUNE → IDLE TUNE → PROTECT TUNE → TORQUE TUNE → NITROUS';
+    const all = 'BUILD → FUEL SYSTEM BUILD → INDUCTION BUILD → SHORT BLOCK BUILD → HEADS AND CAM BUILD → IGNITION BUILD → ENGINE BUILD → EXHAUST TUNE → AIRFLOW TUNE → SPARK TUNE → FUEL TUNE → INJECTORS TUNE → SENSORS TUNE → BOOST TUNE → VVT TUNE → IDLE TUNE → PROTECT TUNE → TORQUE TUNE → NITROUS';
     const links = fixLinks(all);
-    expect(links).toHaveLength(15);
+    expect(links).toHaveLength(18);
     for (const l of links) expect(ROUTES[l.tab]).toContain(l.section);
   });
 
@@ -65,6 +71,13 @@ describe('fixLinks', () => {
     expect(counts).toEqual({ nitrous: 2, spark: 1 });
   });
 
+  it('does not point the Next bar at a note: a factory torque limit is not a fix', () => {
+    const counts = tuneAttention([
+      { type: 'torquelimit', note: true, rpmStart: 1500, rpmEnd: 6100, fix: 'To go further, raise Crank torque limit by RPM on TUNE → TORQUE.' },
+    ]);
+    expect(counts).toEqual({});
+  });
+
   it('counts causes, not the symptoms grouped under them', () => {
     // Lean boost cells and the lean protection they trip, over the same RPM: one cause,
     // so FUEL is pointed at once.
@@ -73,5 +86,16 @@ describe('fixLinks', () => {
       { type: 'leanprot', rpmStart: 3500, rpmEnd: 4000, fix: 'Check TUNE → FUEL and TUNE → INJECTORS.' },
     ]);
     expect(counts).toEqual({ fuel: 1 });
+  });
+
+  it('lists the pages in the log\'s fix order, so the next step is the log\'s first cause', () => {
+    // Two causes send the player to INJECTORS, one to SENSORS: the MAF is set up first, so
+    // SENSORS leads. Counted, the step once sent the player to INJECTORS first.
+    const counts = tuneAttention([
+      { type: 'fuel', rpmStart: 5600, rpmEnd: 5700, fix: 'Fit larger injectors, then enter their flow on TUNE → INJECTORS.' },
+      { type: 'dutyprot', rpmStart: 5800, rpmEnd: 7500, fix: 'Enter their flow rate on TUNE → INJECTORS.' },
+      { type: 'maf', rpmStart: 1500, rpmEnd: 7500, fix: 'On TUNE → SENSORS, raise the MAF scalar.' },
+    ]);
+    expect(Object.keys(counts)[0]).toBe('sensors');
   });
 });

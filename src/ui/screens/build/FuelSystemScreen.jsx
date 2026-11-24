@@ -1,7 +1,8 @@
 /**
  * BUILD > Fuel System.
  *
- * What is physically FITTED: octane in the tank and the injectors bolted in. What
+ * What is physically FITTED: octane in the tank, where the injectors spray (port or direct;
+ * moved here from Heads and cam) and the injectors bolted in. What
  * the ECU BELIEVES is fitted — the injector scaling it calculates pulse width
  * against — lives on TUNE > Injectors instead, deliberately: `RESCALE ECU TO
  * ###cc` exists precisely because hardware and calibration can disagree, and
@@ -15,7 +16,9 @@
 import { Fuel } from 'lucide-react';
 import React from 'react';
 
-import { DEFAULT_ECU_HW, INJECTOR_OPTS, LINEAR_SCALES, FUEL_CHOICES, PUMP_OPTS, REGULATOR_OPTS, injectorLabel, portKitOf, stockInjectorIdx } from '../../../sim/index.js';
+import {
+  DEFAULT_ECU_HW, INJECTION_OPTS, INJECTOR_OPTS, LINEAR_SCALES, FUEL_CHOICES, FUEL_ORDER, PUMP_OPTS, REGULATOR_OPTS, injectorLabel, portKitOf, stockInjectorIdx,
+} from '../../../sim/index.js';
 import { Toggle } from '../../primitives/Toggle.jsx';
 import { BuildSection } from '../../components/BuildSection.jsx';
 import { SetupNote } from '../../components/ecu/SetupNote.jsx';
@@ -26,6 +29,7 @@ import { ACTIONS } from '../../state/reducer.js';
 import { useBuild } from '../../state/StoreProvider.jsx';
 
 import styles from './FuelSystemScreen.module.css';
+import { useUnits } from '../../units.js';
 
 /**
  * @param {object} props
@@ -35,6 +39,7 @@ import styles from './FuelSystemScreen.module.css';
  */
 export function FuelSystemScreen({ active, onToggle }) {
   const [build, dispatch] = useBuild();
+  const U = useUnits();
   const { octaneIdx, injIdx } = build;
   const fuelSystem = build.fuelSystem ?? DEFAULT_ECU_HW.fuelSystem;
   const sensorHw = build.sensorHw ?? DEFAULT_ECU_HW.sensorHw;
@@ -49,10 +54,10 @@ export function FuelSystemScreen({ active, onToggle }) {
     <BuildSection
       active={active} onClick={() => onToggle('fuel')}
       icon={Fuel} label="Fuel System"
-      sub={`${flexTank ? `Flex E${Math.round(build.ethanolPct ?? 0)}` : FUEL_CHOICES[octaneIdx].label} · ${injectorLabel(injIdx, stockInjectorIdx(build))}`}
+      sub={`${flexTank ? `Flex E${Math.round(build.ethanolPct ?? 0)}` : FUEL_CHOICES[octaneIdx].label}, ${injectorLabel(injIdx, stockInjectorIdx(build))}`}
     >
       <div className={styles.label}>Fuel Octane</div>
-      <Seg label="Fuel Octane" options={FUEL_CHOICES.map((o) => ({ label: o.label, id: o.label }))} value={FUEL_CHOICES[octaneIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'octaneIdx', value: FUEL_CHOICES.findIndex((o) => o.label === v) })} />
+      <Seg variant="rule" equal label="Fuel Octane" options={FUEL_ORDER.map((i) => ({ label: FUEL_CHOICES[i].label, id: FUEL_CHOICES[i].label }))} value={FUEL_CHOICES[octaneIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'octaneIdx', value: FUEL_CHOICES.findIndex((o) => o.label === v) })} />
       <SetupNote paths={['config.stoichMode']} />
       <ExpandableInfo title="What Fuel Octane actually does — and what E85 costs you">
         Octane measures a fuel's resistance to auto-igniting under heat and pressure before the spark fires it — not energy content or "power." Higher octane tolerates more cylinder pressure and temperature before knock, letting a tuner run more advance or more boost safely. It does not add power on its own; it raises the ceiling for how much timing/boost you can use before knock becomes the limit. The number on the pump is the average of two lab tests, (RON + MON) ÷ 2; how your engine weighs them depends on how hot its charge runs for its pressure (Learn article 5), which is why boosted, direct-injected engines get more from a high-octane fuel than its pump number suggests.
@@ -72,8 +77,16 @@ export function FuelSystemScreen({ active, onToggle }) {
         </>
       )}
 
+      <div className={styles.labelSpaced}>Where the injectors spray</div>
+      <Seg label="Fuel injection" variant="rule" equal options={INJECTION_OPTS} value={build.engineConfig?.injection ?? 'port'} onChange={(v) => dispatch({ type: ACTIONS.SET_ENGINE_CONFIG_PATCH, patch: { injection: v === 'direct' ? 'direct' : 'port' } })} />
+      <ExpandableInfo title="Port injection versus direct injection">
+          <b className={styles.em}>Port injection</b> (multi-point manifold injection) puts one injector in each intake runner, aimed at the back of the intake valve. The fuel boils off that hot valve, so it cools the metal, not the air: the charge reaches the cylinder barely colder than it left the manifold. The Nissan VQs here are port-injected.
+          <br /><br /><b className={styles.em}>Direct injection</b> sprays into the cylinder itself, at far higher pressure. The fuel takes its heat of evaporation from the air, and measured on the same engine that is about 14 °C colder on gasoline and 49 °C on E85. Colder air is denser, so more of it gets in (about 6% on gasoline here), and colder end gas takes longer to light itself, so the knock limit rises. That is how the BMW and VW turbo engines here run their compression under boost. There is no port wall for fuel to soak into, either, so a direct-injected engine needs far less acceleration enrichment.
+          <br /><br />Swap one for the other and the fuel tables stay the engine&apos;s own: re-tune after the change, as you would on a real conversion.
+        </ExpandableInfo>
+
       <div className={styles.labelSpaced}>Fuel Injectors</div>
-      <PickList options={INJECTOR_OPTS.map((o) => ({ label: o.label, value: o.label }))} value={INJECTOR_OPTS[injIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'injIdx', value: INJECTOR_OPTS.findIndex((o) => o.label === v) })} />
+      <PickList options={INJECTOR_OPTS.map((o, i) => ({ label: injectorLabel(i, stockInjectorIdx(build)), value: String(i) }))} value={String(injIdx)} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'injIdx', value: Number(v) })} columns={3} />
 
       {build.engineConfig?.injection === 'direct' && (
         <>
@@ -101,10 +114,10 @@ export function FuelSystemScreen({ active, onToggle }) {
       <div className={styles.labelSpaced}>Fuel Pump</div>
       <PickList options={PUMP_OPTS.map((o) => ({ label: o.label, value: o.id }))} value={PUMP_OPTS[fuelSystem.pumpIdx]?.id} onChange={(v) => setFs({ pumpIdx: PUMP_OPTS.findIndex((o) => o.id === v) })} />
       <div className={styles.labelSpaced}>Pressure Regulation</div>
-      <Seg label="Pressure regulation" options={REGULATOR_OPTS.map((o) => ({ id: o.id, label: o.label }))} value={fuelSystem.regulator} onChange={(v) => setFs({ regulator: v })} equal />
+      <Seg variant="rule" label="Pressure regulation" options={REGULATOR_OPTS.map((o) => ({ id: o.id, label: o.label }))} value={fuelSystem.regulator} onChange={(v) => setFs({ regulator: v })} equal />
       <SetupNote paths={['injector.pressureComp']} />
       <div className={styles.labelSpaced}>Base Fuel Pressure</div>
-      <Seg label="Base fuel pressure" options={[250, 300, 350, 400].map((k) => ({ id: k, label: `${(k / 6.895).toFixed(0)} psi` }))} value={fuelSystem.basePressureKpa} onChange={(v) => setFs({ basePressureKpa: Number(v) })} equal />
+      <Seg variant="rule" label="Base fuel pressure" options={[250, 300, 350, 400].map((k) => ({ id: k, label: U.metric ? `${(k / 100).toFixed(1)} bar` : `${(k / 6.895).toFixed(0)} psi` }))} value={fuelSystem.basePressureKpa} onChange={(v) => setFs({ basePressureKpa: Number(v) })} equal />
       <SetupNote paths={['injector.refPressureKpa']} />
       <ExpandableInfo title="Pump, regulator and why pressure is fuel">
         An injector is a calibrated hole: it passes fuel as the <b className={styles.em}>square root of the pressure across it</b>. Its flow rating is only true at the pressure it was measured at — 3 bar, 43.5 psi.
@@ -113,7 +126,7 @@ export function FuelSystemScreen({ active, onToggle }) {
       </ExpandableInfo>
 
       <div className={styles.labelSpaced}>Wideband Controller</div>
-      <Seg label="Wideband controller" options={Object.entries(LINEAR_SCALES.wideband).map(([id, s]) => ({ id, label: s.short ?? s.label }))} value={sensorHw.wideband} onChange={(v) => setSensors({ wideband: v })} equal />
+      <Seg variant="rule" label="Wideband controller" options={Object.entries(LINEAR_SCALES.wideband).map(([id, s]) => ({ id, label: s.short ?? s.label }))} value={sensorHw.wideband} onChange={(v) => setSensors({ wideband: v })} equal />
       <SetupNote paths={['sensors.wideband']} okText="The ECU is set up for this sensor." />
     </BuildSection>
   );

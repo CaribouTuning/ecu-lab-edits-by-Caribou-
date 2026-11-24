@@ -1,0 +1,114 @@
+/* The faces of the things in the shop (Station.jsx): a monitor's screen and a cart's console. */
+
+.station { position: relative; flex: 1; min-height: 0; pointer-events: none; }
+/* No room to put them in: the faces one after the other, a page to scroll. */
+.station[data-flat='true'] {
+  pointer-events: auto; overflow-y: auto; display: flex; flex-direction: column; gap: var(--sp-lg);
+  padding: var(--sp-lg); max-width: 980px; margin: 0 auto; width: 100%; box-sizing: border-box;
+}
+/* Laid out flat (a phone, or no 3D) the screen is as tall as what is on it, and the
+   machine's console is docked along the bottom, always in reach: Start engine and Run a
+   pull were below the fold under a screen held at 80% of the phone's height. */
+.station[data-flat='true'] .face[data-kind='monitor'] { height: auto; min-height: 320px; flex: 1 0 auto; }
+/* The screen fills down to the console, which sits on the bottom edge: a short page (a clean
+   pull's log) left a band of the shop's dark behind it. */
+.station[data-flat='true'] { background: var(--bg); }
+.station[data-flat='true'] .face[data-kind='console'] {
+  order: 2; position: sticky; bottom: 0; z-index: 2; flex: none;
+  /* A size container with an auto height is zero tall: the Run button went with it. */
+  container-type: inline-size; height: auto; min-height: 96px;
+  box-shadow: 0 -8px 16px color-mix(in srgb, var(--bg) 85%, transparent);
+}
+
+
+.face {
+  box-sizing: border-box; width: 100%; height: 100%; overflow: hidden;
+  font-family: var(--sans); font-size: var(--fs-base); line-height: 1.45; color: var(--ink);
+  text-align: left;
+}
+.face * { box-sizing: border-box; }
+
+/* ---------- a monitor ---------- */
+/* The shop's computers run the same Mac in dark mode as the laptop (Desk.module.css
+   .screen): the neutral tokens are the Mac's inside the screen, data colours are not. */
+.face[data-kind='monitor'] {
+  --bg: var(--mac-window); --panel: var(--mac-box); --panel2: var(--mac-box); --panel3: var(--mac-control); --acc: var(--screen-acc); --acc-ink: var(--screen-acc-ink); --acc-bg: var(--screen-acc-bg); --acc-on: var(--screen-acc-on); --data2: var(--screen-data2);
+  --line: var(--mac-separator); --line-hi: var(--mac-control-hi); --pen: var(--mac-separator);
+  --ink: var(--mac-label); --ink-soft: var(--mac-label); --ink2: var(--mac-label2); --ink3: var(--mac-label3);
+  /* The machine's software is a pane of glass like the laptop's windows. */
+  background: color-mix(in srgb, var(--mac-window) 88%, transparent); font-size: 13px;
+  border-radius: 16px; box-shadow: inset 0 1px 0 var(--glass-hi), inset 0 0 0 1px var(--glass-edge);
+}
+.monitor { display: flex; flex-direction: column; height: 100%; }
+/* The software's toolbar, as instrument software draws one: its mark and name at the left,
+   its screens as tabs along the same line, a lamp and the live reading at the right. */
+.titleBar {
+  container-type: inline-size;
+  position: relative; flex: none; display: flex; flex-wrap: wrap; align-items: stretch; gap: 0 14px;
+  /* The software's title strip, as a technical panel's: the screens in it as capsules. */
+  min-height: 38px; padding: 0 10px; background: linear-gradient(var(--strip-hi), var(--strip-lo));
+  box-shadow: inset 0 -1px 0 var(--glass-edge);
+}
+.appName {
+  flex: none; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; pointer-events: none;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.02em; color: var(--mac-label);
+}
+.mark { color: var(--ok); }
+.titleStatus {
+  flex: none; margin-left: auto; display: inline-flex; align-items: center; gap: 7px;
+  font-size: 12px; color: var(--mac-label2); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+/* The run lamp: dark when the machine is idle, lit when it runs. */
+.titleStatus [data-led] { width: 7px; height: 7px; border-radius: 50%; background: var(--mac-control-hi); }
+.titleStatus [data-led='busy'] { background: var(--warn); }
+.titleStatus [data-led='on'] { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+/* The screens: tabs on the toolbar, the open one underlined in the text's own colour. */
+.menu { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+.menu::-webkit-scrollbar { display: none; }
+.menuItem {
+  position: relative; flex: none; min-height: 26px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; white-space: nowrap;
+  color: var(--mac-label2); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.menuItem:hover { color: var(--mac-label); background: var(--glass-chip); }
+.menuItem[aria-pressed='true'] { color: var(--mac-label); }
+.menuItem:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
+.flagged { color: var(--danger-ink); }
+.screen { position: relative; flex: 1; min-height: 0; }
+.screenBody { position: absolute; inset: 0; overflow-y: auto; padding: 10px; overscroll-behavior: contain; touch-action: pan-y; }
+/* Flat, the page scrolls, not the screen inside it. */
+.station[data-flat='true'] .screenBody { position: static; overflow: visible; }
+/* ---------- a console: a plate of switches ---------- */
+.face[data-kind='console'] {
+  background: color-mix(in srgb, var(--panel3) 90%, transparent); border: 0; border-radius: 16px; padding: 0; overflow-y: auto; container-type: size;
+  box-shadow: inset 0 1px 0 var(--glass-hi), inset 0 0 0 1px var(--glass-edge);
+}
+
+
+@media (prefers-reduced-motion: reduce) { .face * { transition: none !important; } }
+
+@container (max-width: 420px) { .appName { font-size: 0; gap: 0; } .menuItem { padding: 0 7px; } }
+/* On a phone the tabs take the toolbar's whole line and the live reading drops under them:
+   side by side, "History" ran into "Peak 297 whp, 280 lb-ft" and "Pull log" wrapped. */
+@container (max-width: 560px) {
+  .appName { display: none; }
+  .titleStatus { flex-basis: 100%; margin-left: 0; padding: 0 0 6px; }
+}
+
+/*
+ * A phone on its side: 390 px of height cannot hold a screen and a console docked under it
+ * (Run a pull sat below the fold).
+ */
+@media (max-height: 500px) and (orientation: landscape) {
+  .station[data-flat='true'] {
+    flex-direction: row; align-items: stretch; height: 100%; overflow: hidden; max-width: none;
+    gap: var(--sp-sm); padding: var(--sp-sm) max(var(--sp-sm), env(safe-area-inset-right)) max(var(--sp-sm), env(safe-area-inset-bottom)) max(var(--sp-sm), env(safe-area-inset-left));
+  }
+  .station[data-flat='true'] .face[data-kind='monitor'] { flex: 1 1 auto; min-width: 0; height: 100%; min-height: 0; }
+  .station[data-flat='true'] .screenBody { position: absolute; overflow-y: auto; }
+  .station[data-flat='true'] .face[data-kind='console'] {
+    position: static; flex: none; width: clamp(210px, 32%, 300px); height: 100%; min-height: 0;
+    overflow-y: auto; box-shadow: none;
+    /* Sized both ways, so its plate sees a box taller than wide and stands in a column. */
+    container-type: size;
+  }
+}

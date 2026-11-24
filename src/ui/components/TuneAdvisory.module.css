@@ -10,10 +10,14 @@
 
 .bannerCell {
   margin-bottom: 2px;
-  font-family: var(--mono);
+  font-family: var(--sans); font-variant-numeric: tabular-nums;
   font-size: 11px;
-  color: var(--cyan);
+  color: var(--ink2);
 }
+
+.maths { margin-top: 8px; }
+.maths > summary { cursor: pointer; color: var(--ink2); font-size: 12px; }
+.mathsBody { margin-top: 4px; font-family: var(--sans); font-variant-numeric: tabular-nums; font-size: 11px; color: var(--ink2); }
 
 /* FUEL's two mixture directions, coloured differently — carried over from
    FuelScreen.module.css's `.cell[data-richen='true']`. Richen (this cell is
@@ -64,16 +68,21 @@
 .ok { color: var(--ok); }
 
 .cellStats {
+  /* A stat table: each figure on its own band, the value at the right. */
   margin: 6px 0 8px;
   display: grid;
-  grid-template-columns: auto auto;
-  column-gap: var(--sp-sm);
-  row-gap: 2px;
+  grid-template-columns: minmax(0, max-content) minmax(72px, max-content);
+  gap: 2px;
+  width: fit-content;
+  max-width: 100%;
+  border-radius: 8px;
+  overflow: hidden;
   font-size: var(--fs-sm);
 }
 
+.cellStats dt, .cellStats dd { padding: 4px 10px; background: var(--glass-soft); }
 .cellStats dt { color: var(--ink2); }
-.cellStats dd { margin: 0; color: var(--ink); font-family: var(--mono); }
+.cellStats dd { margin: 0; color: var(--ink); font-weight: 600; text-align: right; font-family: var(--sans); font-variant-numeric: tabular-nums; }
 
 /* AIRFLOW's stale-VE recommendations, carried over unchanged from
    AirflowScreen.module.css's own .staleBody/.rec/.recTitle/.recText/
@@ -104,7 +113,7 @@
 
 .recCells {
   margin-top: 3px;
-  font-family: var(--mono);
+  font-family: var(--sans); font-variant-numeric: tabular-nums;
   font-size: var(--fs-xs);
   color: var(--cyan);
 }

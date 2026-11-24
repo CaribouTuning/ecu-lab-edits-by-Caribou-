@@ -1,18 +1,18 @@
 /**
  * BUILD > Induction.
  *
- * Turbo kit toggle, turbine and compressor sizing, intercooler, the boost target
- * curve editor (eight RPM columns as bar buttons, tap one to select it, then edit it
- * below with full-width controls), and the Cold Air Intake bolt-on — the one
- * installable part whose physics live on the induction side rather than the exhaust
- * side. See ExhaustScreen for the other two (Cat-Back Exhaust, Long-Tube Headers).
+ * One choice of what forces the air in (none, turbo, supercharger), then only that
+ * kit's settings, each group saying what it changes: turbine and compressor sizing, intercooler
+ * and wastegate (the boost target itself is the tune's, on TUNE → BOOST: BoostTargetEditor),
+ * the supercharger; then nitrous and the MAP sensor in their own groups. The bolt-ons (cold air
+ * intake, headers, cat-back) are on BoltonsScreen.
  */
 
 import { Wind } from 'lucide-react';
 import React from 'react';
 
 import {
-  BLOWER_OPTS, COEFF, COMPRESSOR_OPTS, DEFAULT_ECU_HW, ECU_COEFF, KELVIN_OFFSET, LINEAR_SCALES, MOD_INFO, RPM,
+  BLOWER_OPTS, COEFF, COMPRESSOR_OPTS, DEFAULT_ECU_HW, ECU_COEFF, KELVIN_OFFSET, LINEAR_SCALES,
   TURBINE_OPTS, WASTEGATE_OPTS, blowerCurve, blowerOf, bottlePressurePsi, clamp, compressorWithCount, deriveEngine,
   envFrom, starterRatio, tankFuel, turboAirflowNeedKgS,
 } from '../../../sim/index.js';
@@ -29,17 +29,26 @@ import { ACTIONS } from '../../state/reducer.js';
 import { useBuild, useSession } from '../../state/StoreProvider.jsx';
 
 import styles from './InductionScreen.module.css';
+import { useUnits } from '../../units.js';
 
-// `boltons` dissolved into this screen and ExhaustScreen — this is the induction
-// half. Keep reading label/blurb off MOD_INFO rather than copying the strings, or
-// this list forks from the catalogue it is meant to be a view onto.
-const MODS_HERE = ['intake'];
+// What forces air in, and only that: the turbo, the supercharger, their intercooler, and
+// nitrous. The cold air intake is a bolt-on, with the headers and the cat-back
+// (BoltonsScreen, BUILD › BOLT-ONS).
 
 /** kg/s to lb/min, the unit turbo compressor maps are sold in. */
 const LB_MIN_PER_KG_S = 132.277;
 
 /** What each kind of supercharger is called on the picker. */
 const BLOWER_KIND = { roots: 'Roots', twinscrew: 'Twin-screw', centrifugal: 'Centrifugal' };
+
+/** The one choice that decides what else on this screen applies. */
+const FORCED_OPTS = [{ id: 'none', label: 'None' }, { id: 'turbo', label: 'Turbocharger' }, { id: 'blower', label: 'Supercharger' }];
+/** What each choice does to the engine, in one sentence. */
+const FORCED_WHAT = {
+  none: 'No boost: the engine fills from the atmosphere, so the manifold never goes above outside pressure.',
+  turbo: 'Exhaust drives a compressor: boost builds once there is exhaust to spin it (spool lag), and the wastegate and boost target decide how much.',
+  blower: 'The crank drives a compressor through a belt: boost from just off idle with no lag, set by the pulley, paid for with crank power.',
+};
 
 /**
  * @param {object} props
@@ -49,9 +58,10 @@ const BLOWER_KIND = { roots: 'Roots', twinscrew: 'Twin-screw', centrifugal: 'Cen
  */
 export function InductionScreen({ active, onToggle }) {
   const [build, dispatch] = useBuild();
+  const U = useUnits();
   const [session] = useSession();
   const {
-    turboOn, boostCurve, boostSel, turbineIdx, turbineCount, compressorIdx, mods, nitrous,
+    turboOn, boostCurve, turbineIdx, turbineCount, compressorIdx, mods, nitrous,
   } = build;
   const set = (field, value) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field, value });
 
@@ -59,6 +69,7 @@ export function InductionScreen({ active, onToggle }) {
   const blower = blowerOf(build);
   const fuel = tankFuel(build);
   const curve = React.useMemo(() => (blower ? blowerCurve(build, fuel) : []), [blower, build, fuel]);
+  const kind = turboOn ? 'turbo' : blower ? 'blower' : 'none';
   const setTurbo = (v) => { if (v) set('blowerId', null); set('turboOn', v); };
   const setBlower = (id) => {
     if (!id) { set('blowerId', null); return; }
@@ -81,21 +92,7 @@ export function InductionScreen({ active, onToggle }) {
   const bottlePsi = Math.round(bottlePressurePsi(nitrous?.heater ? ECU_COEFF.N2O_HEATER_SET_K : dayK));
   const jetShare = Math.round(Math.sqrt(Math.max(0, bottlePsi) / COEFF.N2O_REF_BOTTLE_PSI) * 100);
 
-  // Every boost-curve write goes through here. Rebuilding from the RPM axis makes it
-  // structurally impossible for the curve to be the wrong length or to contain a
-  // non-number, which is what previously let a single edit poison the whole sim.
-  const setBoostAt = (i, value) => dispatch({
-    type: ACTIONS.SET_BUILD_FIELD,
-    field: 'boostCurve',
-    value: RPM.map((_, idx) => clamp(Number(idx === i ? value : boostCurve[idx]) || 0, 0, 25)),
-  });
 
-  const installMod = (key) => {
-    if (mods[key]) return;
-    // Fitting a part changes airflow but does NOT edit your logged VE table — the
-    // VE tab will show the gap and let you accept it once you understand why.
-    dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'mods', value: { ...mods, [key]: true } });
-  };
 
   const ceiling = COMPRESSOR_OPTS[compressorIdx].boostCeiling;
   // Sizing by airflow, as a turbo shop does: what the engine asks for at the rev limit
@@ -109,181 +106,95 @@ export function InductionScreen({ active, onToggle }) {
   const gate = build.wastegate ?? DEFAULT_ECU_HW.gate;
   const sensorHw = build.sensorHw ?? DEFAULT_ECU_HW.sensorHw;
   const setGate = (patch) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'wastegate', value: { ...gate, ...patch } });
-  const peakOverCeiling = Math.max(...boostCurve) > ceiling;
-  const selectedOverCeiling = boostCurve[boostSel] > ceiling;
 
   return (
     <BuildSection
       active={active} onClick={() => onToggle('induction')}
       icon={Wind} label="Induction"
-      sub={`${turboOn ? `Turbo · ${turbineCount > 1 ? `Twin ${TURBINE_OPTS[turbineIdx].label.split(' ')[0].toLowerCase()}` : TURBINE_OPTS[turbineIdx].label.split(' ')[0]} turbine · peak ${Math.max(...boostCurve)} psi`
-        : blower ? `${blower.label} · ${ratio.toFixed(2)}:1 pulley · ~${peakBoost.toFixed(0)} psi`
-          : 'Not installed'}${nitrous ? ` · ${nitrous.shotHp} shot ${nitrous.kit} nitrous` : ''}`}
+      sub={`${turboOn ? `Turbo, ${turbineCount > 1 ? `Twin ${TURBINE_OPTS[turbineIdx].label.split(' ')[0].toLowerCase()}` : TURBINE_OPTS[turbineIdx].label.split(' ')[0]} turbine, peak ${U.fmtBoost(Math.max(...boostCurve))}`
+        : blower ? `${blower.label}, ${ratio.toFixed(2)}:1 pulley, ~${U.fmtBoost(peakBoost, U.metric ? 2 : 0)}`
+          : 'Not installed'}${nitrous ? `, ${nitrous.shotHp} shot ${nitrous.kit} nitrous` : ''}`}
     >
-      {/* The card markup below is verbatim out of the dissolved BoltonsScreen: a plain
-          `<button disabled={mods[key]}>` where `disabled` means *installed*, switched
-          visually with `data-installed` rather than a `Button` variant — see the brief
-          for why this stays a plain button. */}
-      <div className={styles.list}>
-        {MODS_HERE.map((key) => (
-          <button
-            key={key} onClick={() => installMod(key)} disabled={mods[key]}
-            className={styles.card} data-installed={mods[key] ? 'true' : 'false'}
-          >
-            <div className={styles.cardHead}>
-              <span className={styles.cardLabel} data-installed={mods[key] ? 'true' : 'false'}>{MOD_INFO[key].label}</span>
-              <span className={styles.cardStatus} data-installed={mods[key] ? 'true' : 'false'}>{mods[key] ? 'INSTALLED' : 'INSTALL'}</span>
-            </div>
-            <div className={styles.cardBlurb}>{MOD_INFO[key].blurb}</div>
-          </button>
-        ))}
-      </div>
-
-      <div className={styles.labelTight}>MAP Sensor</div>
-      <Seg label="MAP sensor" options={Object.entries(LINEAR_SCALES.map).map(([id, s]) => ({ id, label: s.label.split(' (')[0] }))}
-        value={sensorHw.map} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'sensorHw', value: { ...sensorHw, map: v } })} equal />
-      <div className={styles.hint}>A sensor reads up to its rating and no further: a 1-bar sensor tops out at atmospheric and never sees boost.</div>
-      <SetupNote paths={['sensors.map']} okText="The ECU is set up for this sensor."
-        hardwareWarning={turboOn && sensorHw.map === '1bar'
-          ? 'This engine makes boost, and a 1-bar sensor stops reading at atmospheric. The ECU will not see boost and will fuel too little under it. Fit 2.5-bar or bigger.'
-          : null} />
-
-      <Toggle label="Turbo kit" sub="Adds boost near WOT, with spool lag off idle" checked={turboOn} onChange={setTurbo} />
+      <section className={styles.group} aria-label="Forced induction">
+        <div className={styles.groupTitle}>What forces the air in</div>
+        <Seg variant="rule" equal label="Forced induction" options={FORCED_OPTS}
+          value={kind} onChange={(v) => { if (v === 'turbo') setTurbo(true); else if (v === 'blower') setBlower(build.blowerId ?? 'tvs1900'); else { setTurbo(false); setBlower(null); } }} />
+        <p className={styles.groupWhat} data-testid="forced-what">{FORCED_WHAT[kind]}</p>
 
       <div className={styles.subPanel} data-open={turboOn ? 'true' : 'false'}>
         <div className={styles.subPanelInner}>
           {turboOn && Math.max(...boostCurve) <= 0 && (
             <Note>
-              The boost target is 0 psi everywhere, so the turbo only restricts the exhaust and the engine makes less power, not more. Set a boost curve under Boost Target Curve below; 6–8 psi is a sensible first step, with timing taken out of the boost rows on TUNE › SPARK before you pull.
+              The boost target is 0 psi everywhere, so the turbo only restricts the exhaust and the engine makes less power, not more. Set a boost target on TUNE → BOOST; 6–8 psi is a sensible first step, with timing taken out of the boost rows on TUNE › SPARK before you pull.
             </Note>
           )}
+          <div className={styles.subhead}>The turbo <span>sets how fast it spools and how much air it can pass</span></div>
           <div className={styles.label}>Turbine Size</div>
           <PickList options={TURBINE_OPTS.map((o) => ({ label: o.label, value: o.label }))} value={TURBINE_OPTS[turbineIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_TURBINE, value: TURBINE_OPTS.findIndex((o) => o.label === v) })} />
           <div className={styles.labelTight}>Compressor Size</div>
-          <Seg label="Compressor Size" options={COMPRESSOR_OPTS.map((o) => ({ label: o.label, id: o.label }))} value={COMPRESSOR_OPTS[compressorIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'compressorIdx', value: COMPRESSOR_OPTS.findIndex((o) => o.label === v) })} />
-          <div className={styles.ceilingNote}>Ceiling before it runs outside its efficient range: ~{ceiling} psi</div>
+          {/* The aftermarket sizes, and the engine's own factory compressor where it left the
+              factory with one (or is running one now): the factory units are for their engines. */}
+          <PickList options={COMPRESSOR_OPTS
+            .filter((o, idx) => !o.factory || idx === compressorIdx || idx === build.factoryInduction?.compressorIdx)
+            .map((o) => ({ label: o.factory ? `Factory: ${o.label}` : o.label, value: o.label }))}
+            value={COMPRESSOR_OPTS[compressorIdx].label}
+            onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'compressorIdx', value: COMPRESSOR_OPTS.findIndex((o) => o.label === v) })} />
+          <div className={styles.ceilingNote}>Ceiling before it runs outside its efficient range: ~{U.fmtBoost(ceiling, U.metric ? 2 : 0)}</div>
           <div className={styles.labelTight}>Turbos</div>
-          <Seg label="Number of turbos" options={[{ id: 1, label: 'Single' }, { id: 2, label: 'Twin' }]} value={turbineCount} onChange={(v) => set('turbineCount', Number(v))} equal />
+          <Seg variant="rule" label="Number of turbos" options={[{ id: 1, label: 'Single' }, { id: 2, label: 'Twin' }]} value={turbineCount} onChange={(v) => set('turbineCount', Number(v))} equal />
           <div className={styles.hint} data-testid="turbo-airflow" data-over={chokes ? 'true' : 'false'}>
-            At {redline} RPM and {peakPsi} psi this engine needs about {Math.round(needLbMin)} lb/min of air. {turbineCount > 1 ? 'The two compressors choke' : 'This compressor chokes'} at about {Math.round(chokeLbMin)} lb/min.
+            At {redline} RPM and {U.fmtBoost(peakPsi, U.metric ? 2 : 0)} this engine needs about {Math.round(needLbMin)} lb/min of air. {turbineCount > 1 ? 'The two compressors choke' : 'This compressor chokes'} at about {Math.round(chokeLbMin)} lb/min.
             {chokes && ' It cannot feed that: boost will fall away near redline while exhaust back-pressure climbs. Fit a bigger compressor or a second turbo.'}
           </div>
           <ExpandableInfo title="Turbine vs. compressor — different jobs">
-            The turbine sits in the exhaust and spins from exhaust energy — its size sets how quickly it spools (small = fast but chokes exhaust flow up top; large = laggy but flows more at redline). The compressor sits in the intake and does the actual pressurizing — its size sets a practical boost ceiling before it's forced outside its efficient operating range, where a real compressor makes hot, inefficient, knock-prone air. (This app heats the charge at one fixed compressor efficiency, so past the ceiling it warns you rather than heating the air further — see Learn article 34.)
+            The turbine sits in the exhaust and spins from exhaust energy — its size sets how quickly it spools (small = fast but chokes exhaust flow up top; large = laggy but flows more at redline). The compressor sits in the intake and does the actual pressurizing — its size sets a practical boost ceiling before it's forced outside its efficient operating range, where a real compressor makes hot, inefficient, knock-prone air. (This app reads the compressor's efficiency off its map at the flow and pressure ratio it runs, so pushed past the ceiling, or choked at the top end, it heats the charge more and the knock limit falls with it — see Learn article 34.)
             <br /><br />Real turbo shops size compressors by required <b className={styles.em}>airflow</b>, not boost pressure. The industry rule of thumb is about <b className={styles.em}>10 crank horsepower per lb/min of air</b> (roughly 8.5 whp after drivetrain loss) — so a 400 whp target needs a compressor good for roughly 47 lb/min, which you then check against the manufacturer's compressor map. (This app's engines land on that rule, 9.3–10.7 crank hp per lb/min across its factory engines; Learn article 34 has the detail.)
             <br /><br />Big engines often need more air than any one sensible turbo passes, which is why many run a <b className={styles.em}>twin</b> setup: two turbos in parallel, each with its own compressor, pass twice the air at the same boost, and each smaller turbine spools sooner than one huge one would. The line under the Turbos picker compares what your engine draws at the rev limit with where the fitted compressors choke.
             <br /><br />Note that this figure barely changes with fuel. E85 needs far more fuel by volume, but it also releases almost exactly the same energy per unit of <i>air</i> as gasoline, so airflow — not fuel type — sets the power ceiling. Octane still helps, but through better timing, not through a bigger number here.
           </ExpandableInfo>
 
+          <div className={styles.subhead}>Wastegate <span>decides where boost stops rising</span></div>
           <div className={styles.labelTight}>Wastegate Actuator</div>
-          <Seg label="Wastegate actuator" options={WASTEGATE_OPTS.map((o) => ({ id: o.id, label: o.label }))} value={gate.type} onChange={(v) => setGate({ type: v })} equal />
+          <Seg variant="rule" label="Wastegate actuator" options={WASTEGATE_OPTS.map((o) => ({ id: o.id, label: o.label }))} value={gate.type} onChange={(v) => setGate({ type: v })} equal />
           {gate.type === 'pneumatic' && (
             <>
               <div className={styles.labelTight}>Spring Pressure</div>
-              <Seg label="Wastegate spring pressure" options={[4, 5, 7, 10, 14].map((p) => ({ id: p, label: `${p} psi` }))} value={gate.springPsi} onChange={(v) => setGate({ springPsi: Number(v) })} equal />
+              <Seg variant="rule" label="Wastegate spring pressure" options={[4, 5, 7, 10, 14].map((p) => ({ id: p, label: U.fmtBoost(p, U.metric ? 2 : 0) }))} value={gate.springPsi} onChange={(v) => setGate({ springPsi: Number(v) })} equal />
               <div className={styles.hint}>The gate opens at its spring pressure on its own. The boost solenoid can hold it shut longer — it can never open it sooner.</div>
             </>
           )}
 
           {!blower && (
             <div className={styles.intercoolerRow}>
+              <div className={styles.subhead}>Charge cooling <span>colder air is denser and slower to knock</span></div>
               <Toggle label="Intercooler" sub="Cools charge air, buys knock margin under boost" checked={mods.intercooler} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'mods', value: { ...mods, intercooler: v } })} />
             </div>
           )}
 
-          <div className={styles.boostLabel}>Boost Target Curve</div>
-
-          <Panel tight style={{ marginBottom: 10 }}>
-            {/* Tap a bar to select that RPM point, then edit it below with full-width controls. */}
-            <div data-testid="boost-columns" className={styles.columns}>
-              {RPM.map((r, i) => {
-                const on = boostSel === i;
-                const over = boostCurve[i] > ceiling;
-                return (
-                  <button
-                    key={r} onClick={() => dispatch({ type: ACTIONS.SET_BOOST_SEL, value: i })}
-                    className={styles.col} data-selected={on ? 'true' : 'false'}
-                  >
-                    <div className={styles.colValue} data-selected={on ? 'true' : 'false'} data-over={over ? 'true' : 'false'}>
-                      {boostCurve[i]}
-                    </div>
-                    <div
-                      className={styles.colFill} data-selected={on ? 'true' : 'false'} data-over={over ? 'true' : 'false'}
-                      style={{ height: `${(boostCurve[i] / 25) * 72}%`, minHeight: boostCurve[i] > 0 ? 3 : 0 }}
-                    />
-                    <div className={styles.colRpm} data-selected={on ? 'true' : 'false'}>
-                      {r >= 1000 ? (r / 1000).toFixed(1) + 'k' : r}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </Panel>
-
-          <Panel tight style={{ marginBottom: 10 }}>
-            <div className={styles.editorHead}>
-              <span className={styles.editorRpm}>{RPM[boostSel]} RPM</span>
-              <span className={styles.editorValue} data-over={selectedOverCeiling ? 'true' : 'false'}>
-                {boostCurve[boostSel]}<span className={styles.editorUnit}>psi</span>
-              </span>
-            </div>
-            <input type="range" min={0} max={25} step={1} value={boostCurve[boostSel]}
-              onChange={(e) => setBoostAt(boostSel, Number(e.target.value))}
-              className={styles.slider} />
-            <div className={styles.stepRow}>
-              {[-5, -1, 1, 5].map((d) => (
-                <button key={d} onClick={() => setBoostAt(boostSel, (boostCurve[boostSel] ?? 0) + d)}
-                  className={styles.stepButton}>
-                  {d > 0 ? '+' : ''}{d}
-                </button>
-              ))}
-            </div>
-            <div className={styles.presetRow}>
-              <Button variant="ghost" size="sm" style={{ flex: 1 }}
-                onClick={() => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: RPM.map(() => clamp(Number(boostCurve[boostSel]) || 0, 0, 25)) })}>
-                FLAT ACROSS ALL
-              </Button>
-              <Button variant="ghost" size="sm" style={{ flex: 1 }}
-                onClick={() => { const peak = boostCurve[boostSel]; dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: RPM.map((r) => Math.round(peak * clamp((r - 1500) / 2600, 0, 1))) }); }}>
-                SPOOL RAMP
-              </Button>
-              {/* Built from RPM so the curve can never be shorter than the
-                  axis. A hand-written literal previously had seven entries
-                  for eight breakpoints, and the next edit put NaN through
-                  the entire simulation. */}
-              <Button variant="ghost" size="sm" style={{ flex: 1 }}
-                onClick={() => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: RPM.map(() => 0) })}>
-                ZERO
-              </Button>
-            </div>
-            <div className={styles.ceilingWarning} data-over={peakOverCeiling ? 'true' : 'false'}>
-              Compressor efficient to ~{ceiling} psi{peakOverCeiling ? ' — you are past it, expect hot inefficient air' : ''}
-            </div>
-          </Panel>
-
-          <Note tone="warn">Stock calibrations have no real tuning above ~101 kPa. Adding boost without retarding SPARK and richening FUEL in the high-MAP rows will knock hard — run a pull and read the log.</Note>
-
-          <ExpandableInfo title="Why boost costs you timing">
-            Boost packs more air and fuel into the same cylinder volume before combustion starts, raising peak pressure and temperature for a given amount of spark advance. The same timing that was safe with no boost becomes knock-prone at 8-10 psi through the same head and pistons — which is why boosted tunes run less initial timing than a naturally aspirated tune, and why timing has to come out further as boost climbs. Set your target here, then dial in TIMING and AFR to match.
-          </ExpandableInfo>
+          {/* The boost target is the engine computer's, not a part: it is set on TUNE → BOOST, as a
+              tuner sets it in the calibration. BUILD keeps the hardware that makes it. */}
+          <div className={styles.subhead}>Boost target <span>set in the tune, on TUNE → BOOST</span></div>
+          <p className={styles.hint} data-testid="boost-target-pointer">
+            The turbo above makes the boost; how much it is asked for at each speed is the engine computer&apos;s boost target, set on TUNE → BOOST. Now asking for up to {U.fmtBoost(Math.max(...boostCurve), U.metric ? 2 : 0)}.
+          </p>
         </div>
       </div>
 
-      <Toggle label="Supercharger kit" sub="Belt-driven boost: no lag, paid for at the crank" checked={!!blower} onChange={(v) => setBlower(v ? (build.blowerId ?? 'tvs1900') : null)} />
-
       {blower && (
         <div className={styles.subPanelInner}>
+          <div className={styles.subhead}>The blower <span>its size and type set the boost curve&apos;s shape</span></div>
           <div className={styles.label}>Supercharger</div>
           <PickList
-            options={BLOWER_OPTS.map((o) => ({ label: `${o.label} · ${BLOWER_KIND[o.type]}`, value: o.id }))}
+            options={BLOWER_OPTS.map((o) => ({ label: `${o.label}, ${BLOWER_KIND[o.type]}`, value: o.id }))}
             value={blower.id} onChange={(v) => setBlower(v)} />
           <div className={styles.hint}>
             {blower.type === 'centrifugal'
-              ? `${blower.stepUp}:1 internal step-up · impeller rated ${rated.toLocaleString('en-US')} rpm · up to ${blower.boostCeiling} psi`
-              : `${blower.dispL} L per revolution · rated ${rated.toLocaleString('en-US')} rpm · up to ${Math.round(blower.etaPeak * 100)}% efficient`}
+              ? `${blower.stepUp}:1 internal step-up, impeller rated ${rated.toLocaleString('en-US')} rpm, up to ${U.fmtBoost(blower.boostCeiling, U.metric ? 2 : 0)}`
+              : `${blower.dispL} L per revolution, rated ${rated.toLocaleString('en-US')} rpm, up to ${Math.round(blower.etaPeak * 100)}% efficient`}
           </div>
 
           <Panel tight style={{ marginBottom: 10 }}>
+            <div className={styles.subhead}>Pulley <span>the only boost control a blower has</span></div>
             <div className={styles.editorHead}>
               <span className={styles.editorRpm}>Pulley ratio</span>
               <span className={styles.editorValue} data-over={top?.overspeed ? 'true' : 'false'}>
@@ -330,6 +241,7 @@ export function InductionScreen({ active, onToggle }) {
           )}
 
           <div className={styles.intercoolerRow}>
+            <div className={styles.subhead}>Charge cooling <span>colder air is denser and slower to knock</span></div>
             <Toggle label="Intercooler" sub="Cools charge air, buys knock margin under boost" checked={mods.intercooler} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'mods', value: { ...mods, intercooler: v } })} />
           </div>
 
@@ -343,22 +255,26 @@ export function InductionScreen({ active, onToggle }) {
         </div>
       )}
 
-      <div className={styles.labelTight}>Nitrous Kit</div>
-      <Seg label="Nitrous kit" options={[{ id: 'none', label: 'None' }, { id: 'wet', label: 'Wet' }, { id: 'dry', label: 'Dry' }]}
+      </section>
+
+      <section className={styles.group} aria-label="Nitrous">
+      <div className={styles.groupTitle}>Nitrous</div>
+      <p className={styles.groupWhat}>Extra oxygen, sprayed only while it is armed: more power on demand, with less knock margin while it flows. Off, it changes nothing.</p>
+      <Seg variant="rule" label="Nitrous kit" options={[{ id: 'none', label: 'None' }, { id: 'wet', label: 'Wet' }, { id: 'dry', label: 'Dry' }]}
         value={nitrous ? nitrous.kit : 'none'} onChange={(v) => setNitrous(v === 'none' ? null : { kit: v })} equal />
       {nitrous && (
         <>
           <div className={styles.labelTight}>Shot</div>
-          <Seg label="Nitrous shot" options={[50, 75, 100, 150, 200].map((h) => ({ id: h, label: `${h} hp` }))}
+          <Seg variant="rule" label="Nitrous shot" options={[50, 75, 100, 150, 200].map((h) => ({ id: h, label: `${h} hp` }))}
             value={nitrous.shotHp} onChange={(v) => setNitrous({ shotHp: Number(v) })} equal />
           <div className={styles.labelTight}>Bottle</div>
-          <Seg label="Bottle size" options={[10, 15].map((lb) => ({ id: lb, label: `${lb} lb` }))}
+          <Seg variant="rule" label="Bottle size" options={[10, 15].map((lb) => ({ id: lb, label: `${lb} lb` }))}
             value={nitrous.bottleLb} onChange={(v) => setNitrous({ bottleLb: Number(v) })} equal />
-          <Toggle label="Bottle heater" sub="Holds the bottle at 85 °F — about 920 psi" checked={!!nitrous.heater} onChange={(v) => setNitrous({ heater: v })} />
+          <Toggle label="Bottle heater" sub={U.metric ? 'Holds the bottle at 29 °C — about 63 bar' : 'Holds the bottle at 85 °F — about 920 psi'} checked={!!nitrous.heater} onChange={(v) => setNitrous({ heater: v })} />
           <div className={styles.hint}>
             {nitrous.heater
-              ? `The bottle sits near ${bottlePsi} psi: the jets flow about their rated shot.`
-              : `At today's ${Math.round(dayK - KELVIN_OFFSET)} °C the bottle sits near ${bottlePsi} psi: the jets flow about ${jetShare}% of their rated shot.`}
+              ? `The bottle sits near ${U.fmtBoost(bottlePsi, 0)}: the jets flow about their rated shot.`
+              : `At today's ${Math.round(dayK - KELVIN_OFFSET)} °C the bottle sits near ${U.fmtBoost(bottlePsi, 0)}: the jets flow about ${jetShare}% of their rated shot.`}
             {nitrous.kit === 'dry' ? ' A dry kit sprays nitrous only — the ECU adds its fuel through the injectors.' : ' A wet kit brings its own fuel through a second jet.'}
           </div>
           <Note>Arm it from LIVE or the dyno; set where it sprays, the timing it takes out and a dry kit's fuel on TUNE › NITROUS.</Note>
@@ -369,6 +285,20 @@ export function InductionScreen({ active, onToggle }) {
           </ExpandableInfo>
         </>
       )}
+      </section>
+
+      <section className={styles.group} aria-label="Manifold pressure sensor">
+      <div className={styles.groupTitle}>Manifold pressure sensor</div>
+      <p className={styles.groupWhat}>What the ECU reads load with. It makes no power: it decides whether the ECU can see the boost it has to fuel for.</p>
+      <Seg variant="rule" label="MAP sensor" options={Object.entries(LINEAR_SCALES.map).map(([id, s]) => ({ id, label: s.label.split(' (')[0] }))}
+        value={sensorHw.map} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'sensorHw', value: { ...sensorHw, map: v } })} equal />
+      <div className={styles.hint}>A sensor reads up to its rating and no further: a 1-bar sensor tops out at atmospheric and never sees boost.</div>
+      <SetupNote paths={['sensors.map']} okText="The ECU is set up for this sensor."
+        hardwareWarning={(turboOn || blower) && sensorHw.map === '1bar'
+          ? 'This engine makes boost, and a 1-bar sensor stops reading at atmospheric. The ECU will not see boost and will fuel too little under it. Fit 2.5-bar or bigger.'
+          : null} />
+
+      </section>
     </BuildSection>
   );
 }

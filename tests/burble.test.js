@@ -64,3 +64,31 @@ describe('the overrun burble', () => {
     expect(lateSparkQuench(-60)).toBeLessThanOrEqual(0.55);
   });
 });
+
+describe('the career job that asks for it', async () => {
+  const { jobById } = await import('../src/ui/career/jobs.js');
+  const { customerCar } = await import('../src/ui/career/cars.js');
+  const { evaluateJob } = await import('../src/ui/career/evaluate.js');
+  const S = await import('../src/sim/index.js');
+  const job = jobById('pops-bangs');
+  const car = customerCar(job.car);
+  const cal = (st, path, v) => ({ ...st, tune: { ...st.tune, ecu: S.setCal(st.tune.ecu, path, v) } });
+  const on = cal(car, 'ignition.burbleEnabled', true);
+
+  it('is silent as delivered, and the customer will not pay for that', () => {
+    const v = evaluateJob(job, car);
+    expect(v.verdict).toBe('fail');
+    expect(v.results.find((x) => x.check.type === 'pops').measured).toMatch(/silent/);
+  }, 120_000);
+
+  it('passes with the burble written in at the calibration\'s own timing', () => {
+    expect(evaluateJob(job, on).verdict).toBe('pass');
+  }, 120_000);
+
+  it('sends a burble cranked past sense home unsafe: every setting at its most cooks the turbo and the cat', () => {
+    const cranked = cal(cal(cal(cal(on, 'ignition.burbleSparkDeg', -35), 'ignition.burbleSeconds', 6), 'ignition.burbleAirPct', 6), 'ignition.burbleEnabled', true);
+    const v = evaluateJob(job, cranked);
+    expect(v.verdict).toBe('unsafe');
+    expect(v.results.find((x) => x.check.type === 'overrunEgt').pass).toBe(false);
+  }, 120_000);
+});

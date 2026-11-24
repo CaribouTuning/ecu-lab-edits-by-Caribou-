@@ -8,7 +8,6 @@
 
 import React from 'react';
 
-import { Zap } from 'lucide-react';
 
 import { SPARK_MAX_DEG, SPARK_MIN_DEG, layoutById } from '../../../sim/index.js';
 import { AdvisorPanel } from '../../components/AdvisorPanel.jsx';
@@ -17,11 +16,11 @@ import { SelectModeBar } from '../../components/SelectModeBar.jsx';
 import { SelectionDock } from '../../components/SelectionDock.jsx';
 import { LayoutSwitch } from '../../components/LayoutSwitch.jsx';
 import { TuneAdvisory } from '../../components/TuneAdvisory.jsx';
-import { TuningGrid } from '../../components/TuningGrid.jsx';
+import { TuningGrid, advisedMarks } from '../../components/TuningGrid.jsx';
 import { GridOrSurface } from '../../components/surface/GridOrSurface.jsx';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
 import { UndoControls } from '../../components/UndoControls.jsx';
-import { Eyebrow } from '../../primitives/Eyebrow.jsx';
+import { Panel } from '../../primitives/Panel.jsx';
 import { ACTIONS } from '../../state/reducer.js';
 import { useUnreached } from '../../state/reach.js';
 import { useTune } from '../../state/StoreProvider.jsx';
@@ -74,32 +73,34 @@ export function SparkScreen({ calAdvice, children }) {
     <>
       <div className={styles.wrap}>
         <div className={styles.main}>
-          <div className={styles.gridHead}>
-            <Eyebrow icon={Zap}>Ignition Timing</Eyebrow>
-            <UndoControls />
-          </div>
-          <div className={styles.intro}>Degrees of spark advance before top dead center (° BTDC).</div>
-          <LayoutSwitch />
-          <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} diffView={diffView} setDiffView={setDiffView} dims={dims} />
-          <GridOrSurface data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} unit="°" title="Ignition timing" commanded={{ label: 'Spark the ECU commanded', read: (p) => p.commandedTiming }} axes={axes}>
-            <TuningGrid data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.timing} diffView={diffView} diffScale={6} axes={axes} untuned={tune.untuned?.timing ?? null} unreached={unreached} />
-          </GridOrSurface>
+          <Panel title="Ignition Timing" tools={<UndoControls />} className={styles.tablePanel}>
+            <div className={styles.intro}>Degrees of spark advance before top dead center (° BTDC).</div>
+            {/* One toolbar, as a table editor has: the axes, how a tap selects, what the cells show. */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 6, margin: '8px 0 10px' }}>
+              <LayoutSwitch />
+              <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} diffView={diffView} setDiffView={setDiffView} dims={dims} />
+            </div>
+            <GridOrSurface data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} unit="°" title="Ignition timing" commanded={{ label: 'Spark the ECU commanded', read: (p) => p.commandedTiming }} axes={axes}>
+              <TuningGrid data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.timing} diffView={diffView} diffScale={6} axes={axes} untuned={tune.untuned?.timing ?? null} unreached={unreached} marks={advisedMarks(calAdvice.overAdvanced)} />
+            </GridOrSurface>
+          </Panel>
+          {/* The advisor reads this table: right under it, where the eye is, not after the settings. */}
+          <AdvisorPanel headline={report.headline} tone={report.tone}>
+            <TuneAdvisory kind="timing" report={report} />
+          </AdvisorPanel>
 
-          <ExpandableInfo title="Why the app never rewrites your spark or fuel tables">
+          <ExpandableInfo quiet title="Why the app never rewrites your spark or fuel tables">
             The VE table can be corrected straight from logs because volumetric efficiency is a <b className={styles.emInk}>measurement of the hardware</b> — swap a cam and a tuner re-logs airflow, and the wideband says how far each cell was off. Even so, the app shows you the working and waits for you to apply it.
             <br /><br />Spark and fuel are different: they are <b className={styles.emInk}>your calibration</b>, a set of judgement calls about how much risk to take for how much power. A real ECU does not retune itself when you bolt on a turbo — it keeps running the old numbers into the new hardware, which is exactly how engines get hurt.
             <br /><br />So the app tells you what the hardware will now tolerate, and leaves the editing to you. That gap between "what the engine can take" and "what your table asks for" is the entire job.
           </ExpandableInfo>
 
-          <ExpandableInfo title="Why timing has a sweet spot (MBT)">
+          <ExpandableInfo quiet title="Why timing has a sweet spot (MBT)">
             Combustion is not instant — the flame front takes time to burn through the mixture. Timing decides when the burn starts so peak cylinder pressure lands just after top dead center, where it does useful work. Advance too far and pressure peaks before the piston is ready, fighting the crank and risking knock; retard too far and you are burning fuel after the piston has already started down, wasting it as heat. MBT is the least advance that still makes the best torque — past it, more advance buys almost nothing, only risk.
             <br /><br /><b className={styles.emInk}>As a beginner:</b> nudge one cell 1-2° at a time, run a pull, and read the log. If it comes back clean with no knock event, you probably still have room. If you see a knock warning, that cell is your new ceiling — back off to what the log suggests and move on.
           </ExpandableInfo>
           {children}
         </div>
-        <AdvisorPanel headline={report.headline} tone={report.tone}>
-          <TuneAdvisory kind="timing" report={report} />
-        </AdvisorPanel>
       </div>
       <div className={styles.spacer} />
       <SelectionDock data={timing} setData={setTable} selection={selection} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} unit="°" onClose={() => setSelection(null)} kind="timing" baseline={baseline.timing} axes={axes} />

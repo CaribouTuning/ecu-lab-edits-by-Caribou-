@@ -14,13 +14,14 @@
  * `dash-screens.test.jsx` pins for HOME.
  */
 
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_ENGINE_CONFIG, INJECTOR_OPTS, MOD_INFO, deriveEngine } from '../../src/sim/index.js';
+import * as S from '../../src/sim/index.js';
 import { EngineScreen } from '../../src/ui/screens/build/EngineScreen.jsx';
-import { ExhaustScreen } from '../../src/ui/screens/build/ExhaustScreen.jsx';
+import { BoltonsScreen } from '../../src/ui/screens/build/BoltonsScreen.jsx';
 import { FuelSystemScreen } from '../../src/ui/screens/build/FuelSystemScreen.jsx';
 import { InductionScreen } from '../../src/ui/screens/build/InductionScreen.jsx';
 import { ACTIONS } from '../../src/ui/state/reducer.js';
@@ -49,7 +50,7 @@ describe('EngineScreen', () => {
     );
     // Configuration comes straight from the store's default build, not a prop.
     expect(screen.getByRole('group', { name: 'Configuration' })).toBeTruthy();
-    expect(screen.getByText('Custom build — every value below is yours to set. Pick a real engine above to start from a known-good factory configuration instead.')).toBeTruthy();
+    expect(screen.getByText('Custom build: every value on the next stages is yours to set. Pick a factory engine from the list to start from a known-good configuration instead.')).toBeTruthy();
   });
 
   it('reports which section it is when its header is clicked', () => {
@@ -86,18 +87,19 @@ describe('EngineScreen', () => {
 });
 
 describe('InductionScreen', () => {
-  it('reveals the boost editor off the store once the turbo switch is on', () => {
+  it('reveals the turbo hardware once the turbo switch is on, and points to TUNE → BOOST for the target', () => {
     const { container } = mount(<InductionScreen active onToggle={noop} />);
     expect(screen.getByText('Not installed')).toBeTruthy();
-    // The boost-columns block is always mounted and hidden with CSS (`data-open`),
-    // the same hide-not-unmount contract BuildSection uses — so the buttons already
-    // exist pre-click. Assert on `data-open` itself, which is what actually flips
-    // with `turboOn`, rather than on button presence, which does not.
+    // The turbo block is always mounted and hidden with CSS (`data-open`), the same
+    // hide-not-unmount contract BuildSection uses. Assert on `data-open` itself, which is
+    // what actually flips with `turboOn`.
     const subPanel = container.querySelector('[data-open]');
     expect(subPanel.getAttribute('data-open')).toBe('false');
-    fireEvent.click(screen.getByRole('switch', { name: /Turbo kit/ }));
+    fireEvent.click(within(screen.getByRole('group', { name: 'Forced induction' })).getByRole('button', { name: 'Turbocharger' }));
     expect(subPanel.getAttribute('data-open')).toBe('true');
-    expect(within(screen.getByTestId('boost-columns')).getAllByRole('button')).toHaveLength(8);
+    // The boost target is the tune's: BUILD names where it is set and holds no editor for it.
+    expect(screen.getByTestId('boost-target-pointer').textContent).toMatch(/TUNE → BOOST/);
+    expect(screen.queryByTestId('boost-columns')).toBeNull();
   });
 
   it('reports which section it is when its header is clicked', () => {
@@ -107,15 +109,26 @@ describe('InductionScreen', () => {
     expect(onToggle).toHaveBeenCalledWith('induction');
   });
 
-  it('installs the intake bolt-on through the store when its card is clicked', () => {
-    // `boltons` dissolved into this screen and ExhaustScreen — this is the induction
-    // half's only card. If `installMod` were dropped or mis-wired on the move out of
-    // BoltonsScreen, the card would render but the click would never flip
-    // `data-installed`, and this would fail.
+  it('picks one thing that forces the air in, and says what it does', () => {
     mount(<InductionScreen active onToggle={noop} />);
-    const install = screen.getAllByRole('button').find((b) => b.textContent.includes('INSTALL') && !/** @type {HTMLButtonElement} */ (b).disabled);
-    fireEvent.click(install);
-    expect(screen.getByText(MOD_INFO.intake.label).closest('button').getAttribute('data-installed')).toBe('true');
+    const pick = (name) => within(screen.getByRole('group', { name: 'Forced induction' })).getByRole('button', { name });
+    expect(pick('None').getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByTestId('forced-what').textContent).toMatch(/No boost/);
+    fireEvent.click(pick('Supercharger'));
+    expect(pick('Supercharger').getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByTestId('forced-what').textContent).toMatch(/belt/);
+    expect(screen.getByLabelText('Pulley ratio')).toBeTruthy();
+    // a turbo replaces the blower: the two are never fitted together
+    fireEvent.click(pick('Turbocharger'));
+    expect(pick('Supercharger').getAttribute('aria-pressed')).toBe('false');
+    expect(screen.queryByLabelText('Pulley ratio')).toBeNull();
+    fireEvent.click(pick('None'));
+    expect(screen.getByText('Not installed')).toBeTruthy();
+  });
+
+  it('holds only what forces air in: the intake is a bolt-on, not on this stage', () => {
+    mount(<InductionScreen active onToggle={noop} />);
+    expect(screen.queryByText(MOD_INFO.intake.label)).toBeNull();
   });
 });
 
@@ -143,9 +156,24 @@ describe('FuelSystemScreen', () => {
     // avoids also matching the PickList option button, which is still on screen
     // reading "650cc" after the click.
     mount(<FuelSystemScreen active onToggle={noop} />);
-    expect(screen.getByText('91 · 315cc (stock)')).toBeTruthy();
+    expect(screen.getByText('91, 315cc (stock)')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '650cc' }));
-    expect(screen.getByText('91 · 650cc')).toBeTruthy();
+    expect(screen.getByText('91, 650cc')).toBeTruthy();
+  });
+
+  it('sets where the injectors spray, port or direct (moved from Heads and cam)', () => {
+    mount(<FuelSystemScreen active onToggle={noop} />);
+    const group = screen.getByRole('group', { name: 'Fuel injection' });
+    fireEvent.click(within(group).getByRole('button', { name: /Direct/ }));
+    expect(within(group).getByRole('button', { name: /Direct/ }).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('marks "(stock)" on the injector the engine left the factory with, whatever its size', () => {
+    expect(S.injectorLabel(3, 3)).toBe('650cc (stock)');
+    expect(S.injectorLabel(0, 3)).toBe('315cc');
+    expect(S.stockInjectorIdx({ originPresetId: 'n54' })).toBe(S.presetById('n54').parts.injectorIdx);
+    expect(S.stockInjectorIdx({ factoryInjIdx: 2, originPresetId: 'n54' })).toBe(2);
+    expect(S.stockInjectorIdx({})).toBeNull();
   });
 
   /** Makes the engine direct-injected, and prints the fitted port kit so a test can read the build slice. */
@@ -188,32 +216,47 @@ describe('FuelSystemScreen', () => {
   });
 });
 
-describe('ExhaustScreen', () => {
-  it('shows the shell-computed ideal diameter, not one it derived itself', () => {
-    // Fabricated — not something the screen's own inputs (default store state)
-    // could ever produce via `idealExhaustDiameter`. If the screen silently
-    // re-derived the value instead of trusting the prop, this would fail.
-    const ideal = 7.77;
-    mount(<ExhaustScreen active onToggle={noop} idealExhaustDia={ideal} />);
-    expect(screen.getByText(new RegExp(`~${ideal.toFixed(2)} in`))).toBeTruthy();
+describe('BoltonsScreen', () => {
+  it('sizes the pipe from the physics: what it costs, and the smallest that costs under 1%', async () => {
+    mount(<BoltonsScreen active onToggle={noop} />);
+    // Solved after the screen paints, off the render path.
+    expect(screen.getByTestId('exhaust-sizing').textContent).toMatch(/Working out/);
+    await waitFor(() => expect(screen.getByTestId('exhaust-sizing').textContent).toMatch(/This pipe costs/), { timeout: 15000 });
+    expect(screen.getByTestId('exhaust-sizing').textContent).toMatch(/This pipe costs about \d+\.\d% of full power\. The smallest that costs under 1%: \d\.\d in/);
   });
+
+  it('a factory exhaust costs no catalogue engine more than 5% of full power, so none is marked too small', () => {
+    for (const p of S.ENGINE_PRESETS.filter((x) => ['vq35de-revup', 'ls1', 'lq4', 'hemi-392', 'b58-m1'].includes(x.id))) {
+      const cfg = S.benchEngineOf(p);
+      const hw = { turboOn: p.induction.turboOn, turbine: p.induction.turboOn ? S.TURBINE_OPTS[p.induction.turbineIdx] : null, fuel: S.OCTANE_OPTS[p.parts.octaneIdx] };
+      const map = 101.3 + (p.induction.turboOn ? Math.max(...p.induction.boost) * 6.895 : 0);
+      const cost = S.exhaustPowerCost(cfg, p.mods, hw, S.EXHAUST_DIA_OPTS[p.parts.exhaustDiaIdx].dia, S.deriveEngine(cfg).redline, map);
+      expect(cost, p.id).toBeLessThan(0.05);
+      // and a 2.0 in pipe on the V8s is
+      if (cfg.configuration === 'V8') expect(S.exhaustPowerCost(cfg, p.mods, hw, 2.0, S.deriveEngine(cfg).redline, map), p.id).toBeGreaterThan(0.05);
+    }
+  }, 120000);
 
   it('reports which section it is when its header is clicked', () => {
     const onToggle = vi.fn();
-    mount(<ExhaustScreen active={false} onToggle={onToggle} idealExhaustDia={3} />);
-    fireEvent.click(screen.getByText('Exhaust'));
-    expect(onToggle).toHaveBeenCalledWith('exhaust');
+    mount(<BoltonsScreen active={false} onToggle={onToggle} />);
+    fireEvent.click(screen.getByText('Bolt-ons'));
+    expect(onToggle).toHaveBeenCalledWith('boltons');
   });
 
-  it('installs the exhaust and headers bolt-ons through the store when their cards are clicked', () => {
-    // The exhaust half of the dissolved BoltonsScreen — both remaining cards land
-    // here. Clicking each in turn and reading `data-installed` back off the DOM
-    // catches either card losing its `installMod` wiring on the move.
-    mount(<ExhaustScreen active onToggle={noop} idealExhaustDia={3} />);
-    fireEvent.click(screen.getByText(MOD_INFO.exhaust.label).closest('button'));
-    fireEvent.click(screen.getByText(MOD_INFO.headers.label).closest('button'));
-    expect(screen.getByText(MOD_INFO.exhaust.label).closest('button').getAttribute('data-installed')).toBe('true');
-    expect(screen.getByText(MOD_INFO.headers.label).closest('button').getAttribute('data-installed')).toBe('true');
+  it('installs the intake, headers and cat-back bolt-ons through the store when their cards are clicked', () => {
+    // Every bolt-on lives on this stage. Clicking each in turn and reading
+    // `data-installed` back off the DOM catches a card losing its wiring.
+    mount(<BoltonsScreen active onToggle={noop} />);
+    const card = (k) => screen.getByText(MOD_INFO[k].label).closest('button');
+    for (const k of ['intake', 'exhaust', 'headers']) {
+      expect(card(k).getAttribute('data-installed')).toBe('false');
+      fireEvent.click(card(k));
+      expect(card(k).getAttribute('data-installed')).toBe('true');
+    }
+    // And it comes off again: a part on the stand is fitted or removed, not fitted for good.
+    fireEvent.click(card('intake'));
+    expect(card('intake').getAttribute('data-installed')).toBe('false');
   });
 
 });
@@ -373,7 +416,7 @@ describe('the dissolved Bolt-On Parts section', () => {
     mount(<InductionScreen active onToggle={noop} />);
     const onInduction = Object.keys(MOD_INFO).filter((k) => screen.queryByText(MOD_INFO[k].label));
     cleanup();
-    mount(<ExhaustScreen active onToggle={noop} idealExhaustDia={2.5} />);
+    mount(<BoltonsScreen active onToggle={noop} />);
     const onExhaust = Object.keys(MOD_INFO).filter((k) => screen.queryByText(MOD_INFO[k].label));
     expect([...onInduction, ...onExhaust].sort()).toEqual(Object.keys(MOD_INFO).sort());
   });

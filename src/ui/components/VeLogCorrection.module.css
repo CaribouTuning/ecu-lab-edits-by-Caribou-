@@ -11,8 +11,7 @@
 .head {
   margin-bottom: 6px;
   font-size: var(--fs-micro);
-  font-weight: 800;
-  letter-spacing: 0.12em;
+  font-weight: 600;
   color: var(--ink2);
 }
 
@@ -40,7 +39,7 @@
 .grid {
   width: 100%;
   border-collapse: collapse;
-  font-family: var(--mono);
+  font-family: var(--sans); font-variant-numeric: tabular-nums;
   font-size: 10px;
 }
 
@@ -81,4 +80,4 @@
   color: var(--warn-ink);
 }
 
-.maf a { color: var(--acc-ink); font-weight: 800; }
+.maf a { color: var(--acc-ink); font-weight: 600; }

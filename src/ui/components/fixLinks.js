@@ -23,12 +23,11 @@ import { groupByCause } from './fixOrder.js';
 const SCREENS = [
   { re: /\bBUILD (?:→|›|>) FUEL SYSTEM\b/, tab: 'build', section: 'fuel', label: 'BUILD › FUEL SYSTEM' },
   { re: /\bBUILD (?:→|›|>) INDUCTION\b/, tab: 'build', section: 'induction', label: 'BUILD › INDUCTION' },
-  // The short block, the head and cam, and the ignition parts are on BUILD's Engine page.
-  { re: /\bBUILD (?:→|›|>) SHORT BLOCK\b/, tab: 'build', section: 'engine', label: 'BUILD › SHORT BLOCK' },
-  { re: /\bBUILD (?:→|›|>) HEADS AND CAM\b/, tab: 'build', section: 'engine', label: 'BUILD › HEADS AND CAM' },
-  { re: /\bBUILD (?:→|›|>) IGNITION\b/, tab: 'build', section: 'engine', label: 'BUILD › IGNITION' },
+  { re: /\bBUILD (?:→|›|>) SHORT BLOCK\b/, tab: 'build', section: 'block', label: 'BUILD › SHORT BLOCK' },
+  { re: /\bBUILD (?:→|›|>) HEADS AND CAM\b/, tab: 'build', section: 'head', label: 'BUILD › HEADS AND CAM' },
+  { re: /\bBUILD (?:→|›|>) IGNITION\b/, tab: 'build', section: 'ignition', label: 'BUILD › IGNITION' },
   { re: /\bBUILD (?:→|›|>) ENGINE\b/, tab: 'build', section: 'engine', label: 'BUILD › ENGINE' },
-  { re: /\bBUILD (?:→|›|>) EXHAUST\b/, tab: 'build', section: 'exhaust', label: 'BUILD › EXHAUST' },
+  { re: /\bBUILD (?:→|›|>) (?:EXHAUST|BOLT-ONS)\b/, tab: 'build', section: 'boltons', label: 'BUILD › BOLT-ONS' },
   { re: /\bTUNE (?:→|›|>) AIRFLOW\b/, tab: 'tune', section: 'airflow', label: 'TUNE › AIRFLOW' },
   { re: /\bTUNE (?:→|›|>) SPARK\b|\bOn TIMING\b/, tab: 'tune', section: 'spark', label: 'TUNE › SPARK' },
   { re: /\bTUNE (?:→|›|>) FUEL\b(?! SYSTEM)|\bOn AFR\b/, tab: 'tune', section: 'fuel', label: 'TUNE › FUEL' },
@@ -58,10 +57,11 @@ export function fixLinks(text) {
 /**
  * How many of a pull's causes send the player to each TUNE page.
  *
- * @param {{type: string, fix?: string, rpmStart?: number, rpmEnd?: number}[]} events
+ * @param {{type: string, fix?: string, rpmStart?: number, rpmEnd?: number, note?: boolean}[]} events
  * @returns {Record<string, number>} TUNE section id → event count
  */
 export function tuneAttention(events) {
+  // Keys go in as the causes come, so the object's order is the log's: the first cause's page first.
   /** @type {Record<string, number>} */
   const counts = {};
   // Causes, not symptoms: a symptom clears with its cause's fix (fixOrder.js

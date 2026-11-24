@@ -31,6 +31,7 @@ import { ACTIONS } from '../../src/ui/state/reducer.js';
 import { makeRunRecord } from '../../src/ui/state/runLog.js';
 import { StoreProvider, useSession } from '../../src/ui/state/StoreProvider.jsx';
 import EcuLab, { EcuLabApp } from '../../src/ui/EcuLab.jsx';
+import { enterSandbox, goTo } from './nav.js';
 
 // jsdom has no ResizeObserver. recharts' <ResponsiveContainer> (ResultScreen's two
 // charts) needs one to mount at all. Same stub as characterisation.test.jsx.
@@ -178,8 +179,8 @@ const BANDED_RESULT = {
 describe('ResultScreen', () => {
   it('renders the power/torque and AFR/timing panels', () => {
     mount(<ResultScreen chartData={[]} engineDerived={{ redline: 7000 }} />);
-    expect(screen.getByText('POWER & TORQUE')).toBeTruthy();
-    expect(screen.getByText('AFR (COMMANDED VS ACTUAL) / TIMING')).toBeTruthy();
+    expect(screen.getByText('Power and torque against rpm')).toBeTruthy();
+    expect(screen.getByText('Air-fuel ratio, asked for and measured, and spark timing')).toBeTruthy();
   });
 
   it('computes its chart ceiling off the shell-computed engineDerived, not one it derives itself', () => {
@@ -191,6 +192,23 @@ describe('ResultScreen', () => {
     // instead of trusting this one, `engineDerived` would never be undefined and
     // this render would stop throwing.
     expect(() => mount(<ResultScreen chartData={[]} engineDerived={undefined} />)).toThrow();
+  });
+});
+
+describe('ResultScreen dyno cursor', () => {
+  const CHART = [1500, 1600, 1700, 1800].map((rpm, i) => ({ rpm, hp: [100, 140, 130, 120][i], torque: [350, 360, 340, 300][i], afr: 12.5, afrCommanded: 12.6, timing: 20 }));
+
+  it('rests on peak power, with the numbers there, and moves with its slider', () => {
+    mount(<ResultScreen chartData={CHART} engineDerived={{ redline: 7000 }} />);
+    expect(screen.getByTestId('dyno-cursor').textContent).toMatch(/1,600 rpm.*140.*360/);
+    fireEvent.change(screen.getByRole('slider', { name: 'Dyno cursor' }), { target: { value: '1800' } });
+    expect(screen.getByTestId('dyno-cursor').textContent).toMatch(/1,800 rpm.*120.*300/);
+  });
+
+  it('follows the sweep while a pull draws, and offers no slider until it is done', () => {
+    mount(<ResultScreen chartData={CHART.slice(0, 3)} engineDerived={{ redline: 7000 }} running />);
+    expect(screen.getByTestId('dyno-cursor').textContent).toMatch(/1,700 rpm/);
+    expect(screen.queryByRole('slider', { name: 'Dyno cursor' })).toBeNull();
   });
 });
 
@@ -543,7 +561,24 @@ describe('LogScreen', () => {
     mountWithResult(<LogScreen flagged={[{ ri: 4, ci: 3 }, { ri: 4, ci: 4 }, { ri: 3, ci: 1 }]} />, { result: { ...FAKE_RESULT, events: [] } });
     expect(screen.getByText(/Clean pull/)).toBeTruthy();
     const note = screen.getByTestId('log-flagged-elsewhere').textContent;
-    expect(note).toMatch(/3 spark cells past the knock limit at 70 and 40 kPa/);
+    expect(note).toMatch(/3 spark cells past the knock limit in the 40 and 70 kPa rows/);
+    expect(note).toMatch(/A pull at 100% throttle never reads them/);
+  });
+
+  // A playtest pulled a stock EA888 and a stock B58 and read "Step 6 · Hardware … -5" for
+  // the factory torque limit: the computer holding its rated plateau, which is how the
+  // engine is meant to run. A note reads as clean, with the note beside it, unnumbered and
+  // costing nothing.
+  it('reads a pull whose only entry is a note as clean, and shows the note without a step or cost', () => {
+    const event = { type: 'torquelimit', severity: 1, impact: 5, note: true, rpmStart: 1500, rpmEnd: 6100,
+      msg: "Torque held to the calibration's limit (500 Nm at 1500 RPM) across 1500–6100 RPM, by boost",
+      cause: 'Boost was reduced to hold torque at the limit.', fix: 'This is the engine computer\'s own torque limit, not a fault.' };
+    mountWithResult(<LogScreen />, { result: { ...FAKE_RESULT, events: [event] } });
+    expect(screen.getByText(/Clean pull/)).toBeTruthy();
+    const note = screen.getByTestId('log-note').textContent;
+    expect(note).toMatch(/Engine computer: Torque held to the calibration's limit/);
+    expect(note).not.toMatch(/Step \d|-5/);
+    expect(document.querySelector('[data-tone]')).toBeNull();
   });
 
   it('tones an unrecognised event type by its severity, not by a hardcoded name list', () => {
@@ -703,7 +738,7 @@ describe('ScoreScreen', () => {
   it('reads bestScore off the store, not a prop, for the figure it reports', () => {
     mountWithResult(<ScoreScreen scores={{ ...scores, wasBest: false }} />, { bestScore: 9999 });
     expect(screen.getByText('Best: 9999')).toBeTruthy();
-    expect(screen.queryByText('NEW BEST')).toBeNull();
+    expect(screen.queryByText('New best')).toBeNull();
   });
 
   it('takes NEW BEST off the run that was banked, not off a live comparison', () => {
@@ -716,7 +751,7 @@ describe('ScoreScreen', () => {
     // The store's `bestScore` here is deliberately HIGHER than the pull: any screen
     // that went back to comparing the two would print `Best: 9999` and go red.
     mountWithResult(<ScoreScreen scores={{ ...scores, pull: 10, wasBest: true }} />, { bestScore: 9999 });
-    expect(screen.getByText('NEW BEST')).toBeTruthy();
+    expect(screen.getByText('New best')).toBeTruthy();
     expect(screen.queryByText('Best: 9999')).toBeNull();
   });
 
@@ -752,40 +787,38 @@ describe('DYNO while a pull is running', () => {
     render(<EcuLab />);
     // The start screen offers CAREER, SANDBOX and TUTORIAL rather than a single START.
     // SANDBOX is the free-play entry the old button was.
-    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
-    fireEvent.click(screen.getByRole('button', { name: /DYNO/ }));
+    enterSandbox();
+    goTo('DYNO');
 
     // First pull, run to completion, so the switcher and a result both exist.
-    fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Run a pull' }));
     await waitFor(
-      () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
+      () => expect(screen.getByRole('button', { name: 'Run a pull' })).toBeTruthy(),
       { timeout: 10000 },
     );
 
     // Select DATALOG explicitly — the view a careless normalisation would keep
     // showing (as a blank tab) once a second pull starts.
-    fireEvent.click(screen.getByRole('button', { name: 'DATALOG' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Data' }));
     expect(screen.getByText('Datalog')).toBeTruthy();
 
     // Start a second pull. doRun dispatches `running: true` synchronously, inside
     // this very click, before the reveal interval has ticked even once — so no
     // `waitFor` here would let the sweep catch up and paper over the one frame this
     // test exists to check.
-    fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Run a pull' }));
 
     // DATALOG is gone...
     expect(screen.queryByText('Datalog')).toBeNull();
     // ...the switcher is gone (all four of its buttons, DATALOG included)...
-    expect(screen.queryByRole('navigation', { name: 'DYNO pages' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'DATALOG' })).toBeNull();
-    // By prefix: after a pull that logged entries, it is named "PULL LOG, N entries".
-    expect(screen.queryByRole('button', { name: /^PULL LOG/ })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'SCORE' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Data' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Pull log' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Score' })).toBeNull();
     // ...and CURVES is showing instead, unasked-for by the URL.
-    expect(screen.getByText('POWER & TORQUE')).toBeTruthy();
+    expect(screen.getByText('Power and torque against rpm')).toBeTruthy();
 
     await waitFor(
-      () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
+      () => expect(screen.getByRole('button', { name: 'Run a pull' })).toBeTruthy(),
       { timeout: 10000 },
     );
     // Vitest's default per-test budget is 5s, and this test waits for TWO real
@@ -813,8 +846,8 @@ describe('DYNO body gating — HISTORY outlives result', () => {
         <EcuLabApp />
       </StoreProvider>,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
-    fireEvent.click(screen.getByRole('button', { name: /DYNO/ }));
+    enterSandbox();
+    goTo('DYNO');
 
     // Seed a restored run directly, the way RESTORE_CAREER would on a cold start —
     // `result` stays at its initial `null`, exactly as it is after a page reload.
@@ -826,15 +859,15 @@ describe('DYNO body gating — HISTORY outlives result', () => {
     });
     act(() => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'runs', value: [restoredRun] }));
 
-    expect(screen.getByRole('button', { name: 'HISTORY' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'History' })).toBeTruthy();
     // Only HISTORY: the other four sections lead to screens that render nothing
     // without a result, so they must not be offered.
-    expect(screen.queryByRole('button', { name: 'CURVES' })).toBeNull();
-    expect(screen.queryByRole('button', { name: /^PULL LOG/ })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'DATALOG' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'SCORE' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Curves' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Pull log' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Data' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Score' })).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: 'HISTORY' }));
+    fireEvent.click(screen.getByRole('button', { name: 'History' }));
     expect(screen.getByText('Run 1')).toBeTruthy();
   });
 
@@ -842,11 +875,11 @@ describe('DYNO body gating — HISTORY outlives result', () => {
     // The converse: a brand-new career has neither `runs` nor `result`, and the
     // switcher — HISTORY included — must not appear for it to click into.
     render(<EcuLab />);
-    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
-    fireEvent.click(screen.getByRole('button', { name: /DYNO/ }));
+    enterSandbox();
+    goTo('DYNO');
 
-    expect(screen.queryByRole('button', { name: 'HISTORY' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'CURVES' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'History' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Curves' })).toBeNull();
   });
 });
 
@@ -1243,8 +1276,8 @@ describe('DYNO event bands during the reveal', () => {
         <EcuLabApp />
       </StoreProvider>,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
-    fireEvent.click(screen.getByRole('button', { name: /DYNO/ }));
+    enterSandbox();
+    goTo('DYNO');
     act(() => {
       dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'result', value: RESULT_WITH_EVENTS });
       dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'revealCount', value: 0 });
@@ -1257,7 +1290,7 @@ describe('DYNO event bands during the reveal', () => {
     const { container } = mountDynoWith(true);
     // CURVES is on screen — this is the gate under test failing to hide the charts,
     // not the charts being absent for some unrelated reason.
-    expect(screen.getByText('POWER & TORQUE')).toBeTruthy();
+    expect(screen.getByText('Power and torque against rpm')).toBeTruthy();
     expect(container.querySelectorAll('rect[data-tone]')).toHaveLength(0);
     expect(screen.queryByRole('button', { name: /to the whole pull/ })).toBeNull();
   });
@@ -1273,7 +1306,7 @@ describe('DYNO event bands during the reveal', () => {
 });
 
 describe('the DYNO page switcher', () => {
-  it('is a labelled nav, marks the open page, and names PULL LOG with its entry count', async () => {
+  it('is a labelled nav, marks the open page, and flags the pull log when it has entries', async () => {
     let dispatch;
     render(
       <StoreProvider>
@@ -1281,24 +1314,24 @@ describe('the DYNO page switcher', () => {
         <EcuLabApp />
       </StoreProvider>,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Sandbox/ }));
     // A stock pull logs nothing; 15° of extra spark everywhere makes it knock (the default V6
     // on 91 runs best-power timing with 10-15° to its knock limit at full throttle).
     const timing = makeInitialState().tune.timing.map((row) => row.map((v) => v + 15));
     act(() => dispatch({ type: ACTIONS.SET_TABLE, table: 'timing', value: timing }));
-    fireEvent.click(screen.getByRole('button', { name: /DYNO/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
+    goTo('DYNO');
+    fireEvent.click(screen.getByRole('button', { name: 'Run a pull' }));
     await waitFor(
-      () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
+      () => expect(screen.getByRole('button', { name: 'Run a pull' }).hasAttribute('disabled')).toBe(false),
       { timeout: 10000 },
     );
 
-    const nav = screen.getByRole('navigation', { name: 'DYNO pages' });
-    const log = within(nav).getByRole('button', { name: /^PULL LOG, \d+ entr(y|ies)$/ });
-    expect(log.querySelector('[aria-hidden="true"]')).toBeTruthy();
+    // The dyno computer's screens, named for the computer; the open one is the pressed one.
+    const nav = screen.getByRole('navigation', { name: 'Dyno computer screens' });
+    expect(within(nav).getByRole('button', { name: /^Pull log \(new findings\)$/ })).toBeTruthy();
 
-    fireEvent.click(within(nav).getByRole('button', { name: 'DATALOG' }));
-    const current = within(nav).getAllByRole('button').filter((b) => b.getAttribute('aria-current') === 'true');
-    expect(current.map((b) => b.textContent)).toEqual(['DATALOG']);
+    fireEvent.click(within(nav).getByRole('button', { name: 'Data' }));
+    const pressed = within(nav).getAllByRole('button').filter((b) => b.getAttribute('aria-pressed') === 'true');
+    expect(pressed.map((b) => b.textContent)).toEqual(['Data']);
   }, 20000);
 });

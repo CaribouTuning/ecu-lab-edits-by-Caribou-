@@ -17,7 +17,7 @@
  * real fix passes it.
  */
 
-import { INJECTOR_OPTS, OCTANE_OPTS, presetById } from '../../sim/index.js';
+import { INJECTOR_OPTS, MIXTURE_TOLERANCE_PCT, OCTANE_OPTS, presetById } from '../../sim/index.js';
 
 import { IDLES, SAFE, withMods } from './criteria.js';
 
@@ -145,7 +145,7 @@ const FAULTS = {
     checks: (_level) => [
       // Headers and a cat-back change how the engine breathes by a few percent, so the job is
       // finishing the tune: within 2%, where a professional holds full-throttle mixture.
-      { type: 'mixture', kind: 'complaint', pct: 2, label: 'On target at full throttle, all the way to redline' },
+      { type: 'mixture', kind: 'complaint', pct: MIXTURE_TOLERANCE_PCT, label: 'On target at full throttle, all the way to redline' },
     ],
     symptom: (r) => r.pick([
       'Headers and a cat-back went on. My gauge says it goes lean under load.',
@@ -160,7 +160,7 @@ const TEMPLATES = /** @type {Template[]} */ ([
     make: ({ r, level }) => ({
       tier: 1, pay: payAt(300, level, r), rep: 4,
       says: FAULTS.intake.symptom(r), wants: 'Make it run right with the intake. I’m keeping it.',
-      work: ['Intake already fitted', 'Road test, diagnose and correct'],
+      work: ['Intake already fitted', 'Pull it, diagnose and correct'],
       carBuild: FAULTS.intake.build({}), params: {},
       checks: [...FAULTS.intake.checks(level), ...SAFE, idleAt(level)],
       hint: 'It’s still not right at full throttle, and the gauge you left says it’s off.',
@@ -215,7 +215,7 @@ const TEMPLATES = /** @type {Template[]} */ ([
     make: ({ r, level }) => ({
       tier: 1, pay: payAt(420, level, r), rep: 5,
       says: FAULTS.headers.symptom(r), wants: 'Fix the lean condition, all the way to the limiter.',
-      work: ['Headers and exhaust already fitted', 'Road test, log and correct'],
+      work: ['Headers and exhaust already fitted', 'Pull it, read the log and correct'],
       carBuild: FAULTS.headers.build({}), params: {},
       checks: [...FAULTS.headers.checks(level), ...SAFE, idleAt(level)],
       hint: 'Better through the middle, but right at the top it still goes lean on my gauge.',
@@ -298,7 +298,7 @@ const TEMPLATES = /** @type {Template[]} */ ([
         tier: 2, pay: payAt(1400, level, r), rep: 12,
         says: `Bolted on a turbo kit: ${psi} psi, intercooler, 550s. The kit said the ECU would “adapt”. It pulls hard, then it rattles and goes flat.`,
         wants: 'I want to use the boost, but I don’t want to blow it up.',
-        work: ['Turbo kit fitted, injectors scaled', 'Road test and tune for boost'],
+        work: ['Turbo kit fitted, injectors scaled', 'Tune for boost on the dyno'],
         carBuild: (b) => ({ turboOn: true, boostCurve: curve, injIdx: 2, ecuInjectorCc: 550, octaneIdx: 0, mods: { ...b.mods, intercooler: true } }),
         params: { psi },
         checks: [
@@ -340,9 +340,7 @@ const TEMPLATES = /** @type {Template[]} */ ([
       const octaneIdx = r.pick([0, 1]);
       // +2% to +4%: bolt-ons, a street cam a step up from stock and a retune from the log make
       // +4.5% on the VQ35DE, +5.9% on the VQ35HR and +6.4% on the V6 in the air model
-      // (tests/careerFixes.js 'build-na'), so the hardest ask leaves room on every car. Real
-      // VQ builds measure more (MotoIQ's JWT C2 test: +6% from the cams alone); the model's
-      // VQ answers a cam less than that (CLAUDE.md, preset fidelity).
+      // (tests/careerFixes.js 'build-na'), so the hardest ask leaves room on every car.
       const share = r.range(1.02, 1.03 + level * 0.0025);
       const redline = r.pick([null, null, 7200]);
       return {
@@ -394,7 +392,7 @@ const TEMPLATES = /** @type {Template[]} */ ([
 export const TEMPLATE_IDS = TEMPLATES.map((t) => t.id);
 
 /** The template ids a shop at `level` can be offered. @param {number} level */
-export const templatesAt = (level) => TEMPLATES.filter((t) => t.minLevel <= level);
+const templatesAt = (level) => TEMPLATES.filter((t) => t.minLevel <= level);
 
 /** @param {string} id */
 export const templateById = (id) => TEMPLATES.find((t) => t.id === id);

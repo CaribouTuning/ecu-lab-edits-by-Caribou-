@@ -1,0 +1,184 @@
+/*
+ * The engine stand's build software (BuildBench.jsx), inside the stand computer's window:
+ * a source list of the engine's parts on the left, the open part's sheet on the right.
+ * Flat Mac panes divided by hairlines, the way a Mac app lays out a list and its detail.
+ */
+
+.wrap { container-type: inline-size; height: calc(100% + 20px); margin: -10px; }
+.bench {
+  display: grid; grid-template-columns: minmax(170px, 30%) 1fr;
+  height: 100%; min-height: 0;
+}
+
+/* ---- the parts ---- */
+.parts {
+  display: flex; flex-direction: column; min-height: 0; overflow-y: auto;
+  border-right: 1px solid var(--glass-edge); background: transparent; padding: 8px; gap: 2px;
+}
+/* The parts as a Settings list: each a row with its number on a tile. */
+.part {
+  display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; margin: 0;
+  border: 0; border-radius: 10px; background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+}
+.part:hover { background: var(--glass-chip); }
+.part[aria-current='true'] {
+  background: color-mix(in srgb, var(--acc) 30%, transparent);
+  box-shadow: inset 0 1px 0 var(--glass-hi), inset 0 0 0 1px color-mix(in srgb, var(--acc-ink) 18%, transparent);
+}
+/* The summary line on the chosen row is body text on a lighter grey: 3.7:1 in ink2, so ink. */
+.part[aria-current='true'] .partNow { color: var(--ink); }
+.part:focus-visible { outline: 2px solid var(--acc); outline-offset: -2px; }
+.partName { font-size: 13px; font-weight: 600; }
+.partNow { font-size: 11.5px; color: var(--ink2); line-height: 1.35; font-variant-numeric: tabular-nums; }
+
+/* The folded form of the list, for a narrow window: hidden where the list is beside the sheet. */
+.rail { display: none; }
+
+/* ---- the sheet ---- */
+.sheet { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.sheetHead { padding: 12px 16px 10px; border-bottom: 1px solid var(--line); }
+.sheetTitle { margin: 0; font-size: 15px; font-weight: 700; }
+.sheetLead { margin: 4px 0 0; font-size: 12px; color: var(--ink2); line-height: 1.45; }
+.notice { padding: 8px 16px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--ink2); line-height: 1.5; }
+.notice b { color: var(--ink); }
+.sheetBody { padding: 12px 16px 20px; }
+
+/* The engine, turning at the head of the sheet where the stand itself is out of view. */
+.sheet > [role='img'] { flex: none; position: sticky; top: 0; z-index: 3; height: 150px; border-bottom: 1px solid var(--line); border-radius: 0; }
+
+/* A narrow window (the computer on a phone held upright): the parts run across the top. */
+@container (max-width: 560px) {
+  .bench { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .parts { overflow: visible; border-right: 0; border-bottom: 1px solid var(--line); gap: 0; padding: 0; }
+  .part { display: none; }
+  .rail { display: grid; }
+  .parts[data-open] .part { display: flex; padding: 9px 14px; border-radius: 0; border-top: 1px solid var(--line); }
+}
+
+/* Stock, modified or the player's own: a word on the Engine part, and a panel on its sheet. */
+.origin, .changed { margin-left: 6px; font-size: 10.5px; font-weight: 600; padding: 1px 5px; border-radius: 4px; border: 1px solid var(--line-hi); color: var(--ink2); vertical-align: 1px; }
+.origin[data-origin='modified'], .changed { color: var(--warn-ink); border-color: var(--warn-ink); }
+.originPanel { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--line); font-size: 12.5px; line-height: 1.5; color: var(--ink2); }
+.originPanel p { margin: 0; flex: 1; }
+.originPanel b { color: var(--ink); }
+.originBtn { flex: none; height: 28px; padding: 0 14px; border-radius: 999px; border: 0; background: var(--glass-chip); box-shadow: inset 0 1px 0 var(--glass-hi), inset 0 0 0 1px var(--glass-edge); color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; }
+.originBtn:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+
+/* Assembly order: a number on each part, and the way on to the next part or the stand. */
+.step {
+  display: inline-grid; place-items: center; width: 20px; height: 20px; margin-right: 7px; border-radius: 6px; vertical-align: 1px;
+  background: var(--glass-chip); box-shadow: inset 0 1px 0 var(--glass-hi), inset 0 0 0 1px var(--glass-edge);
+  color: var(--ink2); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.part[aria-current='true'] .step { background: linear-gradient(var(--tile-air-hi), var(--tile-air-lo)); color: var(--app-glyph); box-shadow: inset 0 1px 0 var(--glass-hi); }
+.steps { display: flex; justify-content: space-between; gap: 10px; padding: 10px 16px 14px; border-top: 1px solid var(--line); margin-top: auto; }
+.stepBtn, .stepGo { height: 30px; padding: 0 16px; border-radius: 999px; font: inherit; font-size: 13px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.stepBtn { border: 0; background: var(--glass-chip); box-shadow: inset 0 1px 0 var(--glass-hi), inset 0 0 0 1px var(--glass-edge); color: var(--ink); }
+.stepGo { margin-left: auto; border: 0; background: linear-gradient(var(--pill-hi), var(--pill-lo)); box-shadow: inset 0 1px 0 var(--glass-hi), 0 2px 6px var(--glass-shade); color: var(--acc-on); }
+.stepBtn:focus-visible, .stepGo:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+/* Full screen (the bench's own page): the panes framed as one window, the engine turning at
+   the head of the parts list, and room for the sheet. */
+/* The page scrolls as one, the way a long settings sheet does: the parts list stays beside
+   the sheet, and the way on (Back, Next, what has changed) stays at the foot of the screen. */
+.wrap[data-full] { height: auto; margin: 0; border: 1px solid var(--line-hi); border-radius: var(--r-lg); background: var(--bg); }
+.wrap[data-full] .bench { grid-template-columns: minmax(220px, 280px) 1fr; height: auto; align-items: start; }
+.wrap[data-full] .parts { position: sticky; top: 0; overflow: visible; border-radius: var(--r-lg) 0 0 var(--r-lg); }
+.wrap[data-full] .sheet { overflow: visible; min-height: 70vh; }
+.wrap[data-full] .steps { position: sticky; bottom: 0; z-index: 1; background: var(--bg); border-radius: 0 0 var(--r-lg) 0; padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
+.wrap[data-full] .parts > [role='img'] { flex: none; height: 170px; margin: -6px -6px 6px; border-bottom: 1px solid var(--line); }
+.wrap[data-full] .sheetHead { padding: 16px 20px 12px; }
+.wrap[data-full] .sheetTitle { font-size: 18px; }
+.wrap[data-full] .sheetBody { padding: 14px 20px 32px; }
+/* What the build is against the factory, beside the way on. */
+.changes { align-self: center; font-size: 12px; color: var(--ink2); min-width: 0; }
+.changes b { color: var(--warn-ink); font-weight: 600; }
+@container (max-width: 560px) {
+  .wrap[data-full] .bench { grid-template-columns: minmax(0, 1fr); }
+  .wrap[data-full] .sheet { min-width: 0; }
+  .wrap[data-full] .parts { position: sticky; top: 0; overflow: visible; z-index: 2; border-radius: 0; }
+  /* The engine stays in view over the sheet, so a longer stroke or a wider bore is seen
+     growing the block as the slider moves. */
+  .wrap[data-full] .parts > [role='img'] { height: 132px; margin: 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; }
+  .changes { display: none; }
+  .stepName { display: none; }
+  /* The rail above already names the part: the title stays for screen readers, the lead shows. */
+  .sheetTitle { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .wrap[data-full] .sheetHead { padding: 12px 16px 10px; }
+}
+
+/* The folded list: "2/6  Short block", six ticks for where you are in the build, and a
+   chevron. Ticks fill as parts are passed; a part changed from stock carries a warm tick. */
+@container (max-width: 560px) {
+  .rail {
+    grid-template-columns: auto 1fr auto; grid-template-areas: 'step name chev' 'ticks ticks ticks';
+    align-items: center; column-gap: 10px; row-gap: 7px; width: 100%; padding: 9px 14px 8px;
+    border: 0; background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+  }
+  .rail:focus-visible { outline: 2px solid var(--acc); outline-offset: -2px; }
+  .railStep { grid-area: step; font-family: var(--sans); font-variant-numeric: tabular-nums; font-size: 15px; font-weight: 700; }
+  .railOf { font-size: 11px; font-weight: 500; color: var(--ink2); }
+  .railName { grid-area: name; font-size: 14px; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .railChevron { grid-area: chev; color: var(--ink2); }
+  /* One column per part, however many there are (seven: six columns wrapped the last tick). */
+  .ticks { grid-area: ticks; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 3px; }
+  .ticks i { display: block; height: 3px; background: var(--line-hi); }
+  .ticks i[data-state='done'] { background: var(--ink2); }
+  .ticks i[data-state='now'] { background: var(--ink); }
+  .ticks i[data-changed='true'] { box-shadow: 0 -2px 0 var(--warn); }
+}
+
+/* A finger, not a pointer: the way on and the part's own buttons are at least as tall as a
+   thumb (Apple and Google both ask for 44 px; WCAG 2.2 allows 24 as the floor). */
+@media (pointer: coarse) {
+  .stepBtn, .stepGo { min-height: 44px; }
+  .originBtn { min-height: 40px; }
+}
+
+/* A phone on its side: the sheet gets the height. A smaller engine at the head of the list,
+   a slimmer way on, and the changes line left to the Engine part's panel. Still 36 px a
+   button: above WCAG 2.2's 24 px floor, where 44 cost a sixth of the screen. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .wrap[data-full] .parts > [role='img'] { height: 112px; }
+  .wrap[data-full] .steps { padding: 6px 14px calc(6px + env(safe-area-inset-bottom, 0px)); }
+  .stepBtn, .stepGo { min-height: 36px; }
+  .changes { display: none; }
+  .wrap[data-full] .sheetHead { padding: 10px 18px 8px; }
+  .wrap[data-full] .sheetTitle { font-size: 16px; }
+}
+
+/* A wide screen, as a car builder lays out its engine designer: the parts docked at the left,
+   the engine large in the middle on its own floor with its figures under it, the open part's
+   sheet docked at the right. Each column scrolls on its own; the screen does not. */
+.stage { display: none; }
+.wrap[data-wide] { height: 100%; border: 0; border-radius: 0; background: transparent; }
+.wrap[data-wide] .bench { grid-template-columns: 240px minmax(0, 1fr) clamp(400px, 34%, 480px); height: 100%; align-items: stretch; }
+.wrap[data-wide] .parts { position: static; overflow-y: auto; border-radius: 0; padding: 10px 8px; }
+.wrap[data-wide] .stage {
+  position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0;
+  background: radial-gradient(ellipse 70% 55% at 50% 62%, color-mix(in srgb, var(--ink) 9%, var(--bg)) 0%, var(--bg) 72%);
+}
+.wrap[data-wide] .stage > [role='img'] { flex: 1; min-height: 0; height: auto; border: 0; border-radius: 0; background: transparent; }
+.wrap[data-wide] .sheet {
+  overflow-y: auto; min-height: 0; margin: 8px 8px 8px 0; border-radius: 16px;
+  /* Nearly opaque over the moving shop, so no blur: it would cost every frame and show nothing. */
+  background: color-mix(in srgb, var(--mac-window) 92%, transparent);
+  box-shadow: inset 0 1px 0 var(--glass-hi), inset 0 0 0 1px var(--glass-edge), 0 12px 32px var(--glass-shade);
+}
+.wrap[data-wide] .steps { position: sticky; bottom: 0; z-index: 1; background: color-mix(in srgb, var(--mac-window) 94%, transparent); border-top: 1px solid var(--glass-edge); border-radius: 0; }
+/* The engine's figures: a spec plate under it, numbers first, read across. */
+.plate {
+  flex: none; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 0;
+  padding: 14px 20px 18px;
+}
+/* Each figure a small technical readout: its name in a strip, the number under it. */
+.plate > div {
+  display: flex; flex-direction: column; min-width: 0; border-radius: 10px; overflow: hidden;
+  background: var(--glass-soft); box-shadow: inset 0 0 0 1px var(--glass-edge);
+}
+.plate dt { padding: 3px 12px; font-size: 11px; color: var(--ink2); text-align: center; background: linear-gradient(var(--strip-hi), var(--strip-lo)); box-shadow: inset 0 -1px 0 var(--glass-edge); }
+.plate dd { margin: 0; padding: 4px 14px 6px; text-align: center; font-size: 18px; font-weight: 650; font-variant-numeric: tabular-nums; color: var(--ink); white-space: nowrap; }
+.plate small { font-size: 12px; font-weight: 500; color: var(--ink2); }
+.wrap[data-wide] .steps { align-items: center; }
+/* The parts list tags what changed; the sheet's foot keeps to the way on. */
+.wrap[data-wide] .changes { display: none; }

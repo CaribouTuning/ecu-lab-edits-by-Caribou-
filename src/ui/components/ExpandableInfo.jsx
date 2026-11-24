@@ -12,10 +12,10 @@
  */
 
 import { ChevronDown, Info } from 'lucide-react';
-import React, { useId, useState } from 'react';
+import React, { useContext, useId, useState } from 'react';
 
-import { T } from '../theme.js';
 
+import { BuildBenchMode } from './BuildSection.jsx';
 import { inertWhen } from './inert.js';
 
 /**
@@ -24,20 +24,31 @@ import { inertWhen } from './inert.js';
  * @param {React.ReactNode} props.children the prose revealed when it opens
  * @param {boolean} [props.lazy] mount the children only once first opened, for an
  *   article carrying a live game screen that should not run while nobody is reading it
+ * @param {boolean} [props.quiet] a quiet line with an info mark, as on the build bench, for
+ *   a working screen (TUNE) where the controls come first
  * @returns {React.ReactElement}
  */
-export function ExpandableInfo({ title, children, lazy = false }) {
+export function ExpandableInfo({ title, children, lazy = false, quiet: quietProp = false }) {
   const [open, setOpen] = useState(false);
   const [opened, setOpened] = useState(!lazy);
   if (open && !opened) setOpened(true);
   const bodyId = useId();
+  // On the build bench the sheet is controls first: the explanation is a quiet line under
+  // the control it explains, opened when wanted, not a full-width bar between every two.
+  const quiet = useContext(BuildBenchMode) || quietProp;
   return (
-    <div style={{ margin: '10px 0', border: `1px solid ${T.line}`, borderRadius: 10, overflow: 'hidden', background: T.panel }}>
-      <button type="button" aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen((o) => !o)} style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 13px', background: 'none', border: 'none' }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 9, color: T.ink, fontSize: 12.5, fontWeight: 700, textAlign: 'left' }}>
-          <Info size={14} style={{ color: T.acc, flexShrink: 0 }} />{title}
-        </span>
-        <ChevronDown aria-hidden="true" size={15} style={{ color: T.ink2, flexShrink: 0, marginLeft: 8, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
+    // A ruled row, as a contents list draws one, not a card: a stack of these is a list of
+    // articles, and a stack of identical rounded boxes read as a template.
+    <div style={quiet ? { margin: '0 0 2px' } : { borderBottom: '1px solid var(--line)' }}>
+      <button type="button" aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen((o) => !o)} style={quiet
+        // On the build bench: a quiet line under the control, a 16 px info mark and what it
+        // explains, in the secondary ink; the mark turns blue while it is open.
+        ? { display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 32, padding: '4px 0', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink2)', fontSize: 12, fontWeight: 500, textAlign: 'left' }
+        : { width: '100%', minHeight: 44, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 2px', background: 'none', border: 'none', cursor: 'pointer' }}>
+        {quiet ? <><Info aria-hidden="true" size={16} style={{ flex: 'none', color: open ? 'var(--acc-ink)' : 'var(--ink2)' }} /><span>{title}</span></> : (
+          <span style={{ color: 'var(--ink)', fontSize: 13.5, fontWeight: 600, textAlign: 'left', lineHeight: 1.35 }}>{title}</span>
+        )}
+        {!quiet && <ChevronDown aria-hidden="true" size={15} style={{ color: 'var(--ink2)', flexShrink: 0, marginLeft: 8, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />}
       </button>
       {/* Grid rows, not max-height: `1fr` animates to the content's own height, where a
           max-height cap clipped any article taller than it (four Learn articles ran past
@@ -45,7 +56,7 @@ export function ExpandableInfo({ title, children, lazy = false }) {
       {/* inert while shut, as in BuildSection. */}
       <div id={bodyId} {...inertWhen(!open)} style={{ display: 'grid', gridTemplateRows: open ? '1fr' : '0fr', opacity: open ? 1 : 0, transition: 'grid-template-rows .3s ease, opacity .2s ease' }}>
         <div style={{ overflow: 'hidden', minHeight: 0 }}>
-          <div style={{ padding: '0 13px 13px', fontSize: 12.5, color: T.ink2, lineHeight: 1.65 }}>{opened ? children : null}</div>
+          <div style={quiet ? { margin: '6px 0 8px', padding: '2px 0 2px 12px', borderLeft: `2px solid var(--line-hi)`, fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.65 } : { padding: '0 2px 16px', maxWidth: '72ch', fontSize: 13, color: 'var(--ink2)', lineHeight: 1.65 }}>{opened ? children : null}</div>
         </div>
       </div>
     </div>

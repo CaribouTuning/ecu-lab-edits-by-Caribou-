@@ -32,7 +32,7 @@ export function MapSlots({ compact = false }) {
   return (
     <div className={styles.wrap}>
       <div className={styles.row} role="group" aria-label="Map slot">
-        <span className={styles.label}>MAP</span>
+        <span className={styles.label} title="Each map is a whole tune. Tap one to run it; an empty map starts as a copy of the one running. A dot marks a map with a tune stored in it.">Map</span>
         {maps.map((m, i) => (
           <button
             key={i} type="button" className={styles.slot} aria-pressed={i === active}
@@ -60,11 +60,6 @@ export function MapSlots({ compact = false }) {
             </select>
           )}
         </div>
-      )}
-      {!compact && (
-        <p className={styles.caption}>
-          Each map is a whole tune. Tap one to run it; an empty map starts as a copy of the one running. A dot marks a map with a tune stored in it.
-        </p>
       )}
     </div>
   );

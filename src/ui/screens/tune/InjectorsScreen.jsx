@@ -77,18 +77,18 @@ export function InjectorsScreen({ dutyPreview, dutyRpm = 6500, injectorCc, child
         <div className={styles.matchNote}>ECU scaling matches the fitted injectors.</div>
       )}
       {portKitOf(build) && <PortKitScaling build={build} dispatch={dispatch} />}
-      <ExpandableInfo title="Injector scaling — the step everyone forgets">
+      <ExpandableInfo quiet title="Injector scaling — the step everyone forgets">
         The ECU never commands "fuel" — it commands a pulse width, calculated for the injector size it has been <i>told</i> is fitted. Bolt in bigger injectors without updating that number and every pulse delivers proportionally more fuel than intended, so the engine runs rich everywhere regardless of what your AFR table says.
         <br /><br />Every real tuning platform has this constant: UpRev calls it the <b className={styles.em}>K-fuel multiplier</b> (lower it for bigger injectors), HP Tuners calls it <b className={styles.em}>injector flow rate</b>. It is the first thing you change after a fuel system upgrade, before touching any table.
       </ExpandableInfo>
 
-      <ExpandableInfo title="Why injector duty cycle limits everything">
+      <ExpandableInfo quiet title="Why injector duty cycle limits everything">
         Injectors flow a rated amount of fuel, and the ECU controls delivery by varying how long each stays open per cycle. As RPM and airflow rise, more fuel is needed in less time, and eventually the injector is open almost the whole cycle — that is duty cycle nearing 100%. Past about 90%, there is no more room to add fuel even if the AFR table calls for it, so the mixture leans out on its own regardless of what you commanded.
       </ExpandableInfo>
 
       <Panel tight className={styles.dutyPanel} data-tour="inj-duty">
         <div className={styles.dutyHead}>
-          <div className={styles.dutyHeadLabel}>INJECTOR DUTY PREVIEW · WOT @ {dutyRpm} RPM</div>
+          <div className={styles.dutyHeadLabel}>Injector duty at full throttle, {dutyRpm.toLocaleString('en-US')} rpm</div>
           {fuel.stoich < 14 && <div className={styles.dutyFuelNote}>{fuel.label} stoich {fuel.stoich}:1</div>}
         </div>
         <div className={styles.dutyBarWrap}>

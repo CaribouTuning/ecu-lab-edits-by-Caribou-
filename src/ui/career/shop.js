@@ -5,12 +5,43 @@
  * another.
  */
 
+
+import { upgradeEcuCalibration } from '../../sim/index.js';
 import { EQUIPMENT, MILESTONES, STARTING_PAGES, STARTING_SECTIONS, TRAINING } from './catalog.js';
 import { customerCar } from './cars.js';
 import { dayOffers } from './generate.js';
 import { JOBS, jobById } from './jobs.js';
 
 export const SAVE_VERSION = 1;
+
+/**
+ * How a save of one version becomes the next: `MIGRATIONS[n]` takes a version-n save and
+ * returns a version-(n + 1) one.
+ * @type {Record<number, (save: any) => any>}
+ */
+export const MIGRATIONS = {};
+
+/**
+ * A save brought up to the current version through `MIGRATIONS`, or as it was if there is
+ * no way to (a newer build's, or damaged).
+ * @param {unknown} raw
+ * @returns {unknown}
+ */
+export function migrateCareer(raw) {
+  let c = /** @type {any} */ (raw);
+  while (c && typeof c === 'object' && Number.isInteger(c.v) && c.v < SAVE_VERSION && MIGRATIONS[c.v]) c = MIGRATIONS[c.v](c);
+  return c;
+}
+
+/**
+ * Whether this build can read a save: it is a shop save, and of this version once migrated.
+ * @param {unknown} raw
+ * @returns {boolean}
+ */
+export function canReadCareer(raw) {
+  const c = /** @type {any} */ (migrateCareer(raw));
+  return !!c && typeof c === 'object' && c.v === SAVE_VERSION;
+}
 export const START_MONEY = 1000;
 
 /**
@@ -50,6 +81,8 @@ export const START_MONEY = 1000;
  * @property {number} [lastSeen] the `seq` of the last hand-back the player has read
  * @property {number} seed this career's own random seed: its customers are its own
  * @property {string[]} offers today's walk-in customers (generated job ids)
+ * @property {boolean} [introDone] the welcome has been read
+ * @property {{ch: number, read: string[], done: boolean}} [saga] the story: the open chapter, messages read, finished (story.js)
  */
 
 /**
@@ -72,7 +105,8 @@ export const START_MONEY = 1000;
 export function newCareer(seed = Math.floor(Math.random() * 2 ** 32)) {
   return withOffers({
     v: SAVE_VERSION, money: START_MONEY, rep: 0, day: 1,
-    owned: ['laptop', 'wideband'], trained: [], done: {}, lifts: [], working: null,
+    // The dyno is Ray's, in the bay from the first day: every job is measured on it.
+    owned: ['laptop', 'wideband', 'dyno'], trained: [], done: {}, lifts: [], working: null,
     history: [], milestones: [], storyDone: false, last: null, lastSeen: 0,
     seed: seed >>> 0, offers: [],
   });
@@ -111,18 +145,25 @@ export function nextDay(c) {
  * @returns {Career}
  */
 export function reviveCareer(raw) {
-  const c = /** @type {any} */ (raw);
+  const c = /** @type {any} */ (migrateCareer(raw));
   if (!c || typeof c !== 'object' || c.v !== SAVE_VERSION) return newCareer();
   const fresh = newCareer(typeof c.seed === 'number' ? c.seed : undefined);
   const revived = {
     ...fresh, ...c,
     seed: fresh.seed,
-    owned: Array.isArray(c.owned) ? c.owned : fresh.owned,
+    // A save from when the dyno had to be bought has it now: the shop always had Ray's.
+    owned: Array.isArray(c.owned) ? [...new Set([...c.owned, 'dyno'])] : fresh.owned,
     trained: Array.isArray(c.trained) ? c.trained : [],
-    lifts: Array.isArray(c.lifts) ? c.lifts.filter((l) => l && jobById(l.jobId) && l.car?.build && l.car?.tune) : [],
+    lifts: Array.isArray(c.lifts) ? c.lifts : [],
     history: Array.isArray(c.history) ? c.history : [],
     milestones: Array.isArray(c.milestones) ? c.milestones : [],
   };
+  // A save from when the shop had cars of its own: those were for driving in town, which
+  // is gone, so they and any job that stood in for one go.
+  for (const k of ['cars', 'starterGiven', 'look', 'wardrobe', 'looks', 'found', 'races', 'raceDay', 'meetDay', 'meets', 'junk', 'daily', 'streak', 'decor', 'ach', 'track']) delete revived[k];
+  revived.lifts = revived.lifts.filter((l) => l && jobById(l.jobId) && l.car?.build && l.car?.tune);
+  // A car on a lift keeps its calibration as saved, brought up to this build's settings.
+  revived.lifts = revived.lifts.map((l) => (l.car.tune.ecu ? { ...l, car: { ...l.car, tune: { ...l.car.tune, ecu: upgradeEcuCalibration(l.car.tune.ecu) } } } : l));
   return Array.isArray(c.offers) && c.offers.every((id) => typeof id === 'string' && jobById(id)) ? revived : withOffers(revived);
 }
 
@@ -131,21 +172,20 @@ export const capacity = (c) => 1 + (c.owned.includes('lift2') ? 1 : 0) + (c.owne
 
 /**
  * What the shop costs to open for a day: rent, and the running costs of what it has
- * grown into (each extra lift is floor space and a tech, the dyno needs power and
- * servicing, the lounge its coffee). Charged every time the day moves on, so growth is
+ * grown into (each extra lift is floor space and a tech, the lounge its coffee). Charged every time the day moves on, so growth is
  * a decision, and money earned has somewhere to go. Never stops play: a shop in the red
  * can still take work, it just cannot buy anything.
  * @param {Career} c
  */
 export const overhead = (c) => 40 + 70 * (capacity(c) - 1)
-  + (c.owned.includes('dyno') ? 60 : 0) + (c.owned.includes('lounge') ? 50 : 0)
+  + (c.owned.includes('lounge') ? 50 : 0)
   + (c.owned.includes('expansion') ? 120 : 0);
 
 /** The day moves on: the running costs are paid, and tomorrow's customers arrive. @param {Career} c */
 const advanceDay = (c) => withOffers({ ...c, day: c.day + 1, money: c.money - overhead(c) });
 
 /** How many customers wait on the board. @param {Career} c */
-export const boardSize = (c) => 3 + (c.owned.includes('sign') ? 1 : 0);
+const boardSize = (c) => 3 + (c.owned.includes('sign') ? 1 : 0);
 
 /** @param {Career} c @param {string} page a TUNE section id */
 export const pageUnlocked = (c, page) => STARTING_PAGES.includes(page)
@@ -244,16 +284,20 @@ export function deliver(c, jobId, v, extra = {}) {
   const leaves = v.verdict !== 'fail';
   const tip = v.verdict === 'pass' && c.owned.includes('lounge') ? Math.round(v.pay * 0.1) : 0;
   const paid = v.pay + tip - v.repair;
+  // Reputation never goes under zero: the change shown and kept is the one that happened (a new
+  // shop at 0 told "Reputation -2" while its reputation stayed at 0).
+  const rep = Math.max(0, c.rep + v.rep);
+  const repChange = rep - c.rep;
   const next = {
     ...c,
     money: c.money + paid,
-    rep: Math.max(0, c.rep + v.rep),
+    rep,
     done: v.verdict === 'pass' && !job.generated ? { ...c.done, [jobId]: c.day } : c.done,
     lifts: leaves ? c.lifts.filter((l) => l.jobId !== jobId) : c.lifts,
     working: leaves ? null : c.working,
-    history: [{ day: c.day, jobId, verdict: v.verdict, paid, repChange: v.rep, boosted: !!extra.boosted, built: !!job.build && v.verdict === 'pass', peakHp: Math.round(v.peakHp) }, ...c.history].slice(0, 60),
+    history: [{ day: c.day, jobId, verdict: v.verdict, paid, repChange, boosted: !!extra.boosted, built: !!job.build && v.verdict === 'pass', peakHp: Math.round(v.peakHp) }, ...c.history].slice(0, 60),
     last: {
-      jobId, verdict: v.verdict, paid, repChange: v.rep, repair: v.repair, line: v.line, leaves,
+      jobId, verdict: v.verdict, paid, repChange, repair: v.repair, line: v.line, leaves,
       results: v.results.map((x) => ({ label: x.check.label, kind: x.check.kind, type: x.check.type, pass: x.pass, measured: x.measured })),
       seq: (c.last?.seq ?? 0) + 1,
     },
@@ -269,12 +313,13 @@ export function deliver(c, jobId, v, extra = {}) {
  * @returns {Career}
  */
 export function giveUp(c, jobId) {
+  const rep = Math.max(0, c.rep - 2);
   return advanceDay({
     ...c,
-    rep: Math.max(0, c.rep - 2),
+    rep,
     lifts: c.lifts.filter((l) => l.jobId !== jobId),
     working: c.working === jobId ? null : c.working,
-    history: [{ day: c.day, jobId, verdict: /** @type {'fail'} */ ('fail'), paid: 0, repChange: -2, boosted: false, peakHp: 0 }, ...c.history].slice(0, 60),
+    history: [{ day: c.day, jobId, verdict: /** @type {'fail'} */ ('fail'), paid: 0, repChange: rep - c.rep, boosted: false, peakHp: 0 }, ...c.history].slice(0, 60),
   });
 }
 

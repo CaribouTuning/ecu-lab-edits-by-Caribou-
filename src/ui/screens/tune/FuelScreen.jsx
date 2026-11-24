@@ -7,7 +7,6 @@
 
 import React from 'react';
 
-import { Droplets } from 'lucide-react';
 
 import { layoutById } from '../../../sim/index.js';
 import { AdvisorPanel } from '../../components/AdvisorPanel.jsx';
@@ -16,11 +15,11 @@ import { SelectModeBar } from '../../components/SelectModeBar.jsx';
 import { SelectionDock } from '../../components/SelectionDock.jsx';
 import { LayoutSwitch } from '../../components/LayoutSwitch.jsx';
 import { TuneAdvisory } from '../../components/TuneAdvisory.jsx';
-import { TuningGrid } from '../../components/TuningGrid.jsx';
+import { TuningGrid, advisedMarks } from '../../components/TuningGrid.jsx';
 import { GridOrSurface } from '../../components/surface/GridOrSurface.jsx';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
 import { UndoControls } from '../../components/UndoControls.jsx';
-import { Eyebrow } from '../../primitives/Eyebrow.jsx';
+import { Panel } from '../../primitives/Panel.jsx';
 import { ACTIONS } from '../../state/reducer.js';
 import { useUnreached } from '../../state/reach.js';
 import { useTune } from '../../state/StoreProvider.jsx';
@@ -64,18 +63,23 @@ export function FuelScreen({ calAdvice, children }) {
     <>
       <div className={styles.wrap}>
         <div className={styles.main}>
-          <div className={styles.gridHead}>
-            <Eyebrow icon={Droplets}>Air-Fuel Ratio Target</Eyebrow>
-            <UndoControls />
-          </div>
-          <div className={styles.intro}>Target air:fuel ratio the ECU aims for. Divide by 14.7 to read it as lambda.</div>
-          <LayoutSwitch />
-          <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} diffView={diffView} setDiffView={setDiffView} dims={dims} />
-          <GridOrSurface data={afr} min={10} max={18} decimals={1} unit="AFR" title="Target air-fuel ratio" commanded={{ label: 'AFR the ECU commanded', read: (p) => p.afrCommanded }} axes={axes}>
-            <TuningGrid data={afr} min={10} max={18} decimals={1} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.afr} diffView={diffView} diffScale={1} axes={axes} untuned={tune.untuned?.afr ?? null} unreached={unreached} />
-          </GridOrSurface>
+          <Panel title="Air-Fuel Ratio Target" tools={<UndoControls />} className={styles.tablePanel}>
+            <div className={styles.intro}>Target air:fuel ratio the ECU aims for. Divide by 14.7 to read it as lambda.</div>
+            {/* One toolbar, as a table editor has: the axes, how a tap selects, what the cells show. */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 6, margin: '8px 0 10px' }}>
+              <LayoutSwitch />
+              <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} diffView={diffView} setDiffView={setDiffView} dims={dims} />
+            </div>
+            <GridOrSurface data={afr} min={10} max={18} decimals={1} unit="AFR" title="Target air-fuel ratio" commanded={{ label: 'AFR the ECU commanded', read: (p) => p.afrCommanded }} axes={axes}>
+              <TuningGrid data={afr} min={10} max={18} decimals={1} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.afr} diffView={diffView} diffScale={1} axes={axes} untuned={tune.untuned?.afr ?? null} unreached={unreached} marks={advisedMarks(calAdvice.wrongMix)} />
+            </GridOrSurface>
+          </Panel>
+          {/* The advisor reads this table: right under it, where the eye is, not after the settings. */}
+          <AdvisorPanel headline={report.headline} tone={report.tone}>
+            <TuneAdvisory kind="afr" report={report} />
+          </AdvisorPanel>
 
-          <ExpandableInfo title="Why AFR trades power for safety">
+          <ExpandableInfo quiet title="Why AFR trades power for safety">
             14.7:1 is stoichiometric — burns all the fuel and oxygen with nothing left over, great for emissions and cruise. Peak power sits a little richer: with some extra fuel every bit of the oxygen finds fuel to burn, and the extra fuel absorbs heat as it vaporizes, which cools the charge and holds off knock. Go leaner than that under load and you lose power and raise both knock risk and exhaust gas temperature at once — which is why lean-under-boost is especially dangerous to valves and pistons.
             <br /><br /><b className={styles.em}>Best power is not one number.</b> Naturally aspirated engines make best torque near lambda 0.85-0.92 (about 12.5-13.5:1 on gasoline). Under boost, best power moves richer — near lambda 0.82-0.85 (about 12.0-12.5:1) — because you are deliberately buying charge cooling to hold off knock. This sandbox moves its best-power target with your boost level, so the same AFR table that was ideal naturally aspirated reads genuinely lean once you are on 8 psi.
             <br /><br /><b className={styles.em}>Reading it in lambda:</b> lambda is AFR divided by the fuel's stoichiometric point, so lambda 0.85 means the same relative richness on any fuel. That is why tuners talk in lambda once E85 enters the picture — 12.5:1 means something completely different on E85 than on pump gas.
@@ -83,9 +87,6 @@ export function FuelScreen({ calAdvice, children }) {
           </ExpandableInfo>
           {children}
         </div>
-        <AdvisorPanel headline={report.headline} tone={report.tone}>
-          <TuneAdvisory kind="afr" report={report} />
-        </AdvisorPanel>
       </div>
       <div className={styles.spacer} />
       <SelectionDock data={afr} setData={setTable} selection={selection} min={10} max={18} decimals={1} unit=":1" onClose={() => setSelection(null)} kind="afr" baseline={baseline.afr} axes={axes} />

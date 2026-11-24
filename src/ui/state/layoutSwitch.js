@@ -17,7 +17,7 @@
 import {
   BARO_KPA, ECU_LAYOUTS, GAME_LAYOUT, PSI_TO_KPA, blowerCurve, chargeTempK, deriveEngine, engineLayout,
   extendAxesTo, factoryCalibrationOn, layoutById, oemLayout, peakMapKpaOf, presetById, readTable, resampleTable,
-  tankFuel, trappedAirGrams,
+  solveIncreasing, tankFuel, trappedAirGrams,
 } from '../../sim/index.js';
 
 /**
@@ -27,7 +27,7 @@ import {
  *
  * @param {StoreState['build']} build
  */
-export function buildLayout(build) {
+function buildLayout(build) {
   const wot = build.blowerId ? blowerCurve(build, tankFuel(build)) : [];
   return engineLayout({
     redline: build.engineConfig.redline ?? 7000,
@@ -54,29 +54,28 @@ export function layoutFor(build, choice) {
   return ECU_LAYOUTS[choice] ? oemLayout(choice, engine.ve) : engine;
 }
 
+/** The layouts whose breakpoints are the game's to add to: its own grid and the sized one. */
+const EXTENDABLE = new Set(['game', 'engine']);
+
 /**
- * Whether the engine reaches past its tables' breakpoints: more boost than the top load
- * row, or a limiter past the last RPM column. A real ECU reads the edge there; the player
- * extends the axes when they are ready to tune the new cells (`extendAxes`). Only for
- * breakpoints sized to the engine: an engine computer's own do not move.
+ * Whether the engine reaches past its tables' breakpoints: more boost than the top load row,
+ * or a limiter past the last RPM column.
  * @param {Pick<StoreState, 'build'|'tune'>} state
  * @returns {boolean}
  */
 export function engineOutgrowsTables(state) {
   const { build, tune } = state;
-  if (!tune.layout || typeof tune.layout !== 'object' || tune.layout.id !== 'engine') return false;
+  if (!tune.layout || typeof tune.layout !== 'object' || !EXTENDABLE.has(tune.layout.id)) return false;
   const want = buildLayout(build).ve;
   const have = tune.layout.ve;
   return want.load[0] > have.load[0] + 0.5 || want.rpm[want.rpm.length - 1] > have.rpm[have.rpm.length - 1] + 0.5;
 }
 
 /**
- * The SET_LAYOUT that extends breakpoints sized to the engine to reach what it reaches
- * now, as tuning software's "extend axis" does: new rows and columns are ADDED, and every
- * existing breakpoint and cell stays exactly as it was (nothing is re-sampled, so a value the
- * player typed is the value that is there). The new cells hold the edge's values: exactly
- * what the ECU read past the edge before, so the engine runs the same until the player tunes
- * them. They are marked not tuned. Nothing is calculated for the player.
+ * The SET_LAYOUT that extends breakpoints sized to the engine to reach what it reaches now, as
+ * tuning software's "extend axis" does: new rows and columns are ADDED, and every existing
+ * breakpoint and cell stays exactly as it was (nothing is re-sampled, so a value the player
+ * typed is the value that is there).
  * @param {Pick<StoreState, 'build'|'tune'>} state
  * @returns {import('./reducer.js').SetLayoutAction}
  */
@@ -163,7 +162,7 @@ function carried(state, to) {
  * table, and the inverse. Boost heats the charge as the dyno heats it.
  * @param {Pick<StoreState, 'build'|'tune'>} state
  */
-export function airmassConversion(state) {
+function airmassConversion(state) {
   const { build, tune } = state;
   const axes = layoutById(tune.layout).ve;
   const derived = deriveEngine(build.engineConfig);
@@ -174,14 +173,7 @@ export function airmassConversion(state) {
     chargeK: chargeTempK(Math.max(0, (kpa - BARO_KPA) / PSI_TO_KPA), !!build.mods?.intercooler),
     sweptM3,
   });
-  const kpaFor = (rpm, g) => {
-    let lo = 5; let hi = 600;
-    for (let i = 0; i < 40; i += 1) {
-      const mid = (lo + hi) / 2;
-      if (airmassAt(rpm, mid) < g) lo = mid; else hi = mid;
-    }
-    return (lo + hi) / 2;
-  };
+  const kpaFor = (rpm, g) => solveIncreasing((kpa) => airmassAt(rpm, kpa), g, 5, 600);
   return { airmassAt, kpaFor };
 }
 
@@ -195,10 +187,8 @@ export function layoutSwitch(state, layoutId) {
   const { build, tune } = state;
   const to = layoutFor(build, layoutId ?? 'engine');
   const preset = build.presetId ? presetById(build.presetId) : null;
-  // Untouched tables on a factory engine are its factory calibration, generated afresh on
-  // the new breakpoints. Not once its induction has changed: the factory never wrote a
-  // calibration for a turbo it did not fit, and generating one would be tuning it for the
-  // player. Then the tables are carried across like anyone's.
+  // Untouched tables on a factory engine are its factory calibration, generated afresh on the
+  // new breakpoints.
   const stockInduction = preset && !!build.turboOn === !!preset.induction.turboOn && !build.blowerId && !build.nitrous;
   if (preset && !tune.tablesDirty && stockInduction) {
     const f = factoryCalibrationOn(preset, to);
@@ -215,7 +205,7 @@ export function layoutSwitch(state, layoutId) {
  * @param {import('../../sim/layouts.js').Layout} to
  * @param {ReturnType<typeof airmassConversion>} conv
  */
-export function moveTables(t, from, to, conv) {
+function moveTables(t, from, to, conv) {
   return {
     ve: resampleTable(t.ve, from.ve, to.ve, conv, 1),
     timing: resampleTable(t.timing, from.timing, to.timing, conv, 1),

@@ -3,9 +3,10 @@
 .empty {
   font-size: 12.5px;
   color: var(--ink2);
-  background: var(--panel2);
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  background: var(--glass-soft);
+  border: 0;
+  box-shadow: inset 0 0 0 1px var(--glass-edge);
+  border-radius: 12px;
   padding: 14px;
 }
 
@@ -24,9 +25,10 @@
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  border-radius: 10px;
-  background: var(--panel2);
-  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--glass-soft);
+  border: 0;
+  box-shadow: inset 0 0 0 1px var(--glass-edge);
 }
 .row[data-pinned='true'] {
   border-color: var(--acc);
@@ -35,7 +37,7 @@
 
 .ordinal {
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 600;
   color: var(--ink-soft);
 }
 
@@ -61,7 +63,7 @@
 
 .peaks {
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
   color: var(--ink);
   white-space: nowrap;
 }
@@ -89,7 +91,7 @@
   padding: 6px 9px;
   border-radius: 8px;
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 600;
   border: 1px solid var(--line);
   background: var(--panel3);
   color: var(--ink2);
@@ -100,5 +102,3 @@
   color: var(--acc-ink);
 }
 
-/* A road test measures no power, so there is no power curve to sketch. */
-.spark[data-hidden='true'] { visibility: hidden; }

@@ -94,8 +94,12 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
  */
 const safe = (v, lo, hi) => (Number.isFinite(v) ? clamp(v, lo, hi) : lo);
 
-/** Samples in each scheduled buffer. */
-const CHUNK = 1024;
+/**
+ * Samples in each scheduled buffer: about 11 ms at 48 kHz. The queue is topped up a whole
+ * buffer at a time, so a buffer is also how much further than `LOOKAHEAD.min` the note can
+ * run ahead of the engine.
+ */
+const CHUNK = 512;
 
 /**
  * How far ahead of the clock the stream is computed, seconds: `min` normally, so the note
@@ -103,15 +107,21 @@ const CHUNK = 1024;
  * slow phone the page's own work — a dyno chart redrawing, the simulation stepping — can
  * hold that thread for longer than `min`. The audio already queued then runs out, and the
  * note stutters: a rough, scraping stop-start. So when the stream finds it has run out it
- * queues far enough ahead to have covered that gap, plus `margin` — or `max`, if it ran
- * out within `again` seconds before too; when it has nearly run out it queues `grow` times
- * further; and once `hold` seconds have passed since it last ran out, it eases back by
- * `decay` seconds per second of smooth running. Every step ahead is also that much delay
- * between the throttle and the note, which is why `min` is small and the way back quick.
- * A fast device never leaves `min`.
+ * queues `grow` times further — and if it ran out within `again` seconds before too, far
+ * enough ahead to have covered the gap that did it, plus `margin`, up to `max`; when it has
+ * nearly run out it queues `grow` times further; and once `hold` seconds have passed since
+ * it last ran out or nearly did, it eases back by `decay` seconds per second of smooth running. Every
+ * step ahead is also that much delay between the throttle and the note, which is why `min`
+ * is small, a one-off stall is not answered by queueing far ahead, and the way back is
+ * quick. It eases back to a floor, not to `min`: each time it runs out the floor rises to
+ * where it then queues, up to `floorCap`, and falls `floorDecay` seconds per second. So a
+ * phone whose timers fire late keeps the queue that covers them rather than running out
+ * again every few seconds; a stall longer than `floorCap` is not the device's timers and
+ * does not move the floor. A fast device never leaves `min`.
  */
 const LOOKAHEAD = {
-  min: 0.06, max: 0.6, grow: 1.5, nearly: 0.3, margin: 0.05, again: 3, hold: 2, decay: 0.2,
+  min: 0.04, max: 0.6, grow: 1.5, nearly: 0.3, margin: 0.05, again: 3, hold: 1, decay: 0.5,
+  floorCap: 0.15, floorDecay: 0.002,
 };
 
 /** How often the stream tops itself up between the app's calls, ms. */
@@ -167,13 +177,31 @@ const CRANK_WOBBLE = 0.1;
 const WOBBLE_RPM = 800;
 
 /**
- * How long the crank takes to settle on a new speed it is given, seconds. The app updates
- * engine speed a few to a few dozen times a second — a dyno pull steps through its
- * measured points about ten times a second — and a note that jumped at each would climb
- * in a staircase, heard as a ratchet. Half an update long: enough to round the steps off
- * into a sweep, short enough that a blip is not heard arriving late.
+ * How long the crank takes to settle on a new speed it is given, as a share of the time
+ * between the speeds it is handed. The app updates engine speed a few to a few dozen times
+ * a second — the LIVE stand twenty, a dyno pull about ten as it steps through its measured
+ * points — and a note that jumped at each would climb in a staircase, heard as a ratchet.
+ * Half an update long: enough to round the steps off into a sweep, short enough that a blip
+ * is not heard arriving late. Every second of glide is a second the note trails the tach,
+ * so it follows the updates the app actually makes (`RPM_STEP` bounds what it takes as
+ * one) rather than allowing for the slowest.
  */
-const RPM_GLIDE = 0.05;
+const RPM_GLIDE = 0.5;
+
+/**
+ * How far the crank carries on the way the engine was going, as a share of the time between
+ * the speeds it is handed. Between updates the speed it was given is already in the past
+ * by the queue's length, so carrying on wins back that delay on a rev; where the engine
+ * turns round — a lift, the limiter — the note goes on past it by this share of one
+ * update's change. At 0.3 a LIVE rev is heard about 45 ms after the tach shows it (110 ms
+ * with none) and a rev into the limiter goes past it by about 100 rpm, which the glide
+ * rounds off; at 1 the delay is halved again but the note goes 500 rpm past.
+ */
+const RPM_LEAD = 0.3;
+
+/** The time between engine speeds the glide allows for, seconds: at least, at most, and
+ * where a stream starts. */
+const RPM_STEP = { min: 0.03, max: 0.1, start: 0.1 };
 
 /** Chance per unit of lope severity that a cycle barely burns at all. */
 const MISFIRE_PER_SEVERITY = 0.3;
@@ -518,14 +546,23 @@ export function createPulseExhaust(ctx) {
       refreshPending: false,
       /** How far ahead the stream is being computed, seconds (see `LOOKAHEAD`). */
       lookahead: LOOKAHEAD.min,
+      /** Where it eases back to (see `LOOKAHEAD`), seconds. */
+      floor: LOOKAHEAD.min,
       /** The clock, in samples, at the last call; -1 before the first. */
       lastCall: -1,
       /** The clock, in samples, when the stream last ran dry; -1 if it never has. */
       lastDry: -1,
+      /** And when it last nearly did; -1 if it never has. */
+      lastNear: -1,
       /** Whether the next buffer starts the stream and fades in. */
       fadeIn: false,
       /** The crank's speed as the events see it, gliding to the one it is given. */
       rpm: NaN,
+      /** How often the app hands the stream a new engine speed, seconds (see `RPM_STEP`),
+       * and the speed and clock, in seconds, of the last one. */
+      step: RPM_STEP.start, givenRpm: NaN, givenAt: -1,
+      /** How fast that speed was changing between the last two, rpm per second. */
+      rate: 0,
       /** The starter: how engaged, its phase, and the crank speed it last saw. */
       starter: 0, starterPhase: 0, commutatorPhase: 0, starterRpm: 0,
       rnd: random((Math.random() * 4294967296) >>> 0),
@@ -738,7 +775,16 @@ function addEvent(a, sampleRate, at, f) {
   if (gapDeg <= 0) gapDeg += 720;
   const wobble = CRANK_WOBBLE * Math.min(1, (WOBBLE_RPM / rpm) ** 2);
   const gap = (gapDeg / (6 * rpm)) * (1 - wobble * cov * s.walk);
-  s.rpm = rpm + (f.rpm - rpm) * (1 - Math.exp(-gap / RPM_GLIDE));
+  // The speed it was handed is the engine's when it was handed over, and this event is heard
+  // a queue later. So the crank carries on the way the engine was going, for at most one
+  // update: on a rev the note keeps up with the tach, and where the engine turns round it
+  // has gone on by no more than one update's change, which the glide rounds off. If no new
+  // speed came when one was due, the engine has held its speed and so does the crank.
+  const lead = start / sampleRate - s.givenAt;
+  const due = s.lookahead + 2 * s.step + CHUNK / sampleRate;
+  const ahead = f.cranking || s.givenAt < 0 || lead > due ? 0 : s.rate * clamp(lead, 0, RPM_LEAD * s.step);
+  const target = Math.max(60, f.rpm + ahead);
+  s.rpm = rpm + (target - rpm) * (1 - Math.exp(-gap / (RPM_GLIDE * s.step)));
   a.log.push({ at: start / sampleRate, cylinder: k, evoKpa: evo, gapSeconds: gap });
   if (a.log.length > 256) a.log.splice(0, a.log.length - 256);
   s.index++;
@@ -943,6 +989,18 @@ function level(a, data, sampleRate, f) {
  */
 export function schedulePulseExhaust(a, ctx, frame) {
   a.frame = frame;
+  const s = a.stream;
+  if (Number.isFinite(frame.rpm) && frame.rpm !== s.givenRpm) {
+    const since = ctx.currentTime - s.givenAt;
+    if (s.givenAt >= 0 && Number.isFinite(s.givenRpm) && since > 0 && since < RPM_STEP.max * 2) {
+      s.step += 0.3 * (clamp(since, RPM_STEP.min, RPM_STEP.max) - s.step);
+      s.rate = (frame.rpm - s.givenRpm) / Math.max(since, RPM_STEP.min);
+    } else {
+      s.rate = 0;
+    }
+    s.givenRpm = frame.rpm;
+    s.givenAt = ctx.currentTime;
+  }
   pump(a, ctx, frame);
   if (a.stream.head >= 0) startPump(a, ctx);
   else stopPump(a);
@@ -999,18 +1057,25 @@ function pump(a, ctx, frame) {
   if (s.head >= 0 && s.lastCall >= 0) {
     const ahead = (s.head - now) / sr;
     if (ahead < 0) {
-      // Run dry: queue far enough to have covered the gap that did it, and a margin — or,
-      // if it ran dry only a moment ago too, the page is busy for a while, so the most.
+      // Run dry. Once is a one-off — an engine going on the bench, a screen opening — and
+      // queueing far ahead would cover a gap that has already happened while the note
+      // trailed the revs for seconds after it: so only `grow` further. If it ran dry a
+      // moment ago too, the page is busy for a while: queue far enough to have covered the
+      // gap that did it, and a margin.
       const gap = (now - s.lastCall) / sr;
       const again = s.lastDry >= 0 && (now - s.lastDry) / sr < LOOKAHEAD.again;
-      s.lookahead = again ? LOOKAHEAD.max : clamp(
-        Math.max(s.lookahead * LOOKAHEAD.grow, gap + LOOKAHEAD.margin), LOOKAHEAD.min, LOOKAHEAD.max);
+      s.lookahead = clamp(
+        again ? Math.max(s.lookahead * LOOKAHEAD.grow, gap + LOOKAHEAD.margin) : s.lookahead * LOOKAHEAD.grow,
+        LOOKAHEAD.min, LOOKAHEAD.max);
+      if (gap + LOOKAHEAD.margin <= LOOKAHEAD.floorCap) s.floor = Math.min(Math.max(s.floor, s.lookahead), LOOKAHEAD.floorCap);
       s.lastDry = now;
     } else if (ahead < LOOKAHEAD.nearly * s.lookahead) {
       s.lookahead = Math.min(LOOKAHEAD.max, s.lookahead * LOOKAHEAD.grow);
-    } else if (s.lastDry < 0 || (now - s.lastDry) / sr > LOOKAHEAD.hold) {
+      s.lastNear = now;
+    } else if (Math.max(s.lastDry, s.lastNear) < 0 || (now - Math.max(s.lastDry, s.lastNear)) / sr > LOOKAHEAD.hold) {
       const elapsed = Math.max(0, (now - s.lastCall) / sr);
-      s.lookahead = Math.max(LOOKAHEAD.min, s.lookahead - LOOKAHEAD.decay * elapsed);
+      s.floor = Math.max(LOOKAHEAD.min, s.floor - LOOKAHEAD.floorDecay * elapsed);
+      s.lookahead = Math.max(s.floor, s.lookahead - LOOKAHEAD.decay * elapsed);
     }
   }
   s.lastCall = now;

@@ -3,9 +3,10 @@
  * edits a table in professional software.
  *
  * Select a cell, drag a rectangle, or take a whole row or column from its header; then
- * step, scale, set, interpolate, smooth, copy and paste. Axis breakpoints can be moved.
- * A finger cannot drag a rectangle, because a drag across the grid scrolls it: Range
- * takes one in two taps, two corners.
+ * step, offset, scale, set, interpolate, smooth, copy and paste. A finger cannot drag a
+ * rectangle, because a drag across the grid scrolls it: Range takes one in two taps, two
+ * corners. A pasted block keeps its arrangement and fills the selected range
+ * (pasteBlock). Axis breakpoints can be moved.
  * Compare shows every cell's difference from the factory table. When the engine is
  * running the cells it is reading right now are outlined, weighted by how much of each
  * the interpolation takes.
@@ -22,7 +23,7 @@ import { TableSurface, ViewToggle, useTableView } from '../surface/TableSurface.
 
 import styles from './CalTable.module.css';
 import {
-  blockToText, copyBlock, inRect, interpolate, mapCells, norm, pasteBlock, rowsOf,
+  blockToText, copyBlock, inRect, interpolate, mapCells, norm, pasteBlock, rectSize, rowsOf,
   sameTable, setBreakpoint, smooth, textToBlock,
 } from './tableOps.js';
 
@@ -54,6 +55,9 @@ export function CalTable({ table, def, meta, onChange, marker, axisVars }) {
   const [pending, setPending] = React.useState(false);
   const [value, setValue] = React.useState('');
   const [pct, setPct] = React.useState('');
+  const [add, setAdd] = React.useState('');
+  // What the last copy or paste did, said back so a range edit is never silent.
+  const [note, setNote] = React.useState('');
   const [view, setView] = useTableView();
   const show3d = twoD && view === '3d';
   const dragging = React.useRef(false);
@@ -96,12 +100,13 @@ export function CalTable({ table, def, meta, onChange, marker, axisVars }) {
   const target = sel ?? null;
 
   /** Sets the selection any way but a tap, which drops a waiting anchor. */
-  const select = (next) => { setSel(next); setPending(false); };
+  const select = (next) => { setSel(next); setPending(false); setNote(''); };
   /**
    * A tap or plain press on a cell. In range mode the first tap anchors a one-cell
    * range and the second completes it; any tap after that starts over.
    */
   const tap = (r, c) => {
+    setNote('');
     if (rangeMode && pending && sel) { select({ ...sel, r2: r, c2: c }); return; }
     setSel({ r1: r, c1: c, r2: r, c2: c });
     setPending(rangeMode);
@@ -145,10 +150,13 @@ export function CalTable({ table, def, meta, onChange, marker, axisVars }) {
     else input.value = String(table[axis][i]);
   };
 
+  const shape = (rows, cols) => `${rows} × ${cols}`;
   const doCopy = () => {
     if (!target) return;
     clip = copyBlock(table, target);
-    try { window.navigator.clipboard?.writeText(blockToText(clip)); } catch { /* clipboard is optional */ }
+    const { rows: h, cols: w } = rectSize(target);
+    setNote(`Copied ${shape(h, w)}`);
+    try { window.navigator.clipboard?.writeText(blockToText(clip))?.catch?.(() => {}); } catch { /* clipboard is optional */ }
   };
   const doPaste = async () => {
     if (!target) return;
@@ -158,7 +166,19 @@ export function CalTable({ table, def, meta, onChange, marker, axisVars }) {
       const parsed = text ? textToBlock(text) : null;
       if (parsed) block = parsed;
     } catch { /* fall back to the in-app clipboard */ }
-    if (block) commit(pasteBlock(table, target, block, lim));
+    if (!block) { setNote('Nothing copied yet'); return; }
+    const { rows: h, cols: w } = rectSize(target);
+    const one = h === 1 && w === 1;
+    commit(pasteBlock(table, target, block, lim));
+    setNote(one ? `Pasted ${shape(block.length, block[0].length)}`
+      : `Pasted ${shape(block.length, block[0].length)} into ${shape(h, w)}`);
+  };
+  // Copy and paste from the keyboard too, while a cell has focus.
+  const onKey = (e) => {
+    if (!(e.ctrlKey || e.metaKey) || !target) return;
+    const k = e.key.toLowerCase();
+    if (k === 'c') { e.preventDefault(); doCopy(); }
+    if (k === 'v') { e.preventDefault(); doPaste(); }
   };
   const resetSel = () => {
     if (!target || !sameShape) return;
@@ -199,7 +219,11 @@ export function CalTable({ table, def, meta, onChange, marker, axisVars }) {
           marker={marker?.x != null && marker?.y != null ? { x: marker.x, y: marker.y } : null} />
       )}
 
-      {!show3d && <div className={styles.scroll}>
+      {!show3d && rangeMode && !sel && (
+        <div className={styles.hint} role="status">Tap the first corner of the range.</div>
+      )}
+
+      {!show3d && <div className={styles.scroll} onKeyDown={onKey}>
         <table className={styles.grid}>
           <thead>
             <tr>
@@ -239,6 +263,7 @@ export function CalTable({ table, def, meta, onChange, marker, axisVars }) {
                         data-live={w > 0 || undefined}
                         style={/** @type {React.CSSProperties} */ (/** @type {any} */ ({ background: bg, '--live': w.toFixed(2) }))}
                         aria-label={`${meta.label} at ${meta.xLabel ?? 'x'} ${table.x[c]}${twoD ? `, ${meta.yLabel ?? 'y'} ${table.y[r]}` : ''}: ${fmt(v)} ${meta.unit ?? ''}`}
+                        data-anchor={(pending && target && target.r1 === r && target.c1 === c) || undefined}
                         onPointerDown={(e) => onCellDown(r, c, e)}
                         onPointerEnter={(e) => onCellEnter(r, c, e)}
                         onClick={(e) => onCellClick(r, c, e)}
@@ -259,7 +284,8 @@ export function CalTable({ table, def, meta, onChange, marker, axisVars }) {
       {target && !show3d && (
         <div className={styles.tools} role="toolbar" aria-label={`Edit ${meta.label}`}>
           <span className={styles.selInfo}>
-            {pending ? '1 cell · tap the opposite corner' : `${selInfo.cells} cell${selInfo.cells > 1 ? 's' : ''} · mean ${fmt(selInfo.mean)}`}
+            {pending ? '1 cell · tap the opposite corner'
+              : `${selInfo.cells > 1 ? `${shape(rectSize(target).rows, rectSize(target).cols)}, ` : ''}${selInfo.cells} cell${selInfo.cells > 1 ? 's' : ''}, mean ${fmt(selInfo.mean)}`}
           </span>
           <button type="button" className={styles.tool} onClick={() => commit(mapCells(table, target, (v) => v - step, lim))} aria-label="Decrease">−{step}</button>
           <button type="button" className={styles.tool} onClick={() => commit(mapCells(table, target, (v) => v + step, lim))} aria-label="Increase">+{step}</button>
@@ -267,6 +293,11 @@ export function CalTable({ table, def, meta, onChange, marker, axisVars }) {
             <input className={styles.num} inputMode="decimal" placeholder="set" value={value} aria-label="Set selected cells to"
               onChange={(e) => setValue(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && value !== '' && Number.isFinite(Number(value))) { commit(mapCells(table, target, () => Number(value), lim)); setValue(''); } }} />
+          </span>
+          <span className={styles.field}>
+            <input className={styles.num} inputMode="decimal" placeholder="add" value={add} aria-label="Add to selected cells"
+              onChange={(e) => setAdd(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && add !== '' && Number.isFinite(Number(add))) { commit(mapCells(table, target, (v) => v + Number(add), lim)); setAdd(''); } }} />
           </span>
           <span className={styles.field}>
             <input className={styles.num} inputMode="decimal" placeholder="±%" value={pct} aria-label="Scale selected cells by percent"
@@ -278,6 +309,7 @@ export function CalTable({ table, def, meta, onChange, marker, axisVars }) {
           <button type="button" className={styles.tool} onClick={doCopy}>Copy</button>
           <button type="button" className={styles.tool} onClick={doPaste}>Paste</button>
           {sameShape && <button type="button" className={styles.tool} onClick={resetSel}>Factory</button>}
+          {note && <span className={styles.note} role="status">{note}</span>}
           <button type="button" className={styles.tool} onClick={() => select(null)} aria-label="Clear selection">✕</button>
         </div>
       )}

@@ -14,15 +14,17 @@ import { AlertTriangle, ChevronDown, RotateCcw } from 'lucide-react';
 import React from 'react';
 
 import {
-  ECU_META, defaultEcuCalibration, deriveEngine, ecuHardwareOf, getCal, setCal, setupMismatches,
+  ECU_META, GAME_LAYOUT, defaultEcuCalibration, deriveEngine, ecuHardwareOf, engineLayout, factoryTorqueLimit, fitsGameGrid, getCal, peakMapKpaOf, presetById, setCal, setupMismatches,
 } from '../../../sim/index.js';
 import { Eyebrow } from '../../primitives/Eyebrow.jsx';
+import { Info } from '../../primitives/Info.jsx';
 import { Seg } from '../../primitives/Seg.jsx';
-import { Toggle } from '../../primitives/Toggle.jsx';
+import { Switch } from '../../primitives/Toggle.jsx';
 import { ACTIONS } from '../../state/reducer.js';
 import { useBuild, useTune } from '../../state/StoreProvider.jsx';
 import { UndoControls } from '../UndoControls.jsx';
 
+import { PickList } from '../PickList.jsx';
 import { CalTable } from './CalTable.jsx';
 import styles from './EcuSection.module.css';
 import { PAGE_GUIDES, tipFor } from './guides.js';
@@ -51,10 +53,22 @@ export function EcuSection({ section, title, icon, intro, liveVars = null, embed
   const [build] = useBuild();
   const cal = tune.ecu;
   const [showPro, setShowPro] = React.useState(false);
-  const def = React.useMemo(
-    () => defaultEcuCalibration({ derived: deriveEngine(build.engineConfig), gate: ecuHardwareOf(build).gate }),
-    [build],
-  );
+  // The factory setting, on the breakpoints its tables left the factory on: the stock layout
+  // for this engine on the induction it left the factory with, chosen as `presetLayout`
+  // chooses it (the game's 8 × 6 where the engine fits it, else breakpoints sized to it), so
+  // as RESET ALL TO STOCK writes it, whatever the axes have been extended or switched to
+  // since.
+  const def = React.useMemo(() => {
+    const f = build.factoryInduction ?? null;
+    const redline = build.engineConfig.redline ?? 7000;
+    const peakMapKpa = peakMapKpaOf({ turboOn: !!f?.turboOn, boostCurve: f?.boostCurve ?? [] });
+    const stock = fitsGameGrid({ redline, peakMapKpa }) ? GAME_LAYOUT : engineLayout({ redline, peakMapKpa });
+    const d = defaultEcuCalibration({ derived: deriveEngine(build.engineConfig), gate: ecuHardwareOf(build).gate, axes: stock.timing });
+    // A factory turbo engine rated as a torque plateau left the factory with its torque limit
+    // set (presets.js factoryTorqueLimit): that is its factory setting, not a change.
+    const origin = presetById(build.originPresetId ?? build.presetId ?? '');
+    return origin ? { ...d, torque: factoryTorqueLimit(origin, d.torque) } : d;
+  }, [build]);
   const hwNow = ecuHardwareOf(build);
   // A field that only means something with a part fitted (the port share table needs a
   // port kit) is not offered without it; nor is a field for one kind of nitrous kit only (a
@@ -168,39 +182,40 @@ function isChanged(meta, value, def) {
 function PageGuide({ guide, changedCount }) {
   return (
     <div className={styles.guide}>
-      <p className={styles.guideDoes}>{guide.does}</p>
-      <dl className={styles.guideList}>
-        <dt>Come here when</dt>
-        <dd>{guide.when}</dd>
-        <dt>Safe to leave</dt>
-        <dd>{guide.leave}</dd>
-      </dl>
-      <div className={styles.guideStatus} data-changed={changedCount > 0 || undefined}>
-        {changedCount > 0
-          ? `${changedCount} setting${changedCount === 1 ? '' : 's'} changed from factory, marked with a dot. Factory puts them all back.`
-          : 'All factory settings. Nothing here needs changing to make a good tune.'}
-      </div>
+      <Info label="About this page" text={(
+        <>
+          <p className={styles.guideDoes}>{guide.does}</p>
+          <dl className={styles.guideList}>
+            <dt>Come here when</dt>
+            <dd>{guide.when}</dd>
+            <dt>Safe to leave</dt>
+            <dd>{guide.leave}</dd>
+          </dl>
+        </>
+      )}>
+        <div className={styles.guideStatus} data-changed={changedCount > 0 || undefined}>
+          {changedCount > 0
+            ? `${changedCount} setting${changedCount === 1 ? '' : 's'} changed from factory, marked with a dot. Factory puts them all back.`
+            : 'All factory settings.'}
+        </div>
+      </Info>
     </div>
   );
 }
 
 /**
- * A setting's short tip, with its full explanation behind "Why?".
+ * What a setting does: its short tip, and the full explanation where it says more. Shown
+ * behind the info button on the setting's name, so the page reads as names and controls.
  * @param {{meta: import('../../../sim/ecu/calibration.js').EcuFieldMeta}} props
  */
-function Help({ meta }) {
-  const [open, setOpen] = React.useState(false);
+function HelpText({ meta }) {
   const tip = tipFor(meta);
-  // "Why?" only when the full explanation says something the tip does not — a near
-  // restatement behind a link is a click that teaches nothing.
+  // The full explanation only when it says something the tip does not.
   const more = meta.help !== tip && meta.help.length > tip.length + 40;
   return (
     <div className={styles.help}>
       {tip}
-      {more && !open && (
-        <> <button type="button" className={styles.why} onClick={() => setOpen(true)}>Why?</button></>
-      )}
-      {open && <div className={styles.whyText}>{meta.help}</div>}
+      {more && <div className={styles.whyText}>{meta.help}</div>}
     </div>
   );
 }
@@ -217,9 +232,9 @@ function Field({ meta, value, def, onChange, liveVars }) {
   const changed = isChanged(meta, value, def);
   if (meta.kind === 'bool') {
     return (
-      <div className={styles.field}>
-        <Toggle label={meta.label} checked={!!value} onChange={onChange} />
-        <Help meta={meta} />
+      <div className={styles.fieldRow}>
+        <FieldHead meta={meta} changed={changed} />
+        <Switch label={meta.label} checked={!!value} onChange={onChange} />
       </div>
     );
   }
@@ -227,7 +242,12 @@ function Field({ meta, value, def, onChange, liveVars }) {
     return (
       <div className={styles.field}>
         <FieldHead meta={meta} changed={changed} />
-        <Seg label={meta.label} options={meta.options} value={value} onChange={onChange} equal={meta.options.length > 2} />
+        {/* Short names sit in one row; long ones (an air-mass strategy) in a grid of keys,
+            rather than wrapping to three lines each. */}
+        {meta.options.some((o) => String(o.label).length > 14)
+          ? <PickList label={meta.label} columns={2} options={meta.options.map((o) => ({ value: String(o.id), label: o.label }))} value={String(value)}
+            onChange={(v) => { const o = meta.options.find((x) => String(x.id) === v); if (o) onChange(o.id); }} />
+          : <Seg variant="rule" label={meta.label} options={meta.options} value={value} onChange={onChange} equal />}
       </div>
     );
   }
@@ -280,10 +300,11 @@ function TableField({ meta, value, def, onChange, marker, changed, axisVars }) {
         <span className={styles.summaryAxes}>{meta.kind === 'map' ? `${meta.xLabel} × ${meta.yLabel}` : meta.xLabel}</span>
         {changed && <span className={styles.dot} aria-label="modified" />}
         {marker && <span className={styles.liveDot} aria-label="engine is reading this table" />}
+        <ChevronDown size={16} className={styles.summaryChev} aria-hidden="true" />
       </button>
       {open && (
         <div className={styles.tableBody} id={bodyId}>
-          <Help meta={meta} />
+          <HelpText meta={meta} />
           <CalTable table={value} def={def} meta={meta} onChange={onChange} marker={marker} axisVars={axisVars} />
         </div>
       )}
@@ -295,11 +316,12 @@ function TableField({ meta, value, def, onChange, marker, changed, axisVars }) {
 function FieldHead({ meta, changed }) {
   return (
     <div className={styles.fieldHead}>
-      <div className={styles.label}>
-        {meta.label}
-        {changed && <span className={styles.dot} aria-label="modified" />}
-      </div>
-      <Help meta={meta} />
+      <Info label={`About ${meta.label}`} text={<HelpText meta={meta} />}>
+        <div className={styles.label}>
+          {meta.label}
+          {changed && <span className={styles.dot} aria-label="modified" />}
+        </div>
+      </Info>
     </div>
   );
 }

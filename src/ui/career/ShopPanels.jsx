@@ -1,0 +1,296 @@
+/**
+ * The shop's paperwork: today's cars, the customers waiting, what to buy, what to learn,
+ * and the books. Pulled out of the screen so the legacy page and the 3-D world's drawer
+ * show exactly the same cards, from the same code.
+ */
+
+import { Check, CheckCircle2, Circle, Lock, X } from 'lucide-react';
+import React from 'react';
+
+import { Button } from '../primitives/Button.jsx';
+
+import { EQUIPMENT, MILESTONES, TRAINING, nextRepTier, repTier } from './catalog.js';
+import { HOW_TO_SEE } from './evaluate.js';
+import { jobById } from './jobs.js';
+import {
+  blockers, board, buy, cannotBuy, cannotTrain, capacity, giveUp, newCareer, nextDay, overhead, train,
+} from './shop.js';
+import { CHAPTERS, chapterFocus, goalProgress, openChapter, sagaOf } from './story.js';
+import styles from './ShopScreen.module.css';
+
+export const money = (n) => `${n < 0 ? '-' : ''}$${Math.abs(Math.round(n)).toLocaleString('en-US')}`;
+const TIER_NAME = { 1: 'Street', 2: 'Enthusiast', 3: 'Pro' };
+const VERDICT = {
+  pass: { title: 'Job done', tone: 'ok' },
+  partial: { title: 'Partly done', tone: 'warn' },
+  fail: { title: 'Not fixed yet', tone: 'warn' },
+  unsafe: { title: 'Sent home unsafe', tone: 'danger' },
+};
+
+/**
+ * Where the story stands: the open chapter, its goal, and how far the shop is towards it,
+ * so a day starts with what it is for. Pops's email explains it; this keeps it in sight.
+ * @param {{career: import('./shop.js').Career}} props
+ */
+function StoryGoal({ career }) {
+  const ch = openChapter(career);
+  if (!ch) return null;
+  const at = sagaOf(career).ch;
+  const prog = goalProgress(career);
+  return (
+    <section className={styles.card} data-goal="" aria-label="Your goal">
+      <div className={styles.cardTag}>Chapter {at + 1} of {CHAPTERS.length} · {ch.title}</div>
+      <p className={styles.goalText}>{ch.goal}</p>
+      {prog && (
+        <div className={styles.goalProgress}>
+          <div className={styles.goalBar} role="progressbar" aria-valuemin={0} aria-valuemax={prog.need} aria-valuenow={prog.have} aria-label={`${prog.have} of ${prog.need} ${prog.unit}`}>
+            <span style={{ width: `${Math.round((prog.have / prog.need) * 100)}%` }} />
+          </div>
+          <small>{prog.have} of {prog.need} {prog.unit}</small>
+        </div>
+      )}
+      <p className={styles.small}>Pops explains it in Messages. Customers whose work practises it are listed first.</p>
+    </section>
+  );
+}
+
+/**
+ * One tab of the shop's paperwork.
+ *
+ * @param {{
+ *   tab: string,
+ *   career: import('./shop.js').Career,
+ *   update: (next: import('./shop.js').Career) => void,
+ *   onWork: () => void,
+ *   setTab: (t: string) => void,
+ *   takeJob: (id: string) => void,
+ *   taking?: string|null,
+ *   setLesson: (id: string|null) => void,
+ *   confirmReset: boolean,
+ *   setConfirmReset: (v: boolean) => void,
+ *   unseen: boolean,
+ *   variant?: 'page'|'drawer',
+ * }} props
+ */
+export function ShopPanel({ tab, career, update, onWork, setTab, takeJob, taking = null, setLesson, confirmReset, setConfirmReset, unseen, variant = 'page' }) {
+  const last = career.last;
+  const tier = repTier(career.rep);
+  const nextTier = nextRepTier(career.rep);
+  const working = career.working ? jobById(career.working) : null;
+  // Walk-ins that practise what the open chapter teaches come first, marked: the story's
+  // curriculum, without changing who walks in (the economy's pace is set on the offers).
+  const focus = chapterFocus(career);
+  const practises = (j) => !!j.template && focus.includes(j.template);
+  const waiting = board(career).map((j, i) => ({ j, i })).sort((a, b) => Number(practises(b.j)) - Number(practises(a.j)) || a.i - b.i).map(({ j }) => j);
+  return (
+  <main className={variant === 'drawer' ? styles.drawerPanel : styles.panel}>
+    {tab === 'today' && (
+      <>
+        <StoryGoal career={career} />
+        {unseen && (
+          <section className={styles.card} data-tone={VERDICT[last.verdict].tone} aria-label="Job result">
+            <div className={styles.cardTag}>{VERDICT[last.verdict].title}: {jobById(last.jobId).customer.name}</div>
+            <p className={styles.quote}>&ldquo;{last.line}&rdquo;</p>
+            <ul className={styles.checks}>
+              {last.results.map((r) => (
+                <li key={r.label} data-pass={r.pass ? 'true' : 'false'}>
+                  <span className={styles.mark} aria-hidden="true">{r.pass ? <Check size={14} /> : <X size={14} />}</span>
+                  <span>
+                    <b>{r.label}</b><span className={styles.measured}>{r.measured}</span>
+                    {!r.pass && r.type && HOW_TO_SEE[r.type] && <span className={styles.how}>How to see it: {HOW_TO_SEE[r.type]}</span>}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <div className={styles.payout}>
+              <span>{last.paid >= 0 ? 'Paid' : 'Cost'} <b>{money(Math.abs(last.paid))}</b>{last.repair ? ` (after a ${money(last.repair)} repair)` : ''}</span>
+              <span>Reputation <b>{last.repChange >= 0 ? '+' : ''}{last.repChange}</b></span>
+            </div>
+            {last.verdict === 'pass' && <p className={styles.teach}><b>What this job was about:</b> {jobById(last.jobId).teaches}</p>}
+            {!last.leaves && <p className={styles.teach}>The car is still on its lift. Have another look.</p>}
+            <Button size="sm" onClick={() => update({ ...career, lastSeen: last.seq })}>Done</Button>
+          </section>
+        )}
+        {working ? (
+          <section className={styles.card} aria-label="On the bay">
+            <div className={styles.cardTag}>On the bay: {working.customer.car}</div>
+            <p className={styles.quote}>&ldquo;{working.says}&rdquo;</p>
+            <p className={styles.small}><b>{working.customer.name} wants:</b> {working.wants}</p>
+            <div className={styles.row}>
+              <Button onClick={onWork}>Work on the car</Button>
+              <Button variant="quiet" size="sm" onClick={() => update(giveUp(career, working.id))}>Send it back unfinished</Button>
+            </div>
+          </section>
+        ) : (
+          <section className={styles.card} aria-label="On the bay">
+            <div className={styles.cardTag}>The bay is empty</div>
+            <p className={styles.small}>{waiting.some((j) => blockers(career, j).length === 0) ? 'A customer is waiting. Take their car in from Customers.' : 'Nobody you can help yet. Train or buy what the next customer needs.'}</p>
+            <Button size="sm" variant="ghost" onClick={() => setTab('customers')}>Customers</Button>
+          </section>
+        )}
+        {career.lifts.filter((l) => l.jobId !== career.working).map((l) => {
+          const job = jobById(l.jobId);
+          return (
+            <section key={l.jobId} className={styles.card} aria-label={`${job.customer.name}'s car`}>
+              <div className={styles.cardTag}>On a lift: {job.customer.car}</div>
+              <p className={styles.small}>{`${job.customer.name}: ${job.wants}`}</p>
+              <Button size="sm" variant="ghost" onClick={() => update({ ...career, working: l.jobId })}>Put it on the bay</Button>
+            </section>
+          );
+        })}
+        {/* Finished work, apart from the cars still in the shop: the last three jobs (a car
+            handed back ends the day), the money in a column. The whole record is in Books. */}
+        {career.history.length > 0 && (
+          <section className={styles.card} aria-label="Completed">
+            <div className={styles.cardTag}>Completed</div>
+            <ul className={styles.ledger}>
+              {career.history.slice(0, 3).map((h, i) => (
+                <li key={i} data-verdict={h.verdict}>
+                  <span>Day {h.day} · {jobById(h.jobId)?.customer.name}, {VERDICT[h.verdict]?.title.toLowerCase()}</span>
+                  <b>{money(h.paid)}</b>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+      </>
+    )}
+
+    {tab === 'customers' && (
+      <>
+        <StoryGoal career={career} />
+        <p className={styles.intro}>{career.lifts.length}/{capacity(career)} lifts in use. Customers describe what the car does; working out why is the job.</p>
+        {waiting.map((job) => {
+          const blocked = blockers(career, job);
+          return (
+            <section key={job.id} className={styles.card} aria-label={`${job.customer.name}, ${job.customer.car}`}>
+              <div className={styles.cardTag}>{job.customer.name}, {job.customer.car}</div>
+              <p className={styles.small}>{job.build ? 'An engine build' : `${job.generated ? 'Walk-in, ' : ''}${TIER_NAME[job.tier]} job`}{practises(job) ? ' · practises this chapter' : ''}</p>
+              <p className={styles.quote}>&ldquo;{job.says}&rdquo;</p>
+              <p className={styles.small}><b>Wants:</b> {job.wants}</p>
+              <div className={styles.meta}><span>Pays <b>{money(job.pay)}</b></span><span>Reputation <b>+{job.rep}</b></span></div>
+              {blocked.length > 0 && <p className={styles.blocked}><Lock size={12} aria-hidden="true" /> Needs {blocked.join(', ')}</p>}
+              <Button size="sm" disabled={blocked.length > 0 || taking === job.id} aria-busy={taking === job.id || undefined} onClick={() => takeJob(job.id)} aria-label={`Take ${job.customer.name}'s car`}>{taking === job.id ? 'Bringing it in…' : 'Take the car'}</Button>
+            </section>
+          );
+        })}
+        {waiting.length === 0 && <p className={styles.intro}>No one else is waiting today.</p>}
+        <section className={styles.card} aria-label="Tomorrow">
+          <div className={styles.cardTag}>Day {career.day}: closing up</div>
+          <p className={styles.small}>New customers come in every day, and the better your reputation, the bigger their jobs. Cars on the lifts wait for you overnight. Opening tomorrow costs the day&apos;s running costs, {money(overhead(career))}.</p>
+          <Button size="sm" variant="ghost" onClick={() => update(nextDay(career))}>Open tomorrow</Button>
+        </section>
+      </>
+    )}
+
+    {tab === 'upgrades' && (
+      <>
+        <p className={styles.intro}>Money well spent changes what the shop can do. Every item here changes the work, not just the look.</p>
+        {EQUIPMENT.filter((e) => e.price > 0).map((e) => {
+          const why = cannotBuy(career, e.id);
+          const own = career.owned.includes(e.id);
+          return (
+            <section key={e.id} className={styles.card} data-owned={own ? 'true' : 'false'} aria-label={e.title}>
+              <div className={styles.cardTag}>{e.title}, {own ? 'owned' : money(e.price)}</div>
+              <p className={styles.small}>{e.does}</p>
+              {own ? <span className={styles.owned}><Check size={14} aria-hidden="true" /> In the shop</span> : (
+                <>
+                  {why && <p className={styles.blocked}><Lock size={12} aria-hidden="true" /> {why}</p>}
+                  <Button size="sm" disabled={!!why} onClick={() => update(buy(career, e.id))} aria-label={`Buy ${e.title}`}>Buy</Button>
+                </>
+              )}
+            </section>
+          );
+        })}
+      </>
+    )}
+
+    {tab === 'training' && (
+      <>
+        <p className={styles.intro}>A new shop can correct airflow, fuel, injectors and sensors. Every other part of the ECU opens with training.</p>
+        {TRAINING.map((t) => {
+          const why = cannotTrain(career, t.id);
+          const done = career.trained.includes(t.id);
+          return (
+            <section key={t.id} className={styles.card} data-owned={done ? 'true' : 'false'} aria-label={t.title}>
+              <div className={styles.cardTag}>{t.title}, {done ? 'completed' : money(t.price)}</div>
+              <p className={styles.small}>{t.summary}</p>
+              {done ? <Button size="sm" variant="ghost" onClick={() => setLesson(t.id)}>Review the lesson</Button> : (
+                <>
+                  {why && <p className={styles.blocked}><Lock size={12} aria-hidden="true" /> {why}</p>}
+                  <Button size="sm" disabled={!!why} onClick={() => { update(train(career, t.id)); setLesson(t.id); }} aria-label={`Take the ${t.title} course`}>Take the course</Button>
+                </>
+              )}
+            </section>
+          );
+        })}
+      </>
+    )}
+
+    {tab === 'books' && (
+      <>
+        <section className={styles.card} aria-label="Reputation">
+          <div className={styles.cardTag}>Reputation: {tier.title}</div>
+          <div className={styles.repTrack}><span className={styles.repFill} style={{ width: `${nextTier ? Math.min(100, ((career.rep - tier.min) / (nextTier.min - tier.min)) * 100) : 100}%` }} /></div>
+          <p className={styles.small}>{nextTier ? `${nextTier.min - career.rep} more to become a ${nextTier.title.toLowerCase()}.` : 'As good as a shop gets.'} Good work raises it; unsafe work or unfinished cars cost it.</p>
+        </section>
+        <section className={styles.card} aria-label="Running costs">
+          <div className={styles.cardTag}>Running costs: {money(overhead(career))} a day</div>
+          <p className={styles.small}>Rent, and what the shop has grown into: every extra lift, the dyno, the lounge. Paid each time the day moves on.</p>
+        </section>
+        <section className={styles.card} aria-label="Milestones">
+          <div className={styles.cardTag}>Milestones: {career.milestones.length} of {MILESTONES.length}</div>
+          <ul className={styles.plain}>
+            {MILESTONES.map((m) => <li key={m.id} data-done={career.milestones.includes(m.id) ? 'true' : 'false'}>{career.milestones.includes(m.id) ? <CheckCircle2 size={14} aria-hidden="true" /> : <Circle size={14} aria-hidden="true" />} {m.title}</li>)}
+          </ul>
+        </section>
+        <section className={styles.card} aria-label="Job history">
+          <div className={styles.cardTag}>Recent work</div>
+          {career.history.length === 0 ? <p className={styles.small}>Nothing yet.</p> : (
+            <ul className={styles.plain}>
+              {career.history.slice(0, 12).map((h, i) => (
+                <li key={i}>Day {h.day}: {jobById(h.jobId)?.customer.name}, {VERDICT[h.verdict]?.title}, {money(h.paid)}</li>
+              ))}
+            </ul>
+          )}
+        </section>
+        <section className={styles.card} aria-label="Start over">
+          {!confirmReset ? (
+            <Button size="sm" variant="quiet" onClick={() => setConfirmReset(true)}>Start a new career</Button>
+          ) : (
+            <>
+              <p className={styles.small}>This deletes the shop: money, reputation, equipment, training and every car. Sandbox is not affected.</p>
+              <div className={styles.row}>
+                <Button size="sm" variant="danger" onClick={() => { update(newCareer()); setConfirmReset(false); }}>Delete the shop</Button>
+                <Button size="sm" variant="ghost" onClick={() => setConfirmReset(false)}>Keep it</Button>
+              </div>
+            </>
+          )}
+        </section>
+      </>
+    )}
+  </main>
+  );
+}
+
+/**
+ * The lesson a course opens with, as a dialog.
+ * @param {{lesson: string|null, onClose: () => void}} props
+ */
+export function LessonDialog({ lesson, onClose }) {
+  const t = lesson ? TRAINING.find((x) => x.id === lesson) : null;
+  if (!t) return null;
+  return (
+    <div className={styles.lessonScrim} role="dialog" aria-modal="true" aria-label={`${t.title} lesson`}>
+      <div className={styles.lesson}>
+        <div className={styles.cardTag}>Training: {t.title}</div>
+        {t.lesson.map((para) => <p key={para} className={styles.lessonText}>{para}</p>)}
+        <p className={styles.small}><b>Opens:</b> {[...t.pages.map((pg) => `TUNE › ${pg.toUpperCase()}`), ...(t.sections ?? []).map((sc) => `the ECU settings on TUNE › ${sc.toUpperCase()}`)].join(', ')}.</p>
+        {t.deeper && <p className={styles.small}><b>Go deeper:</b> {t.deeper}.</p>}
+        <div className={styles.row}>
+          <Button size="sm" onClick={onClose}>Got it</Button>
+        </div>
+      </div>
+    </div>
+  );
+}

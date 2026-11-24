@@ -107,7 +107,7 @@ export function ScreenSnippet({ where, demo, seed, focus, height = 360, callouts
       data-callouts-missing={spots.length === callouts.length ? spots.filter((sp) => sp === null).length : ''}
     >
       <div className={styles.chrome}>
-        <span className={styles.live}>LIVE SCREEN</span>
+        <span className={styles.live}>Live screen</span>
         <span className={styles.where}>{where}</span>
       </div>
       <div

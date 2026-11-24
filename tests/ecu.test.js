@@ -100,10 +100,7 @@ describe('sensors: the ECU acts on what it measures', () => {
 
   it('drives closed loop to the wrong mixture on a mis-scaled wideband, while reading on target', () => {
     // A pull's load is a throttle opening: 15% holds this 3.5 L near 36 kPa at 3500 RPM, part
-    // load in closed loop (40% opening is already near full load, in power enrichment). The
-    // ECU set to read "AFR 10-20" sees 1.00 at 2.35 V, which the fitted controller's lambda
-    // 0.5-1.5 line puts at lambda 0.970: closed loop pulls the mixture rich toward it while
-    // the gauge reads on target.
+    // load in closed loop (40% opening is already near full load, in power enrichment).
     const eng = makeEngine({ cal: { 'sensors.wideband': 'afr-10-20' } });
     const reads = S.readSensor({ kind: 'wideband', value: 0.97, part: 'lambda-0.5-1.5', scale: 'afr-10-20' }).value;
     expect(reads).toBeCloseTo(1, 2);
@@ -243,11 +240,11 @@ describe('ignition: knock control acts on what the sensor hears', () => {
     expect(types(deaf.pull())).toContain('falseknock');
   });
 
-    // 18 degrees over the stock table: with the knock limit anchored to real calibrations the
-    // default V6 on 91 has 10-15 degrees in hand at full throttle (14 once knocked by 2).
   it('lets knock run unheard when the threshold is far above the signal', () => {
     // A naturally aspirated engine: lower cylinder pressure, a quieter knock ring, so a
     // threshold set for a much louder engine misses it.
+    // 18 degrees over the stock table: with the knock limit anchored to real calibrations the
+    // default V6 on 91 has 10-15 degrees in hand at full throttle (14 once knocked by 2).
     const deafEng = makeEngine({ cal: { 'ignition.knockThreshold': S.curve(S.RPM, () => 2) } });
     const heardEng = makeEngine();
     const hot = deafEng.tables.timing.map((row) => row.map((v) => v + 18));
@@ -440,10 +437,8 @@ describe('the live engine runs its controllers in time', () => {
     expect(lowest).toBeGreaterThan(560);
   });
 
-  // A real engine catches, flares a few hundred RPM over its fast idle and comes down in
-  // a second or two. The base idle air used to be a fifth open on a cold start and the
-  // hold ran nearly a second, so every V6 shot to 2,500–2,900 RPM and took four seconds
-  // to come back: it read as the throttle sticking.
+  // A real engine catches, flares a few hundred RPM over its fast idle and comes down in a
+  // second or two.
   it.each([[null], ['vq35hr'], ['vq35de-revup'], ['n54']])('flares modestly on a start and settles (%s)', (preset) => {
     for (const coolantC of [20, 88]) {
       const { rows } = runLive(makeEngine({ preset }), { seconds: 4, coolantC });
@@ -469,6 +464,26 @@ describe('the live engine runs its controllers in time', () => {
     const { rows } = runLive(makeEngine(), { seconds: 12 });
     expect(Math.abs(rows.at(-1).ltft)).toBeLessThan(0.5);
   });
+
+  // A playtest found the GM V8s chopping in and out of the overrun cut at about 2000 RPM
+  // after a rev, some never finding idle: while the fuel was off the idle loop's damping
+  // read the coast-down as a stall coming and threw the valve open to its stop, so the
+  // fuel came back into far too much air and surged the engine back over the cut. These
+  // are the cases that hung (warm with the A/C on, and part-warm).
+  it.each([['ls1', 85, true, 60], ['ls6', 40, true, 100], ['lr4', 85, true, 100], ['hemi-392', 40, false, 60]])(
+    'comes off a rev into idle without chopping in and out of the fuel cut (%s, %i °C)', (preset, coolantC, ac, peak) => {
+      const { rows } = runLive(makeEngine({ preset }), {
+        seconds: 16, coolantC, aux: ac ? { ac: true, lights: true } : {}, pedal: (t) => (t > 6 && t < 7.5 ? peak : 0),
+      });
+      const after = rows.slice(Math.round(7.6 / 0.05));
+      const cutsBack = after.filter((r, i) => i > 0 && r.cut && !after[i - 1].cut).length;
+      expect(cutsBack).toBe(0);
+      // The follower opens the valve to idle's air per cycle at the speed the fuel returns
+      // (with the A/C and lights on top); the fault drove it to its 15% stop.
+      expect(Math.max(...after.map((r) => r.idleAir))).toBeLessThan(11);
+      expect(after.at(-1).running).toBe(true);
+      expect(Math.abs(after.at(-1).rpm - after.at(-1).idleTarget)).toBeLessThan(120);
+    });
 
   it('starts cold and settles on the idle target', () => {
     const { rows } = runLive(makeEngine(), { seconds: 15, coolantC: 20 });
@@ -603,6 +618,16 @@ describe('table editor operations', () => {
     const r = pasteBlock(t, { r1: 0, c1: 3, r2: 0, c2: 3 }, block, lim);
     expect(r.z[0][3]).toBe(0);
     expect(r.z[1][3]).toBe(0);
+  });
+
+  it('pastes into a range without writing outside it: repeating a smaller block, cutting a bigger one', () => {
+    const map = { x: [0, 1, 2, 3], y: [0, 1, 2], z: [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]] };
+    const tiled = pasteBlock(map, { r1: 0, c1: 0, r2: 1, c2: 3 }, [[1, 2]], lim);
+    expect(tiled.z).toEqual([[1, 2, 1, 2], [1, 2, 1, 2], [0, 0, 0, 0]]);
+    const cut = pasteBlock(map, { r1: 1, c1: 1, r2: 1, c2: 2 }, [[5, 6, 7], [8, 9, 10]], lim);
+    expect(cut.z).toEqual([[0, 0, 0, 0], [0, 5, 6, 0], [0, 0, 0, 0]]);
+    const one = pasteBlock(map, { r1: 2, c1: 3, r2: 2, c2: 3 }, [[4, 4], [4, 4]], lim);
+    expect(one.z[2]).toEqual([0, 0, 0, 4]);
   });
 
   it('refuses a breakpoint that would break the axis order', () => {

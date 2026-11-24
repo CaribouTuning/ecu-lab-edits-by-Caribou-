@@ -35,7 +35,8 @@ function AdvisorPanelImpl({ headline, tone, children }) {
   // the body unconditionally and hides the toggle, so this flag only governs the
   // narrow layout. Doing it in CSS keeps 560px out of the JavaScript, where it
   // would be a second copy of the breakpoint that tokens.css could not track.
-  const [open, setOpen] = useState(false);
+  // Under the table on a phone too, so a warning opens itself: the reason it is there.
+  const [open, setOpen] = useState(tone === 'warn' || tone === 'danger');
 
   return (
     <section
@@ -46,7 +47,7 @@ function AdvisorPanelImpl({ headline, tone, children }) {
       data-tone={tone}
     >
       <div className={styles.head}>
-        <span className={styles.eyebrow}>ADVISOR</span>
+        <span className={styles.eyebrow}>Advisor</span>
         <span className={styles.headline}>{headline}</span>
         <ChevronDown size={15} className={styles.chevron} aria-hidden="true" />
         <button

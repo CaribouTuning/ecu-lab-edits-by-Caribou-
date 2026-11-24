@@ -13,6 +13,7 @@
  */
 
 import React from 'react';
+import { Seg } from '../../primitives/Seg.jsx';
 
 import { Surface3D, readSurface } from './Surface3D.jsx';
 import styles from './surface.module.css';
@@ -21,7 +22,7 @@ import styles from './surface.module.css';
 export const PullTraceContext = React.createContext(/** @type {object[]|null} */ (null));
 
 /** Where a pull point records each live variable the ECU reads a table on. */
-export const PULL_FIELD = Object.freeze({
+const PULL_FIELD = Object.freeze({
   rpm: (p) => p.rpm,
   map: (p) => p.sensedMap ?? p.map,
   // Air per cylinder, for a layout that reads spark by it (sim/layouts.js).
@@ -45,10 +46,8 @@ export function useTableView() {
 /** @param {{mode: 'table'|'3d', onChange: (m: 'table'|'3d') => void}} props */
 export function ViewToggle({ mode, onChange }) {
   return (
-    <div className={styles.toggle} role="group" aria-label="Show as">
-      <button type="button" aria-pressed={mode === 'table'} onClick={() => onChange('table')}>Table</button>
-      <button type="button" aria-pressed={mode === '3d'} onClick={() => onChange('3d')}>3-D</button>
-    </div>
+    <Seg label="Show as" value={mode} onChange={(id) => onChange(/** @type {'table'|'3d'} */ (id))}
+      options={[{ id: 'table', label: 'Table' }, { id: '3d', label: '3-D' }]} />
   );
 }
 

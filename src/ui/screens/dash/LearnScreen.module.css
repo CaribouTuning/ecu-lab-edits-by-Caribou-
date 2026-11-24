@@ -13,9 +13,8 @@
    doing, and tuning in depth. */
 .part {
   margin: 14px 0 8px;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 1px;
+  font-size: 13px;
+  font-weight: 700;
   color: var(--acc-ink);
 }
 
@@ -60,8 +59,8 @@
 
 .pathsHead {
   font-size: var(--fs-micro);
-  font-weight: 800;
-  letter-spacing: 0.12em;
+  font-weight: 600;
+
   color: var(--acc-ink);
 }
 
@@ -96,27 +95,21 @@
 
 .table th {
   font-size: var(--fs-micro);
-  font-weight: 800;
-  letter-spacing: 0.08em;
+  font-weight: 600;
+
   color: var(--ink-soft);
 }
 
 .table td { color: var(--ink); }
 
-/* The way into the Tuning Course: the one thing on this page that is not an article. */
-.course {
-  display: grid;
-  gap: 4px;
-  margin: 0 0 var(--sp-lg);
-  padding: var(--sp-md) var(--sp-lg);
-  border: 1px solid var(--acc);
-  border-radius: var(--r-md);
-  background: var(--acc-bg);
-  color: var(--ink);
-  text-decoration: none;
-}
+/* One page of the Learn app: the articles alone. The reading paths, the part headings and
+   their goals describe the whole guide in order, so they step aside. */
+.shelved .paths, .shelved .intro, .shelved .part, .shelved .partGoal { display: none; }
 
-.courseTag { font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.12em; color: var(--acc-ink); }
-.courseTitle { font-size: var(--fs-md); font-weight: 800; }
-.courseText { font-size: var(--fs-sm); line-height: 1.5; color: var(--ink-soft); }
-.courseCta { margin-top: 4px; font-size: var(--fs-sm); font-weight: 800; color: var(--acc-ink); }
+/* The Learn app's pages: each article an open section under a rule, with its title, as the
+   Physics app draws its panels. */
+.panel { min-width: 0; padding: 14px 0 6px; border-top: 1px solid var(--line-hi); }
+.panel:first-of-type { border-top: 0; padding-top: 4px; }
+.panelTitle { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 0 8px; font-size: 15px; font-weight: 600; line-height: 1.35; color: var(--ink); }
+.panelNum { flex: none; font-size: var(--fs-xs); font-weight: 500; color: var(--ink2); }
+.panelBody { max-width: 72ch; font-size: 14px; line-height: 1.7; color: var(--ink2); }

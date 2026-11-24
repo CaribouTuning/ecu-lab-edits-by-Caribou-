@@ -31,6 +31,7 @@ import EcuLab, { DYNO_PULL_MS, EcuLabApp } from '../../src/ui/EcuLab.jsx';
 import { Bar } from '../../src/ui/primitives/Bar.jsx';
 import { StoreProvider, useBuild, useTune } from '../../src/ui/state/StoreProvider.jsx';
 import { ACTIONS } from '../../src/ui/state/reducer.js';
+import { buildPart, enterSandbox, goTo } from './nav.js';
 
 // jsdom has no ResizeObserver. recharts' <ResponsiveContainer> (used on the DYNO
 // results panel) needs one to mount at all, so any test that reaches a rendered
@@ -72,7 +73,7 @@ function presetPicker() {
  * @returns {string}
  */
 function headerEngineName() {
-  return screen.getByTestId('build-line').textContent.split('·')[0].trim();
+  return screen.getByTestId('build-line').textContent.split(',')[0].trim();
 }
 
 /** Renders the app and clicks past the start screen. */
@@ -82,7 +83,7 @@ function launch() {
   // single START. SANDBOX is the free-play entry the old button was.
   // The start screen offers CAREER, SANDBOX and TUTORIAL rather than a single START.
   // SANDBOX is the free-play entry the old button was.
-  fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
+  enterSandbox();
   return view;
 }
 
@@ -99,12 +100,18 @@ function loadFirstPreset() {
 describe('moving the boost-curve cursor', () => {
   it('does not stop the header claiming the factory preset', () => {
     launch();
-    const preset = loadFirstPreset();
+    // A factory turbo engine, whose boost target TUNE → BOOST edits without changing its parts.
+    const picker = presetPicker();
+    fireEvent.change(picker, { target: { value: 'n54' } });
+    const preset = headerEngineName();
     // Guard the setup rather than trusting it: if loading the preset silently failed,
     // presetId would be null before the click and the assertion below would pass for
     // the wrong reason.
-    expect(preset).not.toMatch(/^\d\.\dL /);
+    expect(preset).toMatch(/N54/);
 
+    // The boost target is set on TUNE → BOOST.
+    goTo('TUNE');
+    fireEvent.click(screen.getByRole('button', { name: 'Boost' }));
     const columns = within(screen.getByTestId('boost-columns')).getAllByRole('button');
     // The selected RPM appears in the editor's readout under the bars. Reading it
     // before and after proves the click actually MOVED the cursor — without that, a
@@ -135,20 +142,20 @@ describe('moving the tune-grid cursor', () => {
     // the wrong reason.
     expect(preset).not.toMatch(/^\d\.\dL /);
 
-    fireEvent.click(screen.getByRole('button', { name: /TUNE/ }));
+    goTo('TUNE');
     const grid = within(screen.getByTestId('tuning-grid'));
     // The data cells, by their accessible names ("<rpm> RPM, <load> kPa"): the grid is
     // sized to the engine, so its shape is not a constant to slice by.
     const dataCells = grid.getAllByRole('button', { name: / RPM, [\d.]+ kPa$/ });
 
     // Selecting a grid cell mounts the SelectionDock, whose readout line names the
-    // selected cell's coordinates: "<rpm> RPM · <map> kPa MAP". Reading it after two
+    // selected cell's coordinates: "<rpm> RPM, <map> kPa MAP". Reading it after two
     // DIFFERENT cell clicks and confirming it changed proves the clicks actually
     // MOVED the cursor — without that, a click that hit nothing (or landed on the
     // same cell twice) would leave the header intact and the test would pass while
     // proving nothing.
     const cellLabel = () => within(screen.getByTestId('selection-dock'))
-      .getByText(/^\d+ RPM · [\d.]+ kPa MAP$/).textContent;
+      .getByText(/^\d+ RPM, [\d.]+ kPa MAP$/).textContent;
 
     fireEvent.click(dataCells[0]);
     const first = cellLabel();
@@ -191,16 +198,16 @@ describe('opening and dismissing the overwrite prompt', () => {
         <EcuLabApp />
       </StoreProvider>,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
+    enterSandbox();
 
     // Hand-edit a calibration table: this is what sets `tablesDirty`, which is what
     // makes choosePreset offer the prompt instead of loading straight away.
-    fireEvent.click(screen.getByRole('button', { name: /TUNE/ }));
+    goTo('TUNE');
     const grid = within(screen.getByTestId('tuning-grid'));
     const cells = grid.getAllByRole('button').filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent));
     fireEvent.click(cells[Math.floor(cells.length / 2)]);
     fireEvent.click(within(screen.getByTestId('selection-dock')).getByRole('button', { name: '+1' }));
-    fireEvent.click(screen.getByRole('button', { name: /BUILD/ }));
+    goTo('BUILD');
 
     // Now put a preset label back on the build. APPLY_PRESET also clears the store's
     // `tune.tablesDirty` (it moved into the store in Task 5, along with the rest of the
@@ -242,8 +249,9 @@ describe('opening and dismissing the overwrite prompt', () => {
  * @param {string} label
  * @returns {HTMLElement}
  */
-function toggleFor(label) {
-  return screen.getByRole('switch', { name: label });
+/** One of Induction's "what forces the air in" choices. */
+function chooseFor(label) {
+  return within(screen.getByRole('group', { name: 'Forced induction' })).getByRole('button', { name: label });
 }
 
 /**
@@ -282,7 +290,7 @@ describe('choosing a turbine', () => {
 
     // The Induction summary is where the count is legible: it reads "Twin
     // <housing> turbine" above 1 and the bare housing name at 1.
-    const inductionSummary = () => screen.getByText(/turbine · peak/).textContent;
+    const inductionSummary = () => screen.getByText(/turbine, peak/).textContent;
     expect(inductionSummary()).toMatch(/Twin/);
 
     fireEvent.click(screen.getByText('Induction'));
@@ -319,20 +327,19 @@ describe('resetting the calibration to stock', () => {
         <EcuLabApp />
       </StoreProvider>,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
+    enterSandbox();
     // Turbo on in BOTH runs, so the hardware half of the VE calculation is identical
     // and the only difference between them is the mod set.
     fireEvent.click(screen.getByText('Induction'));
-    fireEvent.click(toggleFor('Turbo kit'));
-    // `boltons` dissolved into Induction and Exhaust — the intake card is already in
-    // the DOM once this section is mounted.
+    fireEvent.click(chooseFor('Turbocharger'));
     // Headers, the part that changes how the cylinder breathes: an intake only changes the
     // duct ahead of the throttle and compressor, which leaves VE at a given manifold
-    // pressure alone, so with it this test could not fail.
+    // pressure alone, so with it this test could not fail. A bolt-on, on its own stage.
     if (withIntake) {
-      fireEvent.click(screen.getByText('Exhaust'));
+      buildPart('Bolt-ons');
       fireEvent.click(screen.getByRole('button', { name: /Long-Tube Headers/ }));
     }
+    buildPart('Engine');
     fireEvent.click(screen.getByRole('button', { name: /RESET ALL TO STOCK/ }));
     cleanup();
     return tune.ve;
@@ -382,24 +389,25 @@ describe('correcting VE from a logged pull', () => {
         <EcuLabApp />
       </StoreProvider>,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
+    enterSandbox();
     fireEvent.click(screen.getByText('Induction'));
-    fireEvent.click(toggleFor('Turbo kit'));
+    fireEvent.click(chooseFor('Turbocharger'));
+    buildPart('Bolt-ons');
     fireEvent.click(screen.getByRole('button', { name: /Intake/ }));
 
-    fireEvent.click(screen.getByRole('button', { name: /DYNO/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
+    goTo('DYNO');
+    fireEvent.click(screen.getByRole('button', { name: 'Run a pull' }));
     await waitFor(
-      () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
+      () => expect(screen.getByRole('button', { name: 'Run a pull' })).toBeTruthy(),
       { timeout: 10000 },
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /TUNE/ }));
+    goTo('TUNE');
     // No one-tap copy of the answer exists any more.
     expect(screen.queryByRole('button', { name: 'ACCEPT RE-LOGGED VALUES' })).toBeNull();
     const panel = within(screen.getByRole('region', { name: 'Correct VE from logs' }));
     const veBefore = tune.ve.map((/** @type {number[]} */ r) => [...r]);
-    fireEvent.click(panel.getByRole('button', { name: 'APPLY HALF' }));
+    fireEvent.click(panel.getByRole('button', { name: 'Apply half' }));
 
     const changedRows = tune.ve.map((/** @type {number[]} */ row, /** @type {number} */ ri) => row.some((v, ci) => v !== veBefore[ri][ci]));
     expect(changedRows.some(Boolean)).toBe(true);
@@ -425,26 +433,25 @@ describe('applying a fuel-trim histogram', () => {
         <EcuLabApp />
       </StoreProvider>,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
+    enterSandbox();
 
     fireEvent.click(screen.getByText('Induction'));
-    fireEvent.click(toggleFor('Turbo kit'));
-    // `boltons` dissolved into Induction and Exhaust — the intake card is already in
-    // the DOM once this section is mounted (BuildSection stays mounted collapsed too,
-    // but opening it here matches how a real player would reach the card).
+    fireEvent.click(chooseFor('Turbocharger'));
+    // The intake is a bolt-on, on its own stage.
+    buildPart('Bolt-ons');
     fireEvent.click(screen.getByRole('button', { name: /Intake/ }));
 
-    fireEvent.click(screen.getByRole('button', { name: /DYNO/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
+    goTo('DYNO');
+    fireEvent.click(screen.getByRole('button', { name: 'Run a pull' }));
     // The reveal is a setInterval that ends by setting running false, which is what
     // uncovers the CURVES/PULL LOG/DATALOG/SCORE sub-tabs. Real timers + waitFor,
     // same approach as characterisation.test.jsx's dyno-pull test.
     await waitFor(
-      () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
+      () => expect(screen.getByRole('button', { name: 'Run a pull' })).toBeTruthy(),
       { timeout: 10000 },
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'DATALOG' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Data' }));
     fireEvent.click(screen.getByRole('button', { name: 'BUILD HISTOGRAM FROM THIS PULL' }));
 
     // Guard: BUILD HISTOGRAM swaps its own button for an APPLY/DISCARD pair only once
@@ -492,10 +499,13 @@ describe('the injector-duty preview call site', () => {
     // with ecuInjectorCc (a fresh build already starts at 315cc, the smallest on the
     // menu, so no edit is needed there) and rises with airflow — so fit a turbo and
     // dial the boost target at 6500 RPM to its maximum.
-    fireEvent.click(screen.getByRole('button', { name: /BUILD/ }));
+    goTo('BUILD');
     fireEvent.click(screen.getByText('Induction'));
-    fireEvent.click(toggleFor('Turbo kit'));
+    fireEvent.click(chooseFor('Turbocharger'));
 
+    // The boost target is the tune's, on TUNE → BOOST.
+    goTo('TUNE');
+    fireEvent.click(screen.getByRole('button', { name: 'Boost' }));
     const columns = within(screen.getByTestId('boost-columns')).getAllByRole('button');
     fireEvent.click(columns[RPM.indexOf(6500)]);
     // Every collapsed BuildSection stays mounted (its content is hidden with
@@ -510,10 +520,12 @@ describe('the injector-duty preview call site', () => {
     // table from the CURRENT hardware (hwForVe, which reads turboOn and boostCurve),
     // which is what lets dutyPreview's own VE lookup see the boosted cylinder filling
     // instead of the naturally-aspirated baseline it started on.
+    goTo('BUILD');
+    buildPart('Engine');
     fireEvent.click(screen.getByRole('button', { name: /RESET ALL TO STOCK/ }));
 
-    fireEvent.click(screen.getByRole('button', { name: /TUNE/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'INJECTORS' }));
+    goTo('TUNE');
+    fireEvent.click(screen.getByRole('button', { name: 'Injectors' }));
 
     const meter = screen.getByRole('meter', { name: 'Duty' });
     const dutyValue = Number(meter.getAttribute('aria-valuenow'));
@@ -582,36 +594,42 @@ describe('every segmented control', () => {
     // excluded), so this first count already picks up every Seg on BUILD: three on
     // EngineScreen (Configuration, Block Material, Head Material), one on
     // InductionScreen (Compressor Size), one on FuelSystemScreen (Fuel Octane) and
-    // one on ExhaustScreen (Exhaust Diameter) — six — regardless of which section is
+    // one on BoltonsScreen (Exhaust Diameter) — six — regardless of which section is
     // open.
-    let total = expectEverySegHasOneSelection();
+    // BUILD is the engine stand's build software, one part of the engine at a time (its
+    // Engine part is a picker and a form, with no segmented control on it).
+    let total = 0;
+    for (const part of ['Short block', 'Heads and cam', 'Ignition', 'Induction', 'Fuel system', 'Bolt-ons']) {
+      buildPart(part);
+      total += expectEverySegHasOneSelection();
+    }
 
     // The remaining two Segs are not on BUILD. ECU Injector Scaling is on TUNE >
     // Injectors, which is not the default sub-view, so it needs an explicit click.
-    fireEvent.click(screen.getByRole('button', { name: /TUNE/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'INJECTORS' }));
+    goTo('TUNE');
+    fireEvent.click(screen.getByRole('button', { name: 'Injectors' }));
     total += expectEverySegHasOneSelection();
 
     // DYNO's manifold-pressure picker (EcuLab.jsx) is the eighth and last, and is on
     // the default DYNO sub-view so no further click is needed to reach it.
-    fireEvent.click(screen.getByRole('button', { name: /DYNO/ }));
+    goTo('DYNO');
     total += expectEverySegHasOneSelection();
 
     // Guard the sweep itself: if navigation silently failed, the per-tab assertions
-    // above would each pass on whatever happened to be showing. Twenty-six is the count
+    // above would each pass on whatever happened to be showing. Twenty-eight is the count
     // of segmented controls those three stops reach today:
-    //   BUILD 22 — Engine: Configuration, Block, Head, Valvetrain Layout, Valves per
+    //   BUILD 21 — Engine: Configuration, Block, Head, Valvetrain Layout, Valves per
     //     Cylinder, Cam Followers, Spark Plugs per Cylinder, Friction Level, Cam Phasers,
-    //     Fuel Injection, Ignition Coils, Plug Gap; Induction: MAP Sensor, Compressor, Turbos (single or
-    //     twin), Wastegate Actuator (the spring picker
+    //     Ignition Coils, Plug Gap; Induction: What forces the air in, MAP Sensor, Turbos (single or
+    //     twin; the compressor is a list, with the factory ones, not a segmented control), Wastegate Actuator (the spring picker
     //     only appears for a pneumatic gate), Nitrous Kit (its shot and bottle pickers
     //     only appear with a kit fitted); Fuel: Octane, Regulation, Base Pressure,
-    //     Wideband Controller; Exhaust: Diameter.
+    //     Wideband Controller; Exhaust: Diameter, Catalytic Converter.
     //   TUNE > INJECTORS 3 — the map-slot picker above every TUNE view, ECU Injector
     //     Scaling, and the ECU's Pressure Compensation.
     //   DYNO 1 — the manifold-pressure picker.
     //   (BUILD › ENGINE also has Pistons and rods, the bottom-end picker.)
-    expect(total).toBe(27);
+    expect(total).toBe(28);
   });
 });
 
@@ -627,6 +645,10 @@ describe('every toggle', () => {
     // earlier version of this test had exactly that bug.
     launch();
     fireEvent.click(screen.getByText('Induction'));
+    // With a supercharger and a nitrous kit fitted, Induction shows its intercooler and
+    // bottle-heater switches.
+    fireEvent.click(chooseFor('Supercharger'));
+    fireEvent.click(within(screen.getByRole('group', { name: 'Nitrous kit' })).getByRole('button', { name: 'Wet' }));
     const switches = screen.getAllByRole('switch');
     expect(switches.length).toBeGreaterThan(1);
     switches.forEach((sw) => {
@@ -635,20 +657,20 @@ describe('every toggle', () => {
   });
 
   it('installs the turbo when switched on, and reports it', () => {
-    // The partner to the intercooler test below. Without this, breaking Turbo kit's
+    // The partner to the intercooler test below. Without this, breaking the turbo choice's
     // `checked` or `onChange` was caught only incidentally, by an unrelated duty-cycle
     // test whose threshold happens to need turboOn — change that number and a broken
     // turbo switch would pass the whole suite.
     launch();
     fireEvent.click(screen.getByText('Induction'));
-    const summary = () => screen.getByText(/Not installed|turbine · peak/).textContent;
-    expect(summary()).toBe('Not installed');
+    const summary = () => screen.getByText(/Naturally aspirated|turbine, peak/).textContent;
+    expect(summary()).toBe('Naturally aspirated');
 
-    fireEvent.click(screen.getByRole('switch', { name: /Turbo kit/ }));
+    fireEvent.click(chooseFor('Turbocharger'));
 
-    expect(screen.getByRole('switch', { name: /Turbo kit/ }).getAttribute('aria-checked')).toBe('true');
+    expect(chooseFor('Turbocharger').getAttribute('aria-pressed')).toBe('true');
     // And it reached the build, not just the switch: the section summary reads turboOn.
-    expect(summary()).toMatch(/turbine · peak/);
+    expect(summary()).toMatch(/turbine, peak/);
   });
 
   it('installs the intercooler when switched on, and reports it', () => {
@@ -669,7 +691,7 @@ describe('every toggle', () => {
         <EcuLabApp />
       </StoreProvider>,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
+    enterSandbox();
     fireEvent.click(screen.getByText('Induction'));
     const intercooler = screen.getByRole('switch', { name: /Intercooler/ });
     expect(intercooler.getAttribute('aria-checked')).toBe('false');

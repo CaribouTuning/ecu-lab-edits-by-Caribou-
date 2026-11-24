@@ -15,7 +15,7 @@
  * issue #34 removed.
  */
 
-import { LOAD, OPEN_LOOP_KPA, RPM } from '../../sim/index.js';
+import { LOAD, MIXTURE_TOLERANCE_PCT, OPEN_LOOP_KPA, RPM } from '../../sim/index.js';
 
 import { inRect, rectOf } from './selection.js';
 
@@ -27,6 +27,10 @@ import { inRect, rectOf } from './selection.js';
  * @property {string} headline plain text, shown on the collapsed summary at <560px
  * @property {string} state which body the renderer should show
  * @property {object} detail numbers and cell records the body needs
+ * @property {{knockDeg?: number, mixOffPct?: number, rich?: boolean}} [sprayFirst] spark and fuel: the nitrous
+ *   knocked or missed its mixture while spraying, which TUNE → NITROUS answers
+ * @property {{lean: boolean, cause: string}} [fuelFirst] spark only: the engine is missing its AFR
+ *   table, so the knock limits are for the mixture it is getting (fix the fuelling first)
  */
 
 /** English, not a template with a stray "1 cells" in it. */
@@ -47,6 +51,38 @@ function countIn(arr, selection) {
  * @returns {AdvisorReport}
  */
 export function sparkReport(calAdvice, selection) {
+  const report = sparkReportOf(calAdvice, selection);
+  // FUEL BEFORE SPARK. Where the engine is not getting the mixture its table asks for, the
+  // knock limits below are the ones for the mixture it is getting: a lean charge lowers them,
+  // and a tuner who retards to them now puts it all back once the fuelling is right.
+  const missed = (calAdvice.missedMix ?? []).find((p) => p.lean) ?? (calAdvice.missedMix ?? [])[0];
+  const withFuel = missed ? { ...report, fuelFirst: { lean: missed.lean, cause: missed.cause ?? 've' } } : report;
+  return withSpray(withFuel, calAdvice, 'knock');
+}
+
+/**
+ * The nitrous's own trouble, named on the page a player would otherwise look at: knock or a
+ * missed mixture while spraying belongs to TUNE → NITROUS, and this table is not judged on it.
+ * @param {AdvisorReport} report @param {any} calAdvice @param {'knock'|'mix'} what
+ * @returns {AdvisorReport}
+ */
+function withSpray(report, calAdvice, what) {
+  const s = calAdvice.spray;
+  if (!s) return report;
+  if (what === 'knock' && s.knockDeg > 0) return { ...report, sprayFirst: { knockDeg: s.knockDeg } };
+  if (what === 'mix' && s.mixOffPct > MIX_OFF_SPRAY_PCT) return { ...report, sprayFirst: { mixOffPct: s.mixOffPct, rich: s.rich } };
+  return report;
+}
+
+/** A spray mixture off its target by more than this, percent, is named on FUEL (as the log's). */
+const MIX_OFF_SPRAY_PCT = 6;
+
+/**
+ * @param {any} calAdvice
+ * @param {any} selection
+ * @returns {AdvisorReport}
+ */
+function sparkReportOf(calAdvice, selection) {
   const { spark, overAdvanced, underAdvanced, pastMbt } = calAdvice;
 
   if (selection && selection.type === 'cell') {
@@ -82,6 +118,9 @@ export function sparkReport(calAdvice, selection) {
         detail: { cell },
       };
     }
+    // At its number, but the pull still knocked where it blends: the cells beside it, which are
+    // listed with their own numbers, carry the rest. This one is done.
+    if (cell.atSuggestion) return { tone: 'warn', headline: 'At its safe value', state: 'cell-done', detail: { cell } };
     return { tone: 'ok', headline: 'Inside both ceilings', state: 'cell-ok', detail: { cell } };
   }
 
@@ -136,6 +175,15 @@ export function sparkReport(calAdvice, selection) {
  * @returns {AdvisorReport}
  */
 export function fuelReport(calAdvice, selection) {
+  return withSpray(fuelReportOf(calAdvice, selection), calAdvice, 'mix');
+}
+
+/**
+ * @param {any} calAdvice
+ * @param {any} selection
+ * @returns {AdvisorReport}
+ */
+function fuelReportOf(calAdvice, selection) {
   const { fuelAdv, wrongMix } = calAdvice;
 
   if (selection && selection.type === 'cell') {
@@ -178,6 +226,31 @@ export function fuelReport(calAdvice, selection) {
   // banner only ever showed one thing, the wrongMix count, and simply did not
   // render when it was empty. table-clean is new prose the panel needs
   // because, unlike the old banner, it always renders something.
+  // The engine missing what the table asks for comes first: until the fuelling delivers the
+  // table, no cell of it can be judged by what the engine got (the pull log says the same).
+  const allMissed = calAdvice.missedMix ?? [];
+  // Misses Correct VE from logs has done all it can for are said as the log says them, after
+  // anything still to fix.
+  const missed = allMissed.filter((m) => !m.settled);
+  const settled = allMissed.filter((m) => m.settled);
+  if (missed.length > 0) {
+    const worst = missed.reduce((a, b) => (Math.abs(b.afr - b.afrCommanded) > Math.abs(a.afr - a.afrCommanded) ? b : a));
+    return {
+      tone: 'warn',
+      headline: `The engine runs ${worst.lean ? 'leaner' : 'richer'} than this table asks for`,
+      state: 'table-missed',
+      detail: { worst, from: missed[0].rpm, to: missed[missed.length - 1].rpm, alsoOff: wrongMix.length },
+    };
+  }
+  if (wrongMix.length === 0 && settled.length > 0) {
+    const worst = settled.reduce((a, b) => (Math.abs(b.afr - b.afrCommanded) > Math.abs(a.afr - a.afrCommanded) ? b : a));
+    return {
+      tone: 'ok',
+      headline: 'As close as these breakpoints allow',
+      state: 'table-settled',
+      detail: { worst, from: settled[0].rpm, to: settled[settled.length - 1].rpm },
+    };
+  }
   if (wrongMix.length > 0) {
     return {
       tone: 'warn',
@@ -189,15 +262,21 @@ export function fuelReport(calAdvice, selection) {
   return { tone: 'ok', headline: 'High-load mixture is on best power', state: 'table-clean', detail: {} };
 }
 
-/** A logged cell within this is as right as a wideband and fuel trims can tell. */
-export const VE_LOG_GOOD_PCT = 2;
+/**
+ * A logged cell within this is settled: the same band the pull log uses to stop pointing at
+ * the VE table (`gridBound` in sweep.js, half the mixture tolerance). With 2% here a cell
+ * 1.9% off read "matches" with Apply greyed out while the log, rightly, still sent the
+ * player to it: the full-throttle mixture is held to 2%, and a cell 1–2% off leaves the
+ * speeds between breakpoints past that.
+ */
+export const VE_LOG_GOOD_PCT = MIXTURE_TOLERANCE_PCT / 2;
 
 /**
  * @typedef {object} VeLogInput
  * @property {{cell: (import('../../sim/veLearn.js').VeCell|null)[][], cells: number}} corr
  *   from `veCorrections`
  * @property {number[][]} ve the table on screen
- * @property {'blend'|'sd'|'maf'} airModel
+ * @property {'blend'|'sd'|'maf'|'alphan'} airModel
  * @property {{state: 'none'|'stale'|'part-load'|'unused'|'ok', changed?: string[]}} pullInfo
  * @property {number} liveSamples
  * @property {import('../../sim/layouts.js').TableAxes} [axes] the VE table's breakpoints, when

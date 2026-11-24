@@ -34,6 +34,22 @@ describe.each(JOBS.map((j) => [j.id, j]))('%s', (_id, job) => {
   });
 });
 
+describe('the shop\'s books', () => {
+  it('reports the reputation change that happened: never below zero, never shown as more', () => {
+    const c0 = { ...shop.newCareer(), rep: 0 };
+    const job = jobById('intake-maf');
+    const v = evaluateJob(job, customerCar(job.car));
+    expect(v.rep).toBeLessThan(0);
+    const c1 = shop.deliver(shop.accept(c0, job.id), job.id, v);
+    expect(c1.rep).toBe(0);
+    expect(c1.last.repChange).toBe(0);
+    expect(c1.history[0].repChange).toBe(0);
+    const c2 = shop.giveUp(shop.accept({ ...c0, rep: 1 }, job.id), job.id);
+    expect(c2.rep).toBe(0);
+    expect(c2.history[0].repChange).toBe(-1);
+  });
+});
+
 describe('grading', () => {
   it('judges the idle once it has settled after a warm restart, not the start-up flare', () => {
     // A player reported failing "Still idles smoothly" on a car that never idled rough in
@@ -91,12 +107,12 @@ describe('grading', () => {
 describe('the shop', () => {
   const { accept, blockers, board, buy, cannotBuy, cannotTrain, capacity, deliver, newCareer, overhead, pageUnlocked, reviveCareer, storeCar, train } = /** @type {any} */ (shop);
 
-  it('starts small: a little money, no reputation, fuel basics only, one lift, no dyno', () => {
+  it('starts small: a little money, no reputation, fuel basics only, one lift, and Ray’s dyno', () => {
     const c = newCareer();
     expect(c.money).toBe(START_MONEY);
     expect(c.rep).toBe(0);
     expect(capacity(c)).toBe(1);
-    expect(c.owned).not.toContain('dyno');
+    expect(c.owned).toContain('dyno');
     expect(['airflow', 'fuel', 'injectors', 'sensors'].every((p) => pageUnlocked(c, p))).toBe(true);
     expect(['spark', 'idle', 'boost', 'vvt', 'nitrous'].some((p) => pageUnlocked(c, p))).toBe(false);
   });
@@ -152,11 +168,10 @@ describe('the shop', () => {
 
   it('money is a decision: you cannot buy what you cannot afford, and buying spends it', () => {
     const c = { ...newCareer(), rep: 20 };
-    expect(cannotBuy(c, 'dyno')).toMatch(/\$5,000 short/);
-    const rich = buy({ ...c, money: 7000 }, 'dyno');
-    expect(rich.owned).toContain('dyno');
+    expect(cannotBuy(c, 'lift2')).toMatch(/\$2,000 short/);
+    const rich = buy({ ...c, money: 4000 }, 'lift2');
+    expect(rich.owned).toContain('lift2');
     expect(rich.money).toBe(1000);
-    expect(rich.milestones).toContain('dyno');
   });
 
   it('training costs money, needs its prerequisites, and opens the real pages', () => {
@@ -174,5 +189,38 @@ describe('the shop', () => {
     const kept = reviveCareer({ ...newCareer(), money: 4321, lifts: [{ jobId: 'no-such-job', car: {} }] });
     expect(kept.money).toBe(4321);
     expect(kept.lifts).toEqual([]);
+  });
+
+  it('a save from when the dyno was bought has Ray’s, and loses the town’s cars and clothes', () => {
+    const old = reviveCareer({ ...newCareer(), owned: ['laptop', 'wideband'], cars: [{ id: 'x' }], wardrobe: ['cap'], races: { won: [], best: {} } });
+    expect(old.owned).toContain('dyno');
+    expect(old.cars).toBeUndefined();
+    expect(old.wardrobe).toBeUndefined();
+    expect(old.races).toBeUndefined();
+  });
+});
+
+describe('a save from another version', () => {
+  it('is migrated, not wiped, when its step exists; and is reported unreadable when it does not', async () => {
+    const shop = await import('../src/ui/career/shop.js');
+    const old = { ...shop.newCareer(), v: 0, money: 4321, rep: 7 };
+    // No step from version 0 yet: nothing to migrate it with, so it is unreadable and a new career starts.
+    expect(shop.canReadCareer(old)).toBe(false);
+    expect(shop.reviveCareer(old).money).toBe(shop.START_MONEY);
+    // With a step registered (as a future version bump must), the same save is kept.
+    shop.MIGRATIONS[0] = (s) => ({ ...s, v: 1 });
+    try {
+      expect(shop.canReadCareer(old)).toBe(true);
+      expect(shop.reviveCareer(old).money).toBe(4321);
+      expect(shop.reviveCareer(old).rep).toBe(7);
+    } finally {
+      delete shop.MIGRATIONS[0];
+    }
+    // Garbage and a newer build's save are not readable either, and never throw.
+    for (const bad of [null, 'x', 7, [], { v: shop.SAVE_VERSION + 1 }]) {
+      expect(shop.canReadCareer(bad)).toBe(false);
+      expect(() => shop.reviveCareer(bad)).not.toThrow();
+    }
+    expect(shop.canReadCareer(shop.newCareer())).toBe(true);
   });
 });

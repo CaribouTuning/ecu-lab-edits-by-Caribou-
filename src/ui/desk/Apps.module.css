@@ -1,0 +1,377 @@
+/* The laptop's apps: Learn's shelves, Physics' stages, Build's engine and its OEM list. */
+
+.pad { padding: 16px; }
+.lead { margin: 0 0 14px; font-size: var(--fs-sm); line-height: 1.6; color: var(--ink2); max-width: 70ch; }
+
+/* ---------- Physics: four panels, as drawn ---------- */
+.physGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 32px; align-items: start; }
+@media (max-width: 900px) { .physGrid { grid-template-columns: 1fr; } }
+
+.physPanel {
+  /* A technical panel: its name in a title strip along the top, its working under it. */
+  min-width: 0; padding: 0 12px 12px; border-radius: 14px; overflow: hidden;
+  background: var(--glass-soft); box-shadow: inset 0 0 0 1px var(--glass-edge);
+}
+.panelHead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.panelTitle { margin: 0 0 10px; font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.physPanel > .panelTitle, .physPanel > .panelHead {
+  margin: 0 -12px 10px; padding: 5px 12px; min-height: 30px;
+  background: linear-gradient(var(--strip-hi), var(--strip-lo)); box-shadow: inset 0 -1px 0 var(--glass-edge);
+}
+.physPanel > .panelTitle { text-align: center; }
+.physPanel > .panelHead .panelTitle { margin: 0; }
+.physWide { grid-column: 1 / -1; }
+.panelNote { margin: 0 0 10px; font-size: var(--fs-sm); color: var(--ink2); line-height: 1.5; }
+.graphBtns { display: flex; gap: 6px; margin-bottom: 8px; }
+.graphBtns button {
+  min-width: 46px; min-height: 24px; padding: 4px 12px; border: 0; border-radius: 999px; background: var(--glass-chip);
+  color: var(--ink); font-weight: 500; font-size: var(--fs-sm); cursor: pointer;
+}
+.buildEngine { margin: 0 0 10px; }
+.buildEngine > div { height: clamp(150px, 22vw, 200px); }
+.buildList { margin: 0; display: flex; flex-direction: column; }
+/* A spec sheet: the name, the figure, then what it does, ruled between rows. */
+.buildRow2 {
+  display: grid; grid-template-columns: 112px 1fr; gap: 12px; padding: 7px 0;
+  border-top: 1px solid var(--line); font-size: var(--fs-sm); line-height: 1.4;
+}
+.buildRow2:first-child { border-top: 0; }
+.buildRow2 dt { color: var(--ink2); }
+.buildRow2 dd { margin: 0; display: flex; flex-direction: column; gap: 1px; }
+.buildRow2 dd b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.buildRow2 dd span { color: var(--ink2); font-size: var(--fs-xs); }
+.piston { animation: piston 1s ease-in-out infinite alternate; }
+@keyframes piston { to { transform: translateY(var(--travel)); } }
+@media (prefers-reduced-motion: reduce) { .piston { animation: none; } }
+@media (max-width: 560px) {
+  .buildRow2 { grid-template-columns: 96px 1fr; gap: 10px; }
+}
+.art path, .art rect, .art line { filter: url(#hand-jitter); }
+.rpm { width: 100%; margin: 6px 0 2px; accent-color: var(--acc); }
+
+/* The Physics graph's traces, drawn inside Plot.jsx's axes. */
+.plotCursor { stroke: var(--ink2); stroke-width: 1; stroke-dasharray: 3 3; }
+.plotLine { fill: none; stroke: var(--acc); stroke-width: 2; stroke-linejoin: round; }
+.plotLine2 { fill: none; stroke: var(--data2); stroke-width: 2; stroke-linejoin: round; }
+.plotDot { fill: var(--acc); stroke: var(--bg); stroke-width: 2; }
+.plotDot2 { fill: var(--data2); stroke: var(--bg); stroke-width: 2; }
+/* The values at the chosen speed: a row of figures, each with its name above. */
+.readout { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 12px 0 0; padding-top: 10px; border-top: 1px solid var(--line); }
+.readout div { min-width: 0; }
+.readout dt { font-size: var(--fs-xs); color: var(--ink2); }
+.readout dd { margin: 2px 0 0; font-size: 17px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+.readout small { font-size: var(--fs-xs); font-weight: 500; color: var(--ink2); }
+/* A stage of the raw model: a row that opens. */
+.stage { border-top: 1px solid var(--line); }
+.stage:first-of-type { border-top: 0; }
+.stageTitle {
+  display: flex; align-items: center; gap: 8px; padding: 8px 2px; cursor: pointer; list-style: none;
+  font-size: var(--fs-base); font-weight: 700;
+}
+.stageTitle::-webkit-details-marker { display: none; }
+.stageTitle::after { content: '+'; margin-left: auto; color: var(--ink2); font-weight: 600; }
+.stage[open] > .stageTitle::after { content: '−'; }
+.stageBody { display: grid; grid-template-columns: 120px 1fr; gap: 12px; align-items: start; padding: 2px 0 12px; }
+@media (max-width: 560px) { .stageBody { grid-template-columns: 1fr; } .art { max-height: 140px; } }
+.stageArt { padding: 8px; border-radius: var(--r-sm); background: var(--panel2); border: 1px solid var(--line); }
+.stageBody:not(:has(> .stageArt)) { grid-template-columns: 1fr; }
+.art { display: block; width: 100%; height: auto; }
+.stageNum {
+  width: 22px; height: 22px; display: inline-grid; place-items: center; border-radius: 50%;
+  background: var(--acc-bg); color: var(--acc-ink); border: 1px solid var(--acc); font-size: var(--fs-xs);
+}
+.stageWhat { margin: 0 0 8px; font-size: var(--fs-sm); line-height: 1.6; color: var(--ink2); }
+.eq {
+  margin-bottom: 10px; padding: 8px 10px; border-radius: var(--r-sm); border-left: 3px solid var(--acc);
+  background: var(--panel2); font-family: var(--mono); font-size: var(--fs-sm); color: var(--ink); overflow-x: auto;
+}
+.nums { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; font-size: var(--fs-sm); }
+.nums dt { color: var(--ink2); }
+.nums dd { margin: 0; font-family: var(--sans); font-variant-numeric: tabular-nums; color: var(--ink); }
+/* The pictures' strokes and fills, from the theme. */
+.artLine { fill: none; stroke: var(--acc); stroke-width: 2.2; }
+.artWarn { fill: none; stroke: var(--warn); stroke-width: 2; }
+.artGrid { stroke: var(--line-hi); stroke-width: 1; stroke-dasharray: 3 3; }
+.artText { fill: var(--ink2); font-size: 9px; font-family: var(--sans); }
+.artBox { fill: var(--panel); stroke: var(--ink3); stroke-width: 1.5; }
+.artBox2 { fill: var(--panel3); stroke: var(--ink3); stroke-width: 1.5; }
+.artFill { fill: var(--acc); opacity: 0.75; }
+.artFill2 { fill: var(--ok); opacity: 0.8; }
+.artDanger { fill: var(--danger); opacity: 0.8; }
+
+/* ---------- Tune: one row of tabs, VE first ---------- */
+/* Tune as a Mac app: a source-list sidebar of the ECU's tables beside the open one. */
+.tuneLayout { display: grid; grid-template-columns: 164px minmax(0, 1fr); align-items: start; min-height: 100%; }
+.tuneSidebar {
+  position: sticky; top: 0; align-self: stretch; display: flex; flex-direction: column; gap: 2px;
+  padding: 4px 8px 10px 10px; background: transparent;
+}
+.sideHead { padding: 8px 8px 4px; font-size: 11.5px; font-weight: 500; color: var(--mac-label2); }
+/* The tables as a Settings list: one inset group, each row its own coloured tile. */
+.tuneTabs {
+  display: flex; flex-direction: column; gap: 1px; padding: 4px; border-radius: 14px;
+  background: var(--glass-soft); box-shadow: inset 0 0 0 1px var(--glass-edge);
+}
+/* The phone's page tabs (PageTabs): hidden wherever the sidebar has room. */
+.tunePicker { display: none; }
+.tuneTab {
+  display: flex; align-items: center; gap: 9px; width: 100%; height: 30px; padding: 0 6px;
+  border: 0; border-radius: 9px; background: transparent; color: var(--mac-label);
+  font-size: 13px; font-weight: 400; text-align: left; cursor: pointer;
+}
+.tuneTab:hover:not([aria-current='page']) { background: var(--glass-chip); }
+/* The selected row: the accent, muted, with the glass's highlight along its top. */
+.tuneTab[aria-current='page'] {
+  background: color-mix(in srgb, var(--acc) 30%, transparent) !important; border-color: transparent !important; color: var(--mac-sel-ink) !important;
+  box-shadow: inset 0 1px 0 var(--glass-hi), inset 0 0 0 1px color-mix(in srgb, var(--acc-ink) 18%, transparent) !important;
+}
+/* Each page's tile: a rounded square in its own colour, a white glyph on it. */
+.tuneTile {
+  flex: none; width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; color: var(--app-glyph);
+  background: linear-gradient(var(--hi, var(--tile-idle-hi)), var(--lo, var(--tile-idle-lo)));
+  box-shadow: inset 0 1px 0 var(--glass-hi), inset 0 -1px 0 var(--glass-shade);
+}
+.tuneTile[data-page='airflow'] { --hi: var(--tile-air-hi); --lo: var(--tile-air-lo); }
+.tuneTile[data-page='spark'] { --hi: var(--tile-spark-hi); --lo: var(--tile-spark-lo); }
+.tuneTile[data-page='fuel'] { --hi: var(--tile-fuel-hi); --lo: var(--tile-fuel-lo); }
+.tuneTile[data-page='injectors'] { --hi: var(--tile-inj-hi); --lo: var(--tile-inj-lo); }
+.tuneTile[data-page='sensors'] { --hi: var(--tile-sens-hi); --lo: var(--tile-sens-lo); }
+.tuneTile[data-page='boost'] { --hi: var(--tile-boost-hi); --lo: var(--tile-boost-lo); }
+.tuneTile[data-page='vvt'] { --hi: var(--tile-cam-hi); --lo: var(--tile-cam-lo); }
+.tuneTile[data-page='protect'] { --hi: var(--tile-prot-hi); --lo: var(--tile-prot-lo); }
+.tuneTile[data-page='torque'] { --hi: var(--tile-torq-hi); --lo: var(--tile-torq-lo); }
+.tuneTile[data-page='nitrous'] { --hi: var(--tile-nos-hi); --lo: var(--tile-nos-lo); }
+.tuneTabName { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A count, as Mail shows unread mail beside a mailbox. */
+.tuneFlag {
+  flex: none; min-width: 18px; padding: 0 5px; border-radius: 8px; background: var(--warn-bg); color: var(--warn-ink);
+  font-size: 11px; font-variant-numeric: tabular-nums; line-height: 16px; text-align: center;
+}
+.sideMaps { padding: 2px 8px 8px; }
+.tuneMain { min-width: 0; container: tune / inline-size; }
+/*
+ * On a phone there is no room for a sidebar: the pages are one line of tabs that scrolls
+ * sideways (the open page underscored, a count on a page the log points at), and the map slots
+ * sit on a line under it.
+ */
+@media (max-width: 560px) {
+  .tuneLayout { grid-template-columns: minmax(0, 1fr); align-content: start; }
+  .tuneSidebar { position: static; flex-direction: column; align-items: stretch; gap: 0; padding: 0; border-right: 0; border-bottom: 1px solid var(--glass-edge); }
+  .sideHead { display: none; }
+  .tunePicker { display: block; }
+  /* TUNE's pages are too many for a row of tabs: the picker above lists them. (Learn's four
+     shelves still fit as tabs.) */
+  .tuneTabsWide { display: none !important; }
+  .tuneTabs {
+    border-radius: 0; background: transparent; box-shadow: none;
+    flex-direction: row; flex-wrap: nowrap; gap: 0; overflow-x: auto; overscroll-behavior-x: contain;
+    scrollbar-width: none; border-bottom: 1px solid var(--line); padding: 0 6px;
+    -webkit-mask-image: linear-gradient(to right, black calc(100% - 28px), transparent); mask-image: linear-gradient(to right, black calc(100% - 28px), transparent);
+  }
+  .tuneTabs::-webkit-scrollbar { display: none; }
+  .tuneTab {
+    flex: none; width: auto; height: 44px; padding: 0 11px; border-radius: 0; background: transparent;
+    border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; color: var(--mac-label2); font-size: 13.5px; white-space: nowrap;
+  }
+  .tuneTab svg, .tuneTile { display: none; }
+  .tuneTab[aria-current='page'] { background: transparent !important; box-shadow: none !important; color: var(--mac-label) !important; font-weight: 700; border-bottom: 2px solid var(--acc) !important; }
+  .tuneTab:hover:not([aria-current='page']) { background: transparent; color: var(--mac-label); }
+  .sideMaps { padding: 4px 12px; }
+}
+
+/* ---------- Physics: the engine cutaway ---------- */
+.cutWrap { display: flex; flex-direction: column; gap: 10px; }
+/* Which stroke cylinder 1 is on: a read-out, not a control, so it is drawn as one (a strip
+   of four with the current one lit underneath), never as buttons. */
+.strokeRow { display: flex; flex-direction: column; gap: 4px; }
+.strokeLabel { font-size: var(--fs-xs); color: var(--ink2); }
+.strokeBar { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid var(--line); }
+.strokePill { padding: 4px 2px 5px; text-align: center; font-size: var(--fs-xs); font-weight: 500; color: var(--ink2); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.strokePill[data-on] { color: var(--ink); font-weight: 600; border-bottom-color: var(--acc); }
+.cutSplit { display: grid; grid-template-columns: 1fr; gap: 12px; align-items: start; }
+/* A page of its own on a wide screen: the drawing beside its explanation, chart and sums. */
+@media (min-width: 1100px) { .physWide .cutSplit { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; } }
+.cutSvg { width: 100%; height: auto; max-height: 560px; background: var(--bg); border-radius: var(--r-md); }
+.cutSide { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.cutStroke { margin: 0; font-size: var(--fs-sm); line-height: 1.5; color: var(--ink2); }
+.cutStroke b { color: var(--ink); }
+.pvLoop { fill: none; stroke: var(--cut-burn); stroke-width: 1.6; }
+.pvDot { fill: var(--acc); stroke: var(--bg); stroke-width: 2; }
+.liveEq { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; margin: 0; font-size: var(--fs-xs); }
+.liveEq dt { color: var(--ink2); white-space: nowrap; }
+.liveEq dd { margin: 0; font-family: var(--mono); color: var(--ink); line-height: 1.45; }
+.cutControls { display: flex; gap: 8px; align-items: center; }
+.cutControls button { padding: 4px 14px; border: 0; border-radius: 999px; background: var(--glass-chip); color: var(--ink); font-weight: 500; font-size: var(--fs-sm); cursor: pointer; }
+.cutControls input { flex: 1; accent-color: var(--acc); }
+.cutCoolant { fill: var(--cut-coolant); opacity: 0.8; }
+/* Cut metal is section-lined (SectionHatch in cutawayParts.jsx: 45° lines, ISO 128-50),
+   outlined in one thin line; where no hatch is defined it falls back to the flat fill. */
+.cutBlock, .cutHead, .cutCase { fill: var(--cut-metal-dark); stroke: var(--cut-metal); stroke-width: 1; }
+svg:has(:global(#cut-hatch)) .cutBlock, svg:has(:global(#cut-hatch)) .cutHead, svg:has(:global(#cut-hatch)) .cutCase { fill: url(#cut-hatch); }
+.cutBore { stroke: var(--ink3); stroke-width: 2; }
+.cutLeader { stroke: var(--ink3); stroke-width: 0.75; }
+.cutLeaderDot { fill: var(--ink2); }
+/* Flow streaks: the tail fades behind the gas, the head is solid. */
+.streakFresh { stroke: var(--cut-fresh); stroke-linecap: round; opacity: 0.5; }
+.streakBurn { stroke: var(--cut-burn); stroke-linecap: round; opacity: 0.5; }
+.cutOil { fill: var(--cut-oil); opacity: 0.85; }
+.gasFresh { fill: var(--cut-fresh); }
+.gasBurn { fill: var(--cut-burn); }
+.gasSpent { fill: var(--cut-exhaust); }
+.cutFlame { fill: var(--warn); }
+.cutSpring { fill: none; stroke: var(--cut-oil); stroke-width: 2.2; }
+.cutStem { stroke: var(--ink-soft); stroke-width: 4; stroke-linecap: round; }
+.cutValve { fill: var(--ink-soft); stroke: var(--ink3); stroke-width: 1; }
+.cutCam { fill: var(--cut-metal); stroke: var(--ink3); stroke-width: 1.2; }
+.cutHub { fill: var(--panel); stroke: var(--cut-metal); stroke-width: 2.5; }
+.cutPlug { fill: var(--ink2); }
+.cutPlugTip { fill: var(--cut-metal); }
+.cutSpark { fill: var(--warn); }
+.cutCounter { fill: var(--cut-metal-dark); stroke: var(--ink3); stroke-width: 1.2; }
+.cutWeb { fill: var(--cut-metal); }
+.cutRod { stroke: var(--cut-metal); stroke-width: 9; stroke-linecap: round; }
+.cutPiston { fill: var(--cut-metal); stroke: var(--ink3); stroke-width: 1.2; }
+.cutRing { stroke: var(--cut-metal-dark); stroke-width: 1.5; }
+.cutArrow { fill: var(--acc-ink); }
+.cutLabel { fill: var(--ink-soft); font-size: 10px; font-family: var(--sans); font-weight: 500; }
+.physControls {
+  /* The two inputs every panel below follows: one glass band across the top. */
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px 32px; margin: 0 0 16px; padding: 12px 16px;
+  border-radius: 14px; background: var(--glass-soft); box-shadow: inset 0 0 0 1px var(--glass-edge);
+}
+@media (max-width: 700px) { .physControls { grid-template-columns: 1fr; } }
+.ctl { display: flex; flex-direction: column; gap: 6px; font-size: var(--fs-sm); color: var(--ink2); }
+.ctl b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.ctl input { accent-color: var(--acc); width: 100%; }
+.ctlNote { grid-column: 1 / -1; margin: 0; font-size: var(--fs-xs); color: var(--ink2); }
+
+/* ---------- CAREER: Pops's messages, as the phone's Messages and Mail draw them ---------- */
+.msgs { display: grid; grid-template-columns: minmax(260px, 340px) 1fr; height: 100%; min-height: 100%; background: var(--bg); font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', var(--sans); }
+/* The conversation list, as iMessage lays it out: a large title, then one row per person. */
+.msgList { min-width: 0; min-height: 0; height: 100%; overflow-y: auto; display: flex; flex-direction: column; padding: 8px 0 16px; border-right: 1px solid var(--line); background: var(--bg); }
+/* The large title, where the window's own bar does not already name the app. */
+.msgTitle { margin: 6px 16px 10px; font-size: 32px; font-weight: 700; letter-spacing: 0.005em; color: var(--ink); }
+.msgRow {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 16px 10px 4px; border: 0; background: transparent;
+  color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+}
+.msgRow:hover { background: var(--panel); }
+.msgRow[aria-current='page'] { background: var(--msg-sent); }
+.msgRow[aria-current='page'] :is(small, .msgRowPreview) { color: var(--app-glyph); }
+.msgDotSlot { flex: none; width: 14px; display: grid; place-items: center; }
+.msgDot { width: 10px; height: 10px; border-radius: 50%; background: var(--msg-sent); display: block; }
+.msgRow[aria-current='page'] .msgDot { background: var(--app-glyph); }
+/* iOS's contact with no photo: an initial on a grey gradient disc. Fixed size, never squeezed. */
+.avatar {
+  flex: none; display: grid; place-items: center; aspect-ratio: 1; border-radius: 50%;
+  background: linear-gradient(180deg, var(--msg-avatar-hi), var(--msg-avatar-lo)); color: var(--app-glyph); font-weight: 600; line-height: 1;
+}
+.msgRowText { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.msgRowTop { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.msgRowTop b { font-size: 16px; font-weight: 600; }
+.msgRowTop small { display: inline-flex; align-items: center; gap: 2px; font-size: 14px; color: var(--ink2); flex: none; }
+.msgRowPreview {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  font-size: 14px; line-height: 1.3; color: var(--ink2);
+}
+.msgRowPreview[data-unread='true'] { color: var(--ink); }
+/* The thread scrolls inside itself, so its header stays put as iMessage's does. */
+.msgView { min-width: 0; min-height: 0; height: 100%; display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; }
+.msgEmpty { color: var(--ink2); text-align: center; margin-top: 30%; font-size: var(--fs-md); }
+/* The thread's header: back on the left, the contact centred under their picture. */
+.threadHead {
+  position: sticky; top: 0; z-index: 1; display: grid; grid-template-columns: 44px 1fr 44px; align-items: center;
+  padding: 6px 4px 8px; border-bottom: 1px solid var(--line); background: var(--bg);
+}
+.msgBack { display: none; width: 44px; height: 44px; place-items: center; padding: 0; border: 0; background: transparent; color: var(--msg-sent); cursor: pointer; }
+.threadWho { grid-column: 2; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.threadWho b { display: inline-flex; align-items: center; gap: 1px; font-size: 12px; font-weight: 500; color: var(--ink); }
+.threadWho small { font-size: 11px; color: var(--ink2); }
+/* Bubbles: his grey on the left, yours blue on the right; the last of a run carries the tail. */
+.bubbles { flex: 1; display: flex; flex-direction: column; gap: 2px; align-items: flex-start; padding: 8px 12px 20px; width: 100%; max-width: 680px; margin: 0 auto; box-sizing: border-box; }
+.threadDay { align-self: center; margin: 14px 0 6px; font-size: 11px; font-weight: 500; color: var(--ink2); text-align: center; }
+.threadNote { align-self: center; margin: 14px 0 0; font-size: 11px; color: var(--ink2); }
+.bubble {
+  position: relative; margin: 0; max-width: 78%; padding: 7px 12px; border-radius: 18px;
+  background: var(--msg-got); color: var(--ink); font-size: 16px; line-height: 1.3; overflow-wrap: anywhere;
+}
+.bubble[data-tail='true'] { border-bottom-left-radius: 4px; margin-bottom: 6px; }
+.bubble[data-me='true'] { align-self: flex-end; background: var(--msg-sent); color: var(--app-glyph); }
+.bubble[data-me='true'][data-tail='true'] { border-bottom-left-radius: 18px; border-bottom-right-radius: 4px; }
+.bubble[data-pay='true'] { padding: 10px 16px; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; background: var(--msg-got); }
+.bubble[data-goal='true'] b { color: var(--warn-ink, var(--ink)); }
+/* What Ray taught him: a card in the thread, as iMessage shows a link with its preview. */
+.linkCard { max-width: 82%; margin: 0; border-radius: 18px; overflow: hidden; background: var(--msg-got); color: var(--ink); }
+.linkCard[data-tail='true'] { border-bottom-left-radius: 4px; margin-bottom: 6px; }
+.linkCardHead { display: flex; flex-direction: column; gap: 2px; padding: 10px 14px 8px; background: color-mix(in srgb, var(--msg-sent) 22%, var(--msg-got)); }
+.linkCardHead small { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink2); }
+.linkCardHead b { font-size: 16px; font-weight: 600; line-height: 1.25; }
+.linkCard ul { margin: 0; padding: 10px 14px 4px 30px; display: flex; flex-direction: column; gap: 6px; font-size: 15px; line-height: 1.4; }
+.linkCardFoot { margin: 0; padding: 6px 14px 10px; font-size: 12px; line-height: 1.4; color: var(--ink2); }
+@media (max-width: 700px) {
+  .msgs { grid-template-columns: minmax(0, 1fr); }
+  .msgs[data-open] .msgList { display: none; }
+  .msgs:not([data-open]) .msgView { display: none; }
+  .msgList { border-right: 0; }
+  .msgBack { display: grid; }
+  .msgTitle { display: none; }
+}
+
+/* ---- the dyno computer's run sheet, before the first pull ---- */
+.runSheet { max-width: 560px; padding: 6px 4px; }
+.runSheetHead { font-size: 15px; font-weight: 700; margin-bottom: 10px; }
+.runSheetList { display: grid; grid-template-columns: max-content 1fr; gap: 7px 18px; margin: 0 0 14px; font-size: 13px; }
+.runSheetList dt { color: var(--ink2); }
+.runSheetList dd { margin: 0; color: var(--ink); font-variant-numeric: tabular-nums; }
+.runSheetNote { margin: 0; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--ink2); line-height: 1.55; }
+
+/* The build bench, full screen under the page bar: reached by its place in the shop, but
+   its parts and their sheets need the room a monitor in the scene does not have. */
+.buildPage { max-width: 1180px; padding: 12px 16px 16px; box-sizing: border-box; }
+@media (max-width: 559px) { .buildPage { padding: 0; } }
+/* Wide, the bench fills the screen under the HUD (BuildBench's wide layout). */
+@media (min-width: 1100px) { .buildPage { max-width: none; height: 100%; padding: 0; } }
+
+/* The dyno's Data page: the datalog, then the tables the pull read. */
+.dataTables { display: flex; flex-direction: column; gap: var(--sp-lg); padding-top: var(--sp-lg); }
+.dataTablesHead { margin: 0; padding-bottom: 4px; border-bottom: 1px solid var(--line); font-size: var(--fs-sm); font-weight: 600; color: var(--ink2); }
+/* The Physics app's pages: a row of tabs where there is room, TUNE's page picker on a phone. */
+.physPicker { display: none; margin-bottom: 10px; }
+.physTabs {
+  /* The pages as one segmented capsule: a well, the open page its glass thumb. */
+  display: inline-flex; flex-wrap: wrap; gap: 2px; margin: 0 0 14px; padding: 3px; border-radius: 18px;
+  background: var(--glass-well); box-shadow: inset 0 1px 2px var(--glass-shade), inset 0 0 0 1px var(--glass-edge);
+}
+.physTabs button {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border: 0; border-radius: 999px;
+  background: transparent; color: var(--ink2); font: 500 var(--fs-sm) var(--sans); cursor: pointer;
+}
+.physTabs button:hover { color: var(--ink); background: var(--glass-chip); }
+.physTabs button[aria-current='page'] { color: var(--mac-sel-ink); background: var(--mac-selected); box-shadow: inset 0 1px 0 var(--glass-hi), 0 1px 4px var(--glass-shade); }
+@media (max-width: 700px) {
+  .physPicker { display: block; }
+  .physTabs { display: none; }
+}
+/* On a phone each worked equation gets the full width, its name above it, so a formula is
+   not broken a word at a time down a narrow column. */
+@media (max-width: 560px) {
+  .liveEq { grid-template-columns: 1fr; gap: 0; }
+  .liveEq dt { margin-top: 8px; font-size: var(--fs-xs); }
+  .liveEq dt:first-child { margin-top: 0; }
+}
+
+/* ---------- Learn: a page's heading, and turning to the next ---------- */
+.learnHead { margin: 2px 0 14px; padding-bottom: 12px; border-bottom: 1px solid var(--line-hi); }
+.learnHead small { font-size: var(--fs-xs); color: var(--ink2); }
+.learnHead h2 { margin: 2px 0 6px; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; color: var(--ink); }
+.learnHead p { margin: 0; max-width: 70ch; font-size: var(--fs-sm); line-height: 1.55; color: var(--ink-soft); }
+.learnTurn { display: flex; justify-content: space-between; gap: 10px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line-hi); }
+.learnTurn button {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 48px; padding: 8px 14px; max-width: 48%;
+  border: 0; border-radius: 14px; background: var(--glass-chip); box-shadow: inset 0 1px 0 var(--glass-hi), inset 0 0 0 1px var(--glass-edge); color: var(--ink);
+  font: inherit; font-size: var(--fs-sm); font-weight: 600; text-align: left; cursor: pointer;
+}
+.learnTurn button[data-next] { margin-left: auto; text-align: right; }
+.learnTurn button span { display: flex; flex-direction: column; }
+.learnTurn button small { font-size: var(--fs-xs); font-weight: 500; color: var(--ink2); }
+.learnWorking { margin: 18px 0; font-size: var(--fs-sm); color: var(--ink2); }

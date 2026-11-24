@@ -180,6 +180,17 @@ describe('fuelReport, no selection', () => {
     expect(r.headline).toBe('2 high-load cells off best power');
   });
 
+  // The pull log calls a miss Correct VE from logs has done all it can for "as close as its
+  // breakpoints allow"; FUEL said "the engine runs leaner than this table asks for" about the
+  // same miss, and a custom I4 was sent round the two for fifteen pulls.
+  it('says a settled miss as the log does, and still leads with one left to fix', () => {
+    const settled = { rpm: 6400, map: 100, afr: 12.8, afrCommanded: 12.4, lean: true, cause: 've', settled: true };
+    const r = fuelReport({ ...fuelAdvice(), missedMix: [settled] }, null);
+    expect(r).toMatchObject({ state: 'table-settled', tone: 'ok', headline: 'As close as these breakpoints allow' });
+    const open = { rpm: 3000, map: 100, afr: 13.4, afrCommanded: 12.6, lean: true, cause: 've' };
+    expect(fuelReport({ ...fuelAdvice(), missedMix: [settled, open] }, null)).toMatchObject({ state: 'table-missed', detail: { worst: open } });
+  });
+
   it('is clean when wrongMix is empty', () => {
     const r = fuelReport(fuelAdvice(), null);
     expect(r.state).toBe('table-clean');
@@ -303,10 +314,15 @@ describe('veLogReport — only what the logs measured', () => {
     expect(r.detail.cell.table).toBe(80);
   });
 
-  it('calls a table within 2% of its logs in sync', () => {
-    const r = veLogReport(log(corrWith([[2, 3, 1.01], [2, 4, 0.985]])), null);
+  it('calls a table in sync only inside the band the pull log stops pointing at it', () => {
+    const r = veLogReport(log(corrWith([[2, 3, 1.006], [2, 4, 0.992]])), null);
     expect(r.state).toBe('log-sync');
     expect(r.tone).toBe('ok');
+    // The playtest's table: +1.9% in a cell read "match" and greyed Apply out while the pull
+    // log still sent the player to Correct VE from logs for it.
+    const near = veLogReport(log(corrWith([[2, 3, 1.019], [2, 4, 1.004]])), null);
+    expect(near.state).not.toBe('log-sync');
+    expect(near.tone).toBe('warn');
   });
 
   it('narrows to a selected cell, and says plainly when that cell has no data', () => {
@@ -343,5 +359,18 @@ describe('a range selection (#105)', () => {
   it('fuel counts a range the same way', () => {
     const cal = { fuelAdv: [], wrongMix: [{ ri: 2, ci: 2 }, { ri: 5, ci: 7 }] };
     expect(fuelReport(cal, { type: 'range', r1: 2, c1: 2, r2: 4, c2: 4 }).detail.count).toBe(1);
+  });
+});
+
+describe('sparkReport, fuel before spark', () => {
+  it('says to fix the fuelling first when the engine missed its AFR target', () => {
+    const r = sparkReport({ ...advice({ over: [cell(3, 4, true)] }), missedMix: [{ lean: false, cause: 'maf' }, { lean: true, cause: 'injectors' }] }, null);
+    expect(r.state).toBe('table-over');
+    expect(r.fuelFirst).toEqual({ lean: true, cause: 'injectors' });
+  });
+
+  it('adds nothing when the mixture is on target', () => {
+    expect(sparkReport(advice({ over: [cell(3, 4, true)] }), null).fuelFirst).toBeUndefined();
+    expect(sparkReport({ ...advice(), missedMix: [] }, null).fuelFirst).toBeUndefined();
   });
 });

@@ -5,9 +5,7 @@
  */
 
 import {
-  COMPRESSOR_OPTS, EXHAUST_DIA_OPTS, INJECTOR_OPTS, TURBINE_OPTS, compressorWithCount, injectorLabel, stockInjectorIdx,
-  blowerOf, deriveEngine, dynoConditions,
-  ecuHardwareOf, layoutById, scheduledVeAt, tankFuel, turbineWithCount, veTruthByPhaseFor,
+  COMPRESSOR_OPTS, EXHAUST_DIA_OPTS, INJECTOR_OPTS, TURBINE_OPTS, compressorWithCount, blowerOf, deriveEngine, dynoConditions, ecuHardwareOf, layoutById, scheduledVeAt, tankFuel, turbineWithCount, veTruthByPhaseFor, injectorLabel, stockInjectorIdx,
 } from '../../sim/index.js';
 
 /** @typedef {import('./initialState.js').StoreState} StoreState */

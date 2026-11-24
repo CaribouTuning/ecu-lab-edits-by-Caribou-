@@ -1,0 +1,106 @@
+/** Where to go next: the game's flow, as one step at a time. */
+
+/**
+ * Where a step sends the player: build the build bench's computer live the run stand's
+ * computer dyno the dyno tune:PAGE that page of the laptop's Tune app board the Jobs app (the
+ * shop's customers and books) messages Pops's messages, on the laptop ticket the job ticket,
+ * open, where the car is handed back
+ * @typedef {'build'|'live'|'dyno'|'board'|'messages'|'ticket'|`tune:${string}`} Go
+ */
+
+/**
+ * @typedef {object} FlowFacts
+ * @property {'sandbox'|'career'} mode
+ * @property {boolean} engineMissing SANDBOX with no engine chosen yet
+ * @property {boolean} heard the engine has run on the stand since its hardware last changed
+ * @property {boolean} [atDyno] the player is at the dyno: a pull there is the next thing, not
+ *   a walk back to the stand to hear it first
+ * @property {boolean} pulled there is a pull at all
+ * @property {boolean} fresh the last pull is of the setup on the bench now
+ * @property {boolean} [changed] the setup differs from the last pull's (false: the pull is the
+ *   same setup, only its curves are gone, as after a reload)
+ * @property {number} [peakHp] that pull's peak, at the wheels
+ * @property {{page: string, label: string, count: number}[]} attention the pages the fresh
+ *   pull's log points at, in the log's order (its first cause first)
+ * @property {boolean} [working] CAREER: a car is on the bay
+ * @property {number} [unread] CAREER: Pops's unread messages
+ * @property {boolean} [newShop] CAREER: no job finished yet, so Pops's first messages are how
+ *   the game is explained, and they come before the first job
+ * @property {boolean} [buildJob] CAREER: an engine-building job
+ * @property {string|null} [failed] what failed, when the engine has: nothing else can be done
+ *   with it until it is rebuilt
+ * @property {boolean} [running] a pull is being made: its log is not up yet, so nothing it
+ *   found can be said (the result is banked as the sweep starts, its log shown as it ends)
+ */
+
+/**
+ * @typedef {object} Step
+ * @property {string} id what the step is, for tests and keys
+ * @property {string} text what to do, in a sentence
+ * @property {string} label the button that does it: where it goes
+ * @property {Go} go
+ */
+
+/**
+ * The step the player is on.
+ * @param {FlowFacts} f
+ * @returns {Step}
+ */
+export function nextStep(f) {
+  // A failed engine comes before everything: it will not run, pull or be tuned until it is rebuilt.
+  if (f.failed && !f.engineMissing && (f.mode !== 'career' || f.working)) {
+    return { id: 'rebuild', text: `The engine has failed: ${f.failed}. Rebuild it on the stand before anything else.`, label: 'Engine stand', go: 'live' };
+  }
+  // Mid-pull the log is not up: "a clean pull" then was said of a pull whose findings had not shown yet.
+  if (f.running && !f.engineMissing) return { id: 'pulling', text: 'The pull is running. Its log comes up when it finishes.', label: 'Dyno', go: 'dyno' };
+  if (f.mode === 'career') {
+    if (!f.working) {
+      const many = (f.unread ?? 0) > 1;
+      if (f.unread && f.newShop) return { id: 'read', text: `Pops sent you ${many ? `${f.unread} messages` : 'a message'}: how the shop works. Read ${many ? 'them' : 'it'} before the first job.`, label: 'Messages', go: 'messages' };
+      return { id: 'take', text: `No car on the bay. Take a customer's car in the Jobs app.${f.unread ? ` Pops sent you ${many ? `${f.unread} messages` : 'a message'} too.` : ''}`, label: 'Jobs', go: 'board' };
+    }
+    if (f.buildJob && !f.pulled) return { id: 'build-job', text: 'An engine-building job: build it to the ticket on the build bench.', label: 'Build bench', go: 'build' };
+    if (!f.fresh) {
+      return { id: 'pull', text: !f.pulled ? 'Strap it on the dyno and run a pull: the log says what is wrong.' : f.changed === false ? 'Run the pull again to bring its curves and log back up.' : 'You changed the car since the last pull. Pull it again to see what it did.', label: 'Dyno', go: 'dyno' };
+    }
+    if (f.attention.length) return fixStep(f.attention[0]);
+    return { id: 'hand-back', text: 'A clean pull. Check it against the ticket, then hand the car back.', label: 'Ticket', go: 'ticket' };
+  }
+
+  if (f.engineMissing) return { id: 'choose', text: 'No engine yet. Choose one on the build bench, or build your own.', label: 'Build bench', go: 'build' };
+  if (!f.heard && !f.fresh && !f.atDyno) return { id: 'hear', text: 'Start it on the stand and listen to it.', label: 'Run it', go: 'live' };
+  if (!f.fresh) return { id: 'pull', text: !f.pulled ? 'Put it on the dyno and run a pull.' : f.changed === false ? 'Run the pull again to bring its curves and log back up.' : 'It has changed since the last pull. Pull it again to see what that did.', label: 'Dyno', go: 'dyno' };
+  if (f.attention.length) return fixStep(f.attention[0]);
+  return {
+    id: 'more',
+    text: `A clean pull${f.peakHp ? `, ${Math.round(f.peakHp)} whp` : ''}. Build more into it on the bench, or tune for more in TUNE.`,
+    label: 'Build bench',
+    go: 'build',
+  };
+}
+
+/**
+ * The fix the log asks for: its page on the laptop.
+ * @param {{page: string, label: string, count: number}} a
+ * @returns {Step}
+ */
+function fixStep(a) {
+  return {
+    id: 'fix',
+    text: `The pull log points at ${a.label} ${a.count === 1 ? 'once' : `${a.count} times`}. Read it, then fix it in TUNE.`,
+    label: a.label,
+    go: `tune:${a.page}`,
+  };
+}
+
+/**
+ * Which of the shop floor's places a step is at: its marker is the one lit.
+ * @param {Go} go
+ * @returns {'build'|'stand'|'dyno'|'laptop'}
+ */
+export function spotOf(go) {
+  if (go === 'build') return 'build';
+  if (go === 'live') return 'stand';
+  if (go === 'dyno' || go === 'ticket') return 'dyno';
+  return 'laptop';
+}

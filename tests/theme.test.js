@@ -232,3 +232,26 @@ describe('diffTint', () => {
     }
   });
 });
+
+describe('heat, as tuning software shades a table', () => {
+  const hsl = (v) => heat(v, 0, 100).match(/hsl\((-?[\d.]+), ([\d.]+)%, ([\d.]+)%\)/).slice(1).map(Number);
+  it('runs green at the low end to red at the high end', () => {
+    expect(hsl(0)[0]).toBeGreaterThanOrEqual(110);
+    expect(hsl(0)[0]).toBeLessThanOrEqual(140);
+    expect(hsl(100)[0]).toBe(0);
+    expect(hsl(50)[0]).toBeGreaterThan(40); // yellow in the middle
+    expect(hsl(50)[0]).toBeLessThan(70);
+  });
+
+  it('keeps the cell text (--ink) at 4.5:1 or better on every step', () => {
+    const rgb = (/** @type {number[]} */ [h, s, l]) => {
+      const S = s / 100, L = l / 100, a = S * Math.min(L, 1 - L);
+      const f = (n) => { const k = (n + h / 30) % 12; return L - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)); };
+      return [f(0), f(8), f(4)];
+    };
+    const lum = (/** @type {number[]} */ c) => { const [r, g, b] = c.map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+    const hex = tokens.ink.replace('#', '');
+    const ink = lum([0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255));
+    for (let v = 0; v <= 100; v += 5) expect((ink + 0.05) / (lum(rgb(hsl(v))) + 0.05)).toBeGreaterThanOrEqual(4.5);
+  });
+});

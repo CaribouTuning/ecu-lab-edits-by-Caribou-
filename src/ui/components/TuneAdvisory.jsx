@@ -15,7 +15,9 @@
 
 import React from 'react';
 
+import { KNOCK_SAFETY_DEG } from '../../sim/index.js';
 
+import { VE_LOG_GOOD_PCT } from './advisorReports.js';
 import styles from './TuneAdvisory.module.css';
 
 /** @typedef {import('./advisorReports.js').AdvisorReport} AdvisorReport */
@@ -27,10 +29,42 @@ import styles from './TuneAdvisory.module.css';
  * @returns {React.ReactElement|null}
  */
 export function TuneAdvisory({ kind, report }) {
-  if (kind === 'timing') return <TimingAdvisory report={report} />;
-  if (kind === 'afr') return <AfrAdvisory report={report} />;
+  if (kind === 'timing') return <>{report.sprayFirst && <SprayFirst {...report.sprayFirst} />}{report.fuelFirst && <FuelFirst {...report.fuelFirst} />}<TimingAdvisory report={report} /></>;
+  if (kind === 'afr') return <>{report.sprayFirst && <SprayFirst {...report.sprayFirst} />}<AfrAdvisory report={report} /></>;
   if (kind === 've') return <VeAdvisory report={report} />;
   return null;
+}
+
+/** Where each cause of a missed mixture is fixed, for the spark page's fuel-first note. */
+const FIX_PAGE = { injectors: 'BUILD › FUEL SYSTEM', pump: 'BUILD › FUEL SYSTEM', injscale: 'TUNE › INJECTORS', maf: 'TUNE › SENSORS', ve: 'TUNE › AIRFLOW', float: 'BUILD › HEADS AND CAM, the valve springs' };
+
+/**
+ * The nitrous's trouble, on the page a player would otherwise look at: knock or a missed
+ * mixture while spraying is fixed on TUNE › NITROUS, as the pull log says, and this table is
+ * judged off the spray.
+ * @param {{knockDeg?: number, mixOffPct?: number, rich?: boolean}} props
+ */
+function SprayFirst({ knockDeg, mixOffPct, rich }) {
+  return (
+    <div className={styles.prose} data-testid="spray-first">
+      {knockDeg != null
+        ? <><b className={styles.emInk}>Knock while the nitrous sprays.</b> The pull ran up to {knockDeg.toFixed(1)}° past the knock limit with the nitrous on. That is the spray&apos;s: raise the retard while spraying on TUNE › NITROUS (the pull log names how much). This table is judged with the nitrous off.</>
+        : <><b className={styles.emInk}>The spray mixture is off.</b> While the nitrous sprays it runs {mixOffPct}% {rich ? 'richer' : 'leaner'} than this table asks for. That is the kit&apos;s fuel: correct it on TUNE › NITROUS (the pull log names how much), and leave this table as it is.</>}
+    </div>
+  );
+}
+
+/**
+ * Fuel before spark: the engine is missing its AFR table, so these knock limits are for the
+ * mixture it is getting, not the one it will get.
+ * @param {{lean: boolean, cause: string}} props
+ */
+function FuelFirst({ lean, cause }) {
+  return (
+    <div className={styles.prose} data-testid="fuel-first">
+      <b className={styles.emInk}>Fix the fuelling first.</b> The engine is running {lean ? 'leaner' : 'richer'} than its AFR table asks for (the pull log&apos;s first step: {FIX_PAGE[cause] ?? FIX_PAGE.ve}). The limits below are for the mixture it is getting now; {lean ? 'a lean charge knocks sooner, so they will rise once the fuelling is right, and spark taken out now goes back in' : 'they will move once the fuelling is right'}.
+    </div>
+  );
 }
 
 /**
@@ -106,8 +140,10 @@ function TimingAdvisory({ report }) {
       return (
         <div className={styles.prose}>
           <CellStats cell={detail.cell} />
-          {detail.cell.knockingOnPull ? 'The engine knocked while it was reading this cell on a full-throttle pull. ' : ''}{detail.cell.sparkCannotFix
-            ? 'No spark setting is safe here: even the most retard the table can hold is past the knock limit at the boost this cell sees. Retard alone cannot fix it. Lower the boost at this speed (BOOST, or a torque limit), or run better fuel.'
+          {detail.cell.knockingOnPull ? (detail.cell.why
+            ? `The last full-throttle pull knocked up to ${detail.cell.why.knockBy}° past the limit while reading this cell. The number under it is set from ${detail.cell.why.rpm.toLocaleString('en-US')} RPM at ${detail.cell.why.map} kPa, where this cell carries ${detail.cell.why.sharePct}% of the timing: ${KNOCK_SAFETY_DEG}° under the limit there, and the pull log gives the same number. `
+            : 'The engine knocked while it was reading this cell on a full-throttle pull. ') : ''}{detail.cell.measuredAtKpa != null ? `That was below this row's own pressure (the boost was still building, or a protection cut it), so the next pull at full boost checks it again. ` : ''}{detail.cell.sparkCannotFix
+            ? 'No spark setting is safe here: even the most retard the table can hold is past the knock limit at the boost this cell sees. Retard alone cannot fix it. Richen this cell on TUNE → FUEL if the advisor lists it there (a richer charge raises the knock limit), lower the boost at this speed (the boost target of a turbo, on TUNE → BOOST, or the drive ratio of a supercharger, on BUILD → INDUCTION), cool the charge (an intercooler, on BUILD → INDUCTION), or run better fuel.'
             : 'Past the knock limit the engine is damaging itself. Pull this cell back to the suggested value, or lower.'}
         </div>
       );
@@ -123,6 +159,13 @@ function TimingAdvisory({ report }) {
         <div className={styles.prose}>
           <CellStats cell={detail.cell} />
           This cell is leaving advance on the table. Add it a degree at a time and run a pull between each change.
+        </div>
+      );
+    case 'cell-done':
+      return (
+        <div className={styles.prose}>
+          <CellStats cell={detail.cell} />
+          This cell is at its safe value. The engine still knocked where it blends with the cells beside it, because they are still above theirs: set the other marked cells to the numbers under them, then pull again.
         </div>
       );
     case 'cell-ok':
@@ -165,7 +208,7 @@ function TimingAdvisory({ report }) {
 function AfrCellLine({ cell }) {
   return (
     <div className={styles.bannerCell} data-richen={cell.delta < 0 ? 'true' : 'false'}>
-      {cell.map} kPa / {cell.rpm} RPM: {cell.current}:1 → {cell.suggested}:1 {cell.delta < 0 ? '(richen)' : '(lean out)'} · delivered {cell.delivered}, wants {cell.target}
+      {cell.map} kPa / {cell.rpm} RPM: {cell.current}:1 → {cell.suggested}:1 {cell.delta < 0 ? '(richen)' : '(lean out)'}, delivered {cell.delivered}, wants {cell.target}
     </div>
   );
 }
@@ -220,8 +263,35 @@ function AfrAdvisory({ report }) {
     // FUEL had no clean state at all — the old banner simply did not render
     // when wrongMix was empty. The panel always renders something, so this is
     // genuinely new prose, not a moved state.
+    case 'table-missed': {
+      const w = detail.worst;
+      const pct = Math.round(Math.abs(w.afr / w.afrCommanded - 1) * 100);
+      const fix = {
+        injectors: <>The injectors are at their limit there: fit larger ones on <b className={styles.emInk}>BUILD › FUEL SYSTEM</b>, then set their flow on TUNE › INJECTORS.</>,
+        pump: <>The pump cannot hold rail pressure at that demand: fit a bigger one on <b className={styles.emInk}>BUILD › FUEL SYSTEM</b>.</>,
+        injscale: <>The ECU is set for a different injector than the one fitted: set the flow on <b className={styles.emInk}>TUNE › INJECTORS</b> first, then pull again.</>,
+        maf: <>The MAF is mis-scaled for the parts fitted: set the MAF scalar on <b className={styles.emInk}>TUNE › SENSORS</b> first, then pull again.</>,
+        ve: <>The ECU&apos;s air estimate is about {pct}% {w.lean ? 'low' : 'high'} there: on <b className={styles.emInk}>TUNE › AIRFLOW</b>, use Correct VE from logs (or {w.lean ? 'raise' : 'lower'} those VE cells by about {pct}%).</>,
+        float: <>The valves float above {(w.floatRpm ?? 0).toLocaleString('en-US')} RPM (Hardware, in the pull log): the filling falls off a cliff there, more steeply than the VE table can bend between its breakpoints, so no VE edit settles it. Fix the float first, on <b className={styles.emInk}>BUILD › HEADS AND CAM</b> (the pull log gives the spring rate), then pull again.</>,
+      }[w.cause ?? 've'];
+      return (
+        <div className={styles.prose}>
+          At full throttle from {detail.from.toLocaleString('en-US')} to {detail.to.toLocaleString('en-US')} RPM the engine got <b className={styles.emInk}>{w.afr.toFixed(1)}:1</b> where this table asks for <b className={styles.emInk}>{w.afrCommanded.toFixed(1)}:1</b> (worst at {w.rpm.toLocaleString('en-US')} RPM, {Math.round(w.map)} kPa). That gap is the fuelling, not the targets: the engine would miss any number typed here by the same share, so a richer or leaner target only moves the miss. Set the targets this build wants first, then close the gap. {fix}
+          {detail.alsoOff > 0 && <> Once it hits the table, {detail.alsoOff} high-load {detail.alsoOff === 1 ? 'cell is' : 'cells are'} still off best power: this page will list them.</>}
+        </div>
+      );
+    }
+    case 'table-settled': {
+      const w = detail.worst;
+      const pct = Math.round(Math.abs(w.afr / w.afrCommanded - 1) * 100);
+      return (
+        <div className={`${styles.prose} ${styles.ok}`}>
+          The AFR table sits on best power for this hardware. Between {detail.from.toLocaleString('en-US')} and {detail.to.toLocaleString('en-US')} RPM the engine still misses it by up to {pct}% ({w.afr.toFixed(1)}:1 against {w.afrCommanded.toFixed(1)}:1 at {w.rpm.toLocaleString('en-US')} RPM), and Correct VE from logs has done all these breakpoints and this pull can there: the pull log says so too. It is inside what a tuner accepts at full throttle.
+        </div>
+      );
+    }
     case 'table-clean':
-      return <div className={`${styles.prose} ${styles.ok}`}>AFR table sits on best power at every high-load cell for this hardware.</div>;
+      return <div className={`${styles.prose} ${styles.ok}`}>AFR table sits on best power at every high-load cell for this hardware, and the engine gets what it asks for.</div>;
 
     // A single selected cell. None of these states existed before the panel —
     // FuelScreen never narrowed to a selection — so there is no old markup to
@@ -285,7 +355,7 @@ function VeMath({ cell }) {
   const newVe = cell.table * cell.ratio;
   return (
     <div className={styles.veMath} data-tour="ve-maths">
-      <div className={styles.recTitle}>{cell.rpm} RPM · {cell.load} kPa — {cell.samples} samples</div>
+      <div className={styles.recTitle}>{cell.rpm} RPM, {cell.load} kPa: {cell.samples} samples</div>
       <dl className={styles.cellStats}>
         <dt>Table VE now</dt><dd>{cell.table.toFixed(1)}%</dd>
         <dt>λ measured ÷ λ target</dt><dd>{f(cell.lambdaRatio)}</dd>
@@ -310,8 +380,13 @@ function VeMath({ cell }) {
  */
 function VeAdvisory({ report }) {
   const { state, detail } = report;
+  // The correction's arithmetic, behind a disclosure: there for whoever wants it, not the
+  // first thing in the pane.
   const formula = (
-    <div className={styles.bannerCell}>VE new = VE × (λ measured ÷ λ target) × fuel trims × MAF factor</div>
+    <details className={styles.maths}>
+      <summary>How the correction is worked out</summary>
+      <div className={styles.mathsBody}>VE new = VE × (λ measured ÷ λ target) × fuel trims × MAF factor</div>
+    </details>
   );
   switch (state) {
     case 'no-logs':
@@ -319,9 +394,9 @@ function VeAdvisory({ report }) {
       const why = pullWhy(detail.pullInfo);
       return (
         <div className={styles.prose}>
-          {formula}
           No tuning software can see an engine&apos;s true VE; it corrects the table from logs. {why}
-          {' '}Run a pull for the full-throttle row, and drive the LIVE engine warm at a steady throttle for the rest — then apply the correction under the table.
+          {' '}Run a pull for the full-throttle row, and drive the LIVE engine warm at a steady throttle for the rest. Then apply the correction under the table.
+          {formula}
         </div>
       );
     }
@@ -336,7 +411,7 @@ function VeAdvisory({ report }) {
           <div className={styles.acceptNote}>
             {state === 'log-sync'
               ? 'Within what a wideband and fuel trims can resolve. Nothing to correct here.'
-              : 'Apply half with CORRECT VE FROM LOGS under the table, log again, and repeat until every cell you use is within 2–3%.'}
+              : `Apply half with Correct VE from logs under the table, log again, and repeat until every cell you use is within ${VE_LOG_GOOD_PCT}%, where the pull log stops pointing here.`}
           </div>
         </>
       );

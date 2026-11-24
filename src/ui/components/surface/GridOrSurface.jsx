@@ -8,7 +8,7 @@ import React from 'react';
 
 import { GAME_LAYOUT } from '../../../sim/index.js';
 
-import { LOAD_UNIT_LABEL } from '../TuningGrid.jsx';
+import { loadAxisText, ThrottleLoadContext } from '../TuningGrid.jsx';
 import styles from './surface.module.css';
 import { TableSurface, ViewToggle, useTableView } from './TableSurface.jsx';
 
@@ -30,13 +30,14 @@ const Y_VAR = { kPa: 'map', 'g/cyl': 'airG', 'mg/cyl': 'airMg' };
  */
 export function GridOrSurface({ data, min, max, decimals, unit, title, commanded, children, axes = GAME_LAYOUT.ve }) {
   const [view, setView] = useTableView();
+  const throttle = React.useContext(ThrottleLoadContext);
   const z = React.useMemo(() => [...data].reverse(), [data]);
   const loadUp = React.useMemo(() => [...axes.load].reverse(), [axes]);
   return (
     <div className={styles.wrap}>
       <div className={styles.switchRow}><ViewToggle mode={view} onChange={setView} /></div>
       {view === '3d'
-        ? <TableSurface x={axes.rpm} y={loadUp} z={z} lo={min} hi={max} xLabel="RPM" yLabel={LOAD_UNIT_LABEL[axes.loadUnit]} unit={unit} decimals={decimals}
+        ? <TableSurface x={axes.rpm} y={loadUp} z={z} lo={min} hi={max} xLabel="RPM" yLabel={loadAxisText(axes.loadUnit, throttle).label} unit={unit} decimals={decimals}
           title={title} xVar="rpm" yVar={Y_VAR[axes.loadUnit]} commanded={commanded} />
         : children}
     </div>

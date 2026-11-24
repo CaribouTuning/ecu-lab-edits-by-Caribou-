@@ -568,11 +568,11 @@ describe('APPLY_PRESET — exact write surface (catches drift in both directions
   // the old test only compared a hand-built map against the local fixture's own key
   // set — never against what the reducer actually writes. This test instead seeds
   // EVERY field of EVERY slice with a sentinel a real write can never produce, dispatches
-  // for real, and asserts the walked set of changed fields against the 39-field
-  // contract this action documents: a stray write grows the changed set past 39, a
-  // dropped write shrinks it below 39, and the failure message names the field either
+  // for real, and asserts the walked set of changed fields against the 40-field
+  // contract this action documents: a stray write grows the changed set past 40, a
+  // dropped write shrinks it below 40, and the failure message names the field either
   // way.
-  it('changes exactly the 39 documented fields, plus the two history fields', () => {
+  it('changes exactly the 40 documented fields, plus the two history fields', () => {
     const before = makeSentinelState();
     const after = reducer(before, { type: ACTIONS.APPLY_PRESET, preset: N54_PRESET });
     const changed = changedFieldKeys(before, after);
@@ -1728,7 +1728,7 @@ describe('snapshot field coverage', () => {
   // module iterates over would let a key deleted from both the list AND this
   // expectation pass vacuously. That is exactly the vulnerability a reviewer found —
   // cutting BUILD_KEYS to 3 entries and TUNE_KEYS to 2 left all 871 tests green.
-  it('snapshots exactly the documented 27 build and 10 tune fields', () => {
+  it('snapshots exactly the documented 28 build and 10 tune fields', () => {
     const snap = snapshot(makeInitialState());
     expect(Object.keys(snap.build).sort()).toEqual([
       'assumed', 'blowerId', 'blowerRatio', 'boostCurve', 'coil', 'compressorIdx', 'ecuInjectorCc',
@@ -2073,6 +2073,29 @@ describe('tune.diffView (#106)', () => {
     expect(toggled.tune.diffView).toBe(true);
     expect(toggled.history.past).toHaveLength(0);
     expect(toggled.history.future).toHaveLength(1);
+  });
+});
+
+describe('SET_ENGINE_CONFIG_PATCH with a base map (an engine of the player\'s own)', () => {
+  const base = {
+    ve: [[1]], timing: [[2]], afr: [[3]], mafScalar: 1.02, layout: null, ecu: undefined,
+  };
+  it('writes the base map in the same pass while the tables are as generated', () => {
+    const s0 = makeInitialState();
+    const s = reducer({ ...s0, tune: { ...s0.tune, tablesDirty: false } }, { type: ACTIONS.SET_ENGINE_CONFIG_PATCH, patch: { bore: 96 }, base });
+    expect(s.build.engineConfig.bore).toBe(96);
+    expect(s.tune.timing).toEqual([[2]]);
+    expect(s.tune.baseline.timing).toEqual([[2]]);
+    expect(s.build.mafScalar).toBe(1.02);
+    expect(s.tune.tablesDirty).toBe(false);
+  });
+  it('never replaces tables the player has worked on', () => {
+    const s0 = makeInitialState();
+    const dirty = { ...s0, tune: { ...s0.tune, tablesDirty: true } };
+    const s = reducer(dirty, { type: ACTIONS.SET_ENGINE_CONFIG_PATCH, patch: { bore: 96 }, base });
+    expect(s.build.engineConfig.bore).toBe(96);
+    expect(s.tune.timing).toBe(dirty.tune.timing);
+    expect(s.build.mafScalar).toBe(dirty.build.mafScalar);
   });
 });
 

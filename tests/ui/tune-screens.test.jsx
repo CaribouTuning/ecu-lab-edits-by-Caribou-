@@ -121,7 +121,7 @@ describe('AirflowScreen', () => {
     // only appears once a cell is clicked, same as inside the full app.
     expect(screen.queryByTestId('selection-dock')).toBeNull();
     const grid = screen.getByTestId('tuning-grid');
-    fireEvent.click(within(grid).getAllByRole('button').at(-1));
+    fireEvent.click(within(grid).getAllByRole('button').filter((b) => b.closest('td')).at(-1));
     expect(screen.getByTestId('selection-dock')).toBeTruthy();
   });
 
@@ -180,7 +180,7 @@ describe('AirflowScreen', () => {
     const log = veLog();
     mount(<AirflowScreen veLog={log} />);
     const region = within(screen.getByRole('region', { name: 'Correct VE from logs' }));
-    fireEvent.click(region.getByRole('button', { name: 'APPLY HALF' }));
+    fireEvent.click(region.getByRole('button', { name: 'Apply half' }));
     expect(log.onApply).toHaveBeenCalledWith(0.5);
     expect(region.getByRole('link', { name: 'TUNE › SENSORS' }).getAttribute('href')).toBe('#/tune/sensors');
   });
@@ -308,7 +308,7 @@ describe('FuelScreen', () => {
     // Singular — the pre-panel banner always read '1 HIGH-LOAD CELLS OFF BEST
     // POWER', a latent copy bug the plural helper in `fuelReport` fixes.
     expect(panel.getByText('1 high-load cell off best power')).toBeTruthy();
-    expect(panel.getByText(/888 kPa \/ 7777 RPM: 12\.3:1 → 11\.1:1 \(richen\) · delivered 99, wants 88/)).toBeTruthy();
+    expect(panel.getByText(/888 kPa \/ 7777 RPM: 12\.3:1 → 11\.1:1 \(richen\), delivered 99, wants 88/)).toBeTruthy();
   });
 
   it('narrows to the selected cell rather than the whole table', () => {
@@ -443,7 +443,7 @@ describe('SensorsScreen', () => {
     // the shell's computation, not to the mods/turboOn this same screen also reads
     // for the explanatory sub-note.
     mount(<SensorsScreen {...quietProps} needsMafRecal />);
-    expect(screen.getByText('HARDWARE CHANGED')).toBeTruthy();
+    expect(screen.getByText('Hardware changed')).toBeTruthy();
   });
 
   it('shows the FUEL TRIM chart only when the shell says a pull result exists', () => {

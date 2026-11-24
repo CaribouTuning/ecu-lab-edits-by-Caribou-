@@ -63,16 +63,16 @@
 }
 
 .statValue {
-  font-family: var(--mono);
-  font-weight: 800;
+  font-family: var(--sans); font-variant-numeric: tabular-nums;
+  font-weight: 600;
   color: var(--ink);
 }
 
 /* The pull figure only earns the accent once there is a pull to report; until then
    it reads as a quiet placeholder rather than a real value. */
 .pullValue {
-  font-family: var(--mono);
-  font-weight: 800;
+  font-family: var(--sans); font-variant-numeric: tabular-nums;
+  font-weight: 600;
   color: var(--ink2);
 }
 
@@ -135,6 +135,8 @@
    Danger replaces both the moment the springs float below redline. */
 .floatCaption { font-weight: 400; color: var(--ink2); }
 .floatCaption[data-float='true'] { color: var(--danger); }
+/* A figure the control above decides, read out in a line of its own: caption-sized. */
+.readout { margin: 6px 0 2px; font-size: var(--fs-sm); line-height: 1.5; color: var(--ink2); }
 
 .springSlider { width: 100%; accent-color: var(--cyan); }
 .springSlider[data-float='true'] { accent-color: var(--danger); }
@@ -173,3 +175,8 @@
 .ownEngine summary { cursor: pointer; font-size: var(--fs-sm); font-weight: 700; color: var(--acc-ink); }
 .ownEngine[open] summary { margin-bottom: 8px; }
 .ownLead { margin: 0 0 10px; font-size: var(--fs-xs); line-height: 1.55; color: var(--ink2); }
+
+/* The one-line note after a preset or a reset replaced the tune: text and its undo, no box. */
+.undoLine { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; padding: 8px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); font-size: 12px; line-height: 1.45; color: var(--ink2); }
+.undoLine > span { flex: 1; min-width: 0; }
+.character { margin: -8px 0 0; font-size: 12px; color: var(--ink2); }

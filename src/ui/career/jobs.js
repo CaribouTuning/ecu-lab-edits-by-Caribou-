@@ -25,12 +25,13 @@
  * engine alive, and request is anything else they asked for.
  */
 
+import { MIXTURE_TOLERANCE_PCT } from '../../sim/index.js';
 import { IDLES, SAFE, withMods } from './criteria.js';
 import { generatedJob } from './generate.js';
 
 /**
  * @typedef {object} Criterion
- * @property {'events'|'mixture'|'minHp'|'maxEgt'|'maxDuty'|'untouched'|'idle'|'score'|'fuelIs'|'naOnly'|'maxRedline'} type
+ * @property {'events'|'mixture'|'minHp'|'maxEgt'|'maxDuty'|'untouched'|'idle'|'score'|'fuelIs'|'naOnly'|'maxRedline'|'pops'|'overrunEgt'} type
  * @property {'complaint'|'safety'|'request'} kind
  * @property {string} label what the customer would call it
  * @property {string[]} [types]
@@ -78,7 +79,7 @@ export const JOBS = [
     customer: { name: 'Marcus', car: '2006 Nissan 350Z', color: 'silver', body: 'coupe' },
     says: 'Put a cold air intake on it last weekend. Sounds great, but it feels flat up top and I’m filling up more often. Did I break something?',
     wants: 'Make it run right with the intake. I’m keeping the intake.',
-    work: ['Road test and diagnose', 'Tune for the new intake'],
+    work: ['Pull it on the dyno and diagnose', 'Tune for the new intake'],
     car: { preset: 'vq35de-revup', build: withMods({ intake: true }) },
     needs: {}, minRep: 0, pay: 350, rep: 6,
     checks: [
@@ -94,7 +95,7 @@ export const JOBS = [
     customer: { name: 'Dana', car: '2008 Nissan 350Z', color: 'red', body: 'coupe' },
     says: 'I fitted bigger injectors myself because I’m saving for a turbo. Now it stinks of fuel, the plugs come out black, it’s gutless, and on a cold morning it floods and won’t start.',
     wants: 'Get it running right on these injectors. And don’t just lean the fuel map out to hide it — I’ve read about that.',
-    work: ['Road test and diagnose', 'Correct the calibration for the new injectors'],
+    work: ['Pull it on the dyno and diagnose', 'Correct the calibration for the new injectors'],
     car: { preset: 'vq35hr', build: () => ({ injIdx: 4 }) },
     needs: {}, minRep: 0, pay: 300, rep: 5,
     checks: [
@@ -110,13 +111,13 @@ export const JOBS = [
     customer: { name: 'Tony', car: '2006 Nissan 350Z', color: 'blue', body: 'coupe' },
     says: 'My 350Z runs like crap after I installed these headers. It’s showing a lean condition under load. Can you figure it out?',
     wants: 'Fix the lean condition. Everywhere, all the way to the limiter.',
-    work: ['Headers and cat-back already fitted by the customer', 'Road test, log and correct'],
+    work: ['Headers and cat-back already fitted by the customer', 'Pull it, read the log and correct'],
     car: { preset: 'vq35de-revup', build: withMods({ headers: true, exhaust: true }) },
     needs: {}, minRep: 0, pay: 450, rep: 7,
     checks: [
       // Within 2%, where a professional holds full-throttle mixture: headers change the
       // engine's breathing by a few percent, not a gross amount.
-      { type: 'mixture', kind: 'complaint', pct: 2, label: 'On target at full throttle, all the way to redline' },
+      { type: 'mixture', kind: 'complaint', pct: MIXTURE_TOLERANCE_PCT, label: 'On target at full throttle, all the way to redline' },
       ...SAFE, IDLES,
     ],
     hint: 'Much better through the middle, but right at the top before the limiter it still goes lean on my gauge.',
@@ -144,7 +145,7 @@ export const JOBS = [
     customer: { name: 'Big Mike', car: '3.5 V6 project car', color: 'orange', body: 'coupe' },
     says: 'Had a shop put a big cam in. It sounds mean, but it bogs, runs rough, and pops lean up top. They said it “just needs a tune”.',
     wants: 'Make it run right with the cam. I know it’ll idle lumpy — that’s the point.',
-    work: ['Road test and diagnose', 'Re-map for the new cam'],
+    work: ['Pull it on the dyno and diagnose', 'Re-map for the new cam'],
     // The shop that fitted the cam fitted the 440s a cam that size needs at the top end,
     // and set the ECU's injector size for them: the fault left is the airflow record.
     car: { preset: null, build: (b) => ({ engineConfig: { ...b.engineConfig, camDuration: 268, springRate: 78 }, injIdx: 1, ecuInjectorCc: 440 }) },
@@ -193,9 +194,9 @@ export const JOBS = [
   {
     id: 'turbo-kit', tier: 2,
     customer: { name: 'Sam', car: '3.5 V6 turbo project', color: 'purple', body: 'coupe' },
-    says: 'Bolted a turbo kit on: 8 psi, intercooler, bigger injectors. The kit said the ECU would “adapt”. It pulls hard, then it rattles and goes flat.',
+    says: 'Bolted a turbo kit on: 9 psi, intercooler, bigger injectors. The kit said the ECU would “adapt”. It pulls hard, then it rattles and goes flat.',
     wants: 'I want to use the boost, but I don’t want to blow it up.',
-    work: ['Turbo kit already fitted, injectors already scaled', 'Road test and tune for boost'],
+    work: ['Turbo kit already fitted, injectors already scaled', 'Tune for boost on the dyno'],
     // On 91, as most kit cars are run: with the knock model anchored to real calibrations, the
     // naturally aspirated timing through an intercooler is safe on 93 at 8 psi; at 9 psi on 91 it
     // knocks by about 1.5 degrees, the rattle Sam hears, which fuel alone does not take out.
@@ -266,6 +267,28 @@ export const JOBS = [
     ],
     hint: 'Still bogs when it comes on, or it still makes that noise. It isn’t right yet.',
     teaches: 'Nitrous brings its own oxygen, so it needs its own fuel, and it lowers the knock limit while it sprays. Both are set for the spray alone; the base tune stays as it was.',
+  },
+  {
+    id: 'pops-bangs', tier: 2,
+    customer: { name: 'Tyler', car: '2017 BMW 340i', color: 'blue', body: 'sedan' },
+    says: 'Every car at the meet crackles when it lifts off except mine. Mine just goes quiet.',
+    wants: 'Pops and bangs when I lift off the throttle. I don’t want to cook the turbo or the cat doing it.',
+    work: ['Write in an overrun burble', 'Keep the exhaust heat in check'],
+    car: { preset: 'b58-m0' },
+    needs: { training: ['knock'] }, minRep: 15, pay: 450, rep: 7,
+    checks: [
+      // A tenth of each charge lighting in the exhaust is a crackle the customer hears; the
+      // factory overrun cuts the fuel and lights none (tests/burble.test.js).
+      { type: 'pops', kind: 'complaint', min: 0.1, label: 'Pops and bangs when you lift off' },
+      // The overrun with the burble on runs this engine's exhaust at about 480 °C at the
+      // calibration's own timing, 520 °C at 25° after TDC, and 600 °C with every setting at its
+      // most (35° after, 6 s, 6% air): heat the turbo and the catalyst take every time the driver
+      // lifts. The cap passes a crackle and fails one cranked past sense, as the customer asks.
+      { type: 'overrunEgt', kind: 'safety', max: 560, label: 'Exhaust heat on the overrun kept in check' },
+      ...SAFE,
+    ],
+    hint: 'It’s exactly as quiet as it was. I lift off and nothing happens.',
+    teaches: 'A burble keeps the fuel on with the throttle shut and fires the spark late, after top dead centre, so the charge is still burning when the exhaust valve opens and finishes in the manifold. The later the spark and the longer it runs, the louder the pops and the hotter the turbo and the catalyst get: a tuner keeps it short and moderate.',
   },
 ];
 

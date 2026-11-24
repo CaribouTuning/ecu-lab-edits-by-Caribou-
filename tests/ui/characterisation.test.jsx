@@ -28,6 +28,7 @@ import React from 'react';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 
 import EcuLab, { DYNO_PULL_MS } from '../../src/ui/EcuLab.jsx';
+import { enterSandbox, goTo } from './nav.js';
 
 // jsdom has no ResizeObserver. recharts' <ResponsiveContainer> (used on the DYNO
 // results panel) needs one to mount at all, so without this stub any test that
@@ -52,7 +53,7 @@ function launch() {
   const view = render(<EcuLab />);
   // The start screen offers CAREER, SANDBOX and TUTORIAL on this branch rather than a
   // single START. SANDBOX is the free-play entry the old button was.
-  fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
+  enterSandbox();
   return view;
 }
 
@@ -69,47 +70,47 @@ describe('entry', () => {
   it('opens on the start screen', () => {
     render(<EcuLab />);
     // Three ways in, not one: a career of customer cars, free play, and the tutorial.
-    for (const way of ['CAREER', 'SANDBOX', 'TUTORIAL']) {
+    for (const way of [/^Career/, /^Sandbox/, /^Tutorial/]) {
       expect(screen.getByRole('button', { name: way })).toBeTruthy();
     }
   });
 
   it('enters the app on SANDBOX and lands on BUILD', () => {
     launch();
-    expect(screen.getByRole('button', { name: /BUILD/ })).toBeTruthy();
+    // SANDBOX is a laptop on your desk; BUILD is its app, open in a window.
+    expect(screen.getByRole('region', { name: 'Build' })).toBeTruthy();
   });
 
   it('opens the tutorial and comes back', () => {
     render(<EcuLab />);
-    fireEvent.click(screen.getByRole('button', { name: 'TUTORIAL' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Tutorial/ }));
     // It opens on its contents page: what you will learn, then the chapters.
-    expect(screen.getByText('TUTORIAL · CONTENTS')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'START' }));
-    expect(screen.getByText(/TUTORIAL · 1\//)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'SKIP' }));
-    expect(screen.getByRole('button', { name: /BUILD/ })).toBeTruthy();
+    expect(screen.getByText('Tutorial contents')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+    expect(screen.getByText(/Tutorial, page 1 of/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
+    expect(screen.getByRole('region', { name: 'Build' })).toBeTruthy();
   });
 });
 
 describe('navigation', () => {
-  it('moves between the five tabs', () => {
+  it('moves between the laptop\'s apps and the shop\'s pages', () => {
     launch();
-    // The bottom-nav buttons (HOME/BUILD/TUNE/LIVE/DYNO) are rendered unconditionally —
-    // only their active styling changes — so re-querying for the clicked button by
-    // name proves nothing about whether the click actually switched tabs; it would
-    // pass even if the tab body never moved. Assert on a marker that only exists
-    // while that tab's body is mounted instead.
+    // Assert on a marker that only exists while that screen's body is mounted, not on
+    // the button that was clicked: the button proves nothing about whether the click
+    // actually switched screens.
     const marker = {
-      TUNE: () => screen.getByRole('button', { name: 'AIRFLOW' }), // TUNE_VIEWS sub-tab
-      DYNO: () => screen.getByRole('button', { name: 'RUN DYNO PULL' }),
-      // The live engine is its own tab now. HOME in free play has no jobs board — that
-      // is CAREER's — so its marker is the stats section it opens on.
-      LIVE: () => screen.getByText('Live Engine'),
-      HOME: () => screen.getByText('Sandbox Stats & Last Pull'),
-      BUILD: () => screen.getByText('Garage'),
+      TUNE: () => screen.getByRole('button', { name: 'Airflow (VE)' }), // TUNE_VIEWS sub-tab (VE first, as the sandbox draws it)
+      DYNO: () => screen.getByRole('button', { name: 'Run a pull' }),
+      // The live engine is the engine stand in the shop: its marker is the stand's own
+      // bench computer, which only that place has.
+      LIVE: () => screen.getByRole('region', { name: 'Engine computer' }),
+      // LEARN opens on its first page, one page at a time (its pages' tabs).
+      LEARN: () => screen.getByRole('navigation', { name: 'Learn pages' }),
+      BUILD: () => screen.getByRole('navigation', { name: 'Engine parts' }),
     };
-    for (const tab of ['TUNE', 'DYNO', 'LIVE', 'HOME', 'BUILD']) {
-      fireEvent.click(screen.getByRole('button', { name: tab }));
+    for (const tab of ['TUNE', 'DYNO', 'LIVE', 'LEARN', 'BUILD']) {
+      goTo(tab);
       expect(marker[tab]()).toBeTruthy();
     }
   });
@@ -149,11 +150,9 @@ describe('loading a preset', () => {
 });
 
 describe('editing a calibration table', () => {
-  it('stops the header claiming the factory preset', () => {
-    // The single most important behaviour in this PR: withTableEdit crosses the
-    // build/tune boundary, clearing presetId (build) and setting tablesDirty (tune).
-    // If the extraction drops that link, the header goes on claiming a factory
-    // calibration the player has just edited away from.
+  it('keeps naming the engine after a table edit: the build line is the hardware', () => {
+    // withTableEdit crosses the build/tune boundary, clearing presetId (build) and setting
+    // tablesDirty (tune).
     launch();
     const picker = presetPicker();
     const target = [...picker.querySelectorAll('option')]
@@ -161,7 +160,7 @@ describe('editing a calibration table', () => {
       .find((v) => v && v !== picker.value);
     fireEvent.change(picker, { target: { value: target } });
 
-    fireEvent.click(screen.getByRole('button', { name: /TUNE/ }));
+    goTo('TUNE');
     // Scope to the tuning grid itself: unscoped queries also match the BUILD tab's
     // boost-curve editor, so if tab navigation broke and the app never left BUILD,
     // an unscoped query would still find cells there and the test would pass for
@@ -179,28 +178,27 @@ describe('editing a calibration table', () => {
     const dock = within(screen.getByTestId('selection-dock'));
     fireEvent.click(dock.getByRole('button', { name: '+1' }));
 
-    // Header falls back to the derived "3.0L I6" form once the preset is invalidated.
-    expect(screen.getByTestId('build-line').textContent).toMatch(/^\d\.\dL /);
+    // Still the engine's name, not the derived "3.0L I6" form.
+    expect(screen.getByTestId('build-line').textContent).not.toMatch(/^\d\.\dL /);
   });
 });
 
 describe('running a dyno pull', () => {
   it('produces a result', async () => {
     launch();
-    fireEvent.click(screen.getByRole('button', { name: /DYNO/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
-    // doRun() calls setResult(r) synchronously (before the reveal interval even
-    // starts), so the PEAK WHP tile mounts immediately — no need to wait for the
-    // sweep to finish. This is the actual point of the test: if setResult were
-    // wired to the wrong slice (or dropped entirely), this tile never appears,
-    // regardless of what the button label does.
-    expect(screen.getByText('PEAK WHP')).toBeTruthy();
+    goTo('DYNO');
+    fireEvent.click(screen.getByRole('button', { name: 'Run a pull' }));
+    // doRun() calls setResult(r) synchronously (before the reveal interval even starts), so
+    // the dyno computer's curves mount immediately — no need to wait for the sweep to finish.
+    expect(screen.getByText('Power and torque against rpm')).toBeTruthy();
     // The reveal is a setInterval that ends by setting running false, so the button
     // returns to its idle label. Real timers + waitFor is less brittle here than fake
     // timers, which would need act() wrapping around every tick.
     await waitFor(
-      () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
+      () => expect(screen.getByRole('button', { name: 'Run a pull' })).toBeTruthy(),
       { timeout: 10000 },
     );
+    // Done, the computer's title bar reads the pull's peaks.
+    expect(screen.getByText(/^Peak \d+ whp, \d+ lb-ft$/)).toBeTruthy();
   }, DYNO_PULL_MS + 4000);
 });

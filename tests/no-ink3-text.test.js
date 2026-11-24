@@ -30,8 +30,11 @@ const ALLOWED = new Set(['tokens.js', 'tokens.css', 'theme.js']);
 /** Which files the guard reads. */
 const GUARDED = /\.(jsx?|css)$/;
 
-/** A reference to the --ink3 token, in CSS or in JS. */
-const INK3 = /\b(?:T|tokens)\.ink3\b|\b(?:T|tokens)\[\s*['"]ink3['"]\s*\]|var\(\s*--ink3\s*[,)]/;
+/**
+ * A reference to the --ink3 token, in CSS or in JS, or to --mac-label3, the laptop's name for
+ * the same grey (tokens.css): the laptop's sidebar headings were 3.9:1 in it.
+ */
+const INK3 = /\b(?:T|tokens)\.(?:ink3|macLabel3)\b|\b(?:T|tokens)\[\s*['"](?:ink3|macLabel3)['"]\s*\]|var\(\s*--(?:ink3|mac-label3)\s*[,)]/;
 
 /**
  * Which JSX props colour text, per tag. recharts colours an axis's tick labels with its
@@ -212,7 +215,9 @@ function cssHits(code) {
         hits.push({ at, why: `${prop} is text colour` });
       } else if (prop === 'fill' && SVG_TEXT_SELECTOR.test(selector)) {
         hits.push({ at, why: 'fill on SVG text is text colour' });
-      } else if (prop.startsWith('--')) {
+      } else if (prop.startsWith('--') && prop !== '--ink3') {
+        // A scope that sets --ink3 itself to its own grey (the laptop's Mac palette) themes the
+        // token, and every use of --ink3 is still read here; any other name would hide them.
         hits.push({ at, why: 'an alias of --ink3 hides its uses from this guard' });
       }
     }

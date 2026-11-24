@@ -7,61 +7,134 @@
  * someone else's engine.
  */
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
 import { PRESET_GROUPS, applyPreset } from '../../../sim/index.js';
-import { EngineSpecForm } from '../../components/EngineSpecForm.jsx';
-import { Panel } from '../../primitives/Panel.jsx';
+import { ownEnginePatch } from '../../state/ownEngine.js';
+import { warm, warmAhead } from '../../sim/warm.js';
 import { ACTIONS } from '../../state/reducer.js';
 import { useBuild } from '../../state/StoreProvider.jsx';
 
 import styles from './EngineStart.module.css';
+import { useUnits } from '../../units.js';
 
 /**
  * @returns {React.ReactElement}
  */
-export function EngineStart() {
-  const [, dispatch] = useBuild();
-  const load = (preset) => dispatch({ type: ACTIONS.APPLY_PRESET, preset: applyPreset(preset) });
-  const create = (patch) => dispatch({ type: ACTIONS.APPLY_PRESET, preset: patch });
-
+/**
+ * The factory engines, by maker, as cards: the start screen's first choice and the Build
+ * app's Factory engines list.
+ * @param {{onPick: (preset: any) => void, picked?: any, detail?: (preset: any) => React.ReactNode}} props
+ *   `detail` is drawn under the picked engine, in place: what is chosen and what to do with
+ *   it stay together, not a screen's length apart.
+ */
+export function PrebuiltEngines({ onPick, picked = null, detail = undefined }) {
+  const U = useUnits();
   return (
-    <div className={styles.page} data-testid="engine-start">
-      <h2 className={styles.title}>Choose your engine</h2>
-      <p className={styles.lead}>
-        Nothing is loaded yet. Pick a prebuilt factory engine to start from its published figures,
-        or enter your own engine&apos;s specs and the simulator will build its calibration from them.
-      </p>
-
-      <section aria-labelledby="start-prebuilt" className={styles.section}>
-        <h3 className={styles.h3} id="start-prebuilt">A prebuilt engine</h3>
-        {PRESET_GROUPS.map((g) => (
-          <div key={g.manufacturer} className={styles.group}>
-            <div className={styles.maker}>{g.manufacturer}</div>
-            <div className={styles.cards}>
-              {g.presets.map((p) => (
-                <button key={p.id} type="button" className={styles.card} onClick={() => load(p)} aria-label={`Use ${p.name}`}>
+    <>
+      {PRESET_GROUPS.map((g) => (
+        <div key={g.manufacturer} className={styles.group}>
+          <div className={styles.maker}>{g.manufacturer}</div>
+          <div className={styles.cards}>
+            {g.presets.map((p) => (
+              <React.Fragment key={p.id}>
+                <button type="button" className={styles.card} onClick={() => onPick(p)} aria-pressed={picked ? picked.id === p.id : undefined}>
                   <span className={styles.name}>{p.name}</span>
                   <span className={styles.spec}>
                     {p.factory.displacementL.toFixed(1)} L {p.engine.configuration}
-                    {p.induction.turboOn ? ' turbo' : ''} · {p.factory.crankHp} hp · {p.years}
+                    {p.induction.turboOn ? ' turbo' : ''}, {U.fmtPower(p.factory.crankHp)}, {p.years}
                   </span>
                 </button>
-              ))}
-            </div>
+                {detail && picked?.id === p.id && detail(p)}
+              </React.Fragment>
+            ))}
           </div>
-        ))}
-      </section>
+        </div>
+      ))}
+    </>
+  );
+}
 
-      <section aria-labelledby="start-own" className={styles.section}>
-        <h3 className={styles.h3} id="start-own">Or build your own</h3>
-        <Panel>
-          <p className={styles.formLead}>
-            Enter your engine&apos;s figures from its manual or build sheet. Nothing is filled in for you.
-          </p>
-          <EngineSpecForm onCreate={create} />
-        </Panel>
-      </section>
+/** Where the engine comes from, chosen first: a factory engine, or one of the player's own. */
+/**
+ * @param {object} [props]
+ * @param {() => void} [props.onCancel] swapping an engine already on the bench: keep it after all
+ * @param {() => void} [props.onDone] the new engine is on the bench
+ * @param {boolean} [props.replacing] the tables on the bench hold work this replaces: said on the button
+ * @returns {React.ReactElement}
+ */
+export function EngineStart({ onCancel, onDone, replacing = false } = {}) {
+  const [, dispatch] = useBuild();
+  const U = useUnits();
+  const [path, setPath] = useState(/** @type {null|'factory'} */ (null));
+  const [picked, setPicked] = useState(/** @type {any} */ (null));
+  // A factory engine's calibration is worked out from its breathing, seconds of the gas
+  // exchange on a new engine: the simulator worker starts it as soon as the engine is picked
+  // (sim/warm.js), and putting it on the bench waits for that, not for a frozen screen.
+  const [loading, setLoading] = useState(/** @type {string|null} */ (null));
+  const pick = (p) => { setPicked(p); if (p) warm('preset', { id: p.id }); };
+  // Opening the factory list starts every engine on the list, in its order, on the worker for
+  // work done ahead: one the player has looked at for a moment is usually ready when they pick it.
+  useEffect(() => {
+    if (path !== 'factory') return;
+    for (const g of PRESET_GROUPS) for (const p of g.presets) warmAhead('preset', { id: p.id });
+  }, [path]);
+  const load = (preset) => {
+    // The worker hands back the preset it worked out: put on the bench as it is, not worked out
+    // a second time on the drawing thread (a B58's calibration held the screen for most of a second).
+    const put = (patch) => { dispatch({ type: ACTIONS.APPLY_PRESET, preset: patch ?? applyPreset(preset) }); setLoading(null); onDone?.(); };
+    const ready = warm('preset', { id: preset.id });
+    if (!ready) { put(null); return; }
+    setLoading(preset.id);
+    ready.then(put);
+  };
+  const create = (patch) => { dispatch({ type: ACTIONS.APPLY_PRESET, preset: patch }); onDone?.(); };
+
+  if (!path) {
+    return (
+      <div className={styles.page} data-testid="engine-start">
+        <div className={styles.bar}>
+          {onCancel && <button type="button" className={styles.back} onClick={onCancel}>Keep this engine</button>}
+          <h2 className={styles.title}>{onCancel ? 'Change the engine' : 'Put an engine on the bench'}</h2>
+        </div>
+        <div className={styles.paths}>
+          <button type="button" className={styles.path} onClick={() => setPath('factory')}>
+            <span className={styles.pathName}>Start with a factory engine</span>
+            <span className={styles.pathWhat}>A production engine as it left the factory, with its published figures and its factory calibration. Change any part of it after.</span>
+          </button>
+          <button type="button" className={styles.path} onClick={() => create(ownEnginePatch())}>
+            <span className={styles.pathName}>Build a custom engine</span>
+            <span className={styles.pathWhat}>Your own engine, set part by part on the bench, starting with the short block: layout, bore, stroke, compression and redline. It runs on a safe base map generated from the physics, for you to tune.</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.page} data-testid="engine-start">
+      <div className={styles.bar}>
+        <button type="button" className={styles.back} onClick={() => setPath(null)}>Back</button>
+        <h2 className={styles.title}>Factory engines</h2>
+      </div>
+      <div className={styles.catalog} data-plain="">
+        <PrebuiltEngines
+            onPick={(p) => pick(picked?.id === p.id ? null : p)} picked={picked}
+            detail={(p) => (
+              <div className={styles.sheet} role="region" aria-label={`${p.name} specifications`}>
+                <dl className={styles.specs}>
+                  <div><dt>Layout</dt><dd>{p.engine.configuration}{p.induction.turboOn ? ', turbo' : ''}</dd></div>
+                  <div><dt>Displacement</dt><dd>{p.factory.displacementL.toFixed(1)} L</dd></div>
+                  <div><dt>Bore × stroke</dt><dd>{p.engine.bore} × {p.engine.stroke} mm</dd></div>
+                  <div><dt>Compression</dt><dd>{p.engine.compression}:1</dd></div>
+                  <div><dt>Redline</dt><dd>{p.engine.redline.toLocaleString('en-US')} rpm</dd></div>
+                  <div className={styles.wide}><dt>Factory rating</dt><dd>{U.fmtPower(p.factory.crankHp)}, {U.fmtTorque(p.factory.crankTq)}</dd></div>
+                </dl>
+                <button type="button" className={styles.use} onClick={() => load(p)} disabled={loading === p.id} aria-busy={loading === p.id || undefined} aria-label={`Use ${p.name}`}>{loading === p.id ? 'Putting it on the bench…' : replacing ? 'Replace the engine and its tune' : 'Put it on the bench'}</button>
+              </div>
+            )}
+          />
+        </div>
     </div>
   );
 }
