@@ -183,7 +183,7 @@ export const ACTIONS = Object.freeze({
  *   ecuInjectorCc: number, octaneIdx: number, ethanolPct: number, exhaustDiaIdx: number,
  *   ve: number[][], timing: number[][], afr: number[][],
  *   ecu?: object, mafScalar?: number, assumed?: string[], layout?: import('../../sim/layouts.js').Layout|null,
- *   factoryInduction?: BuildState['factoryInduction'],
+ *   factoryInduction?: BuildState['factoryInduction'], factoryInjIdx?: number,
  * }}} ApplyPresetAction
  */
 
@@ -656,6 +656,7 @@ function baseReducer(state, action) {
           // blank (BUILD says so until each is set); none for a catalogue engine.
           assumed: p.assumed ?? [],
           presetPrompt: null,
+          factoryInjIdx: p.factoryInjIdx ?? p.injIdx,
         },
         tune: {
           ...state.tune,

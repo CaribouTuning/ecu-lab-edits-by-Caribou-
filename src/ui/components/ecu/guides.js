@@ -42,9 +42,9 @@ export const PAGE_GUIDES = {
     leave: 'The default is the same air model you have been tuning with all along.',
   },
   boost: {
-    does: 'How the ECU asks for boost and drives the wastegate to get it. The BUILD boost curve is the target; this page is how it is reached.',
+    does: 'How the ECU asks for boost and drives the wastegate to get it. The Boost target curve at the top of this page is the target; the settings below are how it is reached.',
     when: 'The log shows boost overshooting its target, falling short of it, or wheelspin in the low gears.',
-    leave: 'Closed loop with the factory duty table reaches the BUILD boost curve by itself, wherever the turbo can make it.',
+    leave: 'Closed loop with the factory duty table reaches the Boost target curve by itself, wherever the turbo can make it.',
   },
   vvt: {
     does: 'Where the cam phasers turn the camshafts at each speed and load.',
@@ -121,7 +121,7 @@ export const FIELD_TIPS = {
   'ignition.knockThreshold': 'How loud a noise must be to count as knock. After a cam or spring change, raise it if the ECU hears "knock" that is not there.',
   'ignition.highDetRetard': 'After heavy knock, the ECU drops to safer timing by this much until things calm down. Zero turns it off.',
   // AIRFLOW
-  'config.airModel': 'How the ECU works out air: from pressure and the AIRFLOW table, from the airflow sensor, or both. Leave on the default.',
+  'config.airModel': 'How the ECU works out air: from pressure and the AIRFLOW table, from the airflow sensor, both, or from throttle position alone (Alpha-N, for a converted carburettor engine or individual throttle bodies). Leave on the default unless the engine has no usable MAP signal.',
   'config.cylinderModel': 'Works out each cylinder on its own, so they can differ. Turn on to use per-cylinder trims.',
   'airflow.mafTrim': 'Corrects the airflow sensor at specific airflows, after an intake change.',
   'airflow.camVeCorr': 'Corrects the AIRFLOW table as the cam phaser moves. Needs cam phasers.',
@@ -132,6 +132,7 @@ export const FIELD_TIPS = {
   'boost.gearLimit': 'The most boost allowed in each gear. Lower 1st and 2nd if the car spins its tyres.',
   'boost.iatComp': 'Takes boost away as the intake air gets hot.',
   'boost.baseDuty': 'The wastegate duty the ECU starts from for each boost target. Get this close and boost arrives cleanly.',
+  'boost.maxDuty': 'The most wastegate duty the controller may ask for. Raise it when boost falls short of the target with the duty already at this limit.',
   'boost.kp': 'How hard the ECU reacts to a boost error right now. Too high and boost oscillates.',
   'nitrous.minRpm': 'Nitrous opens above this speed. Too low and a big shot breaks parts or backfires.',
   'nitrous.maxRpm': 'Nitrous shuts off above this. Keep it under the rev limiter.',
@@ -157,6 +158,7 @@ export const FIELD_TIPS = {
   'idle.target': 'Idle speed by coolant temperature. Cold engines usually idle higher.',
   'idle.baseAir': 'Where the idle valve starts. Close to right means a steady idle straight after starting.',
   'idle.gainUp': 'How quickly the ECU adds air when idle drops. Too slow stalls; too fast hunts.',
+  'idle.sparkBase': 'The spark the engine idles on with the throttle shut. Factory tunes sit short of best torque, so idle control has spark in reserve.',
   'idle.sparkGain': 'How much the ECU uses timing to catch quick idle dips.',
   'idle.sparkLimit': 'The most timing idle control may add or remove.',
   'idle.acRpmAdd': 'Raises idle while the A/C is on.',

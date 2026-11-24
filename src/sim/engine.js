@@ -49,6 +49,22 @@ export function valveFloatRpm(springRate, camDuration) {
     - (camDuration - CAM_BASE_DURATION) * COEFF.FLOAT_PER_CAM_DEG;
 }
 
+/** The stiffest valve spring the build offers (BUILD → HEADS AND CAM). */
+export const SPRING_RATE_MAX = 100;
+
+/**
+ * The spring rate that floats the valves COEFF.SPRING_MARGIN_RPM past a redline with this cam
+ * (the inverse of `valveFloatRpm`), never below the stock 50.
+ *
+ * @param {number} redline
+ * @param {number} camDuration crank degrees, the longer of the two lobes
+ * @returns {number}
+ */
+export function springRateFor(redline, camDuration) {
+  const needed = 50 + (redline + COEFF.SPRING_MARGIN_RPM - valveFloatRpm(50, camDuration)) / COEFF.FLOAT_PER_SPRING_RATE;
+  return Math.max(50, Math.ceil(needed));
+}
+
 /**
  * Parasitic loss from compressing stiffer valve springs, every cycle.
  *
@@ -192,6 +208,7 @@ export function intakeValveAreaRatio(cfg) {
  * @property {number} torqueScale displacement relative to the 3.5 L baseline
  * @property {number} bearingWearMult block material wear multiplier
  * @property {number} bearingFreeBar average peak pressure the bottom end carries for free, bar
+ * @property {number} peakPressureLimitBar peak cylinder pressure the pistons and rods are built for, bar
  * @property {number} bearingEventBar average peak pressure that raises the bottom-end advisory, bar
  * @property {string} character human-readable bore/stroke description
  * @property {number} perCylL per-cylinder displacement, litres
@@ -268,6 +285,10 @@ export function deriveEngine(cfg) {
   // starts: see BEARING_PRESSURE_FREE_BAR.
   const bearingFreeBar = cfg.boostRatedBottomEnd ? COEFF.BEARING_PRESSURE_FREE_BAR_BOOST_RATED : COEFF.BEARING_PRESSURE_FREE_BAR;
   const bearingEventBar = cfg.boostRatedBottomEnd ? COEFF.BEARING_EVENT_BAR_BOOST_RATED : COEFF.BEARING_EVENT_BAR;
+  // The peak cylinder pressure the pistons and rods are built for: forged and race assemblies
+  // carry the most, a factory turbo engine's own more than a naturally aspirated one's.
+  const peakPressureLimitBar = ['forged', 'race'].includes(cfg.bottomEnd) ? COEFF.PEAK_PRESSURE_LIMIT_BAR_FORGED
+    : cfg.boostRatedBottomEnd ? COEFF.PEAK_PRESSURE_LIMIT_BAR_BOOST_RATED : COEFF.PEAK_PRESSURE_LIMIT_BAR;
   // Architecture friction. Main bearings are counted in the friction model itself
   // (friction.js: an inline six pays for its seven mains); balance shafts are a share on
   // top of it.
@@ -278,10 +299,6 @@ export function deriveEngine(cfg) {
   const springRate = cfg.springRate ?? 50;
   // Overlap is shared between the two lobes, each bringing half of its duration to TDC; the
   // more aggressive lobe is the one whose valve floats first.
-  // A cam card's lobe separation moves the lobes apart or together: overlap at the checking
-  // lift is (intake + exhaust duration) / 2 - 2 * LSA, so each degree tighter than the
-  // separation the lobes otherwise sit at (the intake centreline, both mirrored about TDC)
-  // adds two of overlap.
   const impliedLsa = 180 + COEFF.IVC_BASE_ABDC + (camDuration - COEFF.IVC_CAM_REF_DURATION) * COEFF.IVC_PER_CAM_DEG - camDuration / 2;
   const overlapDeg = Math.max(0, camOverlapDeg((camDuration + exhaustCamDuration) / 2) + (cfg.lsaDeg != null ? 2 * (impliedLsa - cfg.lsaDeg) : 0));
   const floatRpm = valveFloatRpm(springRate, Math.max(camDuration, exhaustCamDuration));
@@ -295,7 +312,7 @@ export function deriveEngine(cfg) {
   const valvesPerCyl = cfg.valvesPerCyl ?? 4;
   const follower = cfg.follower ?? (valvetrain === 'dohc' ? 'flat' : 'roller');
   const valves = intakeValveAreaRatio({ bore: cfg.bore, valvesPerCyl, intakeValveMm: cfg.intakeValveMm });
-  const character = ratio > 1.08
+  const character = ratio > 1.05
     ? 'Oversquare — revs and breathes higher'
     : ratio < 0.95 ? 'Undersquare — stronger low-end torque' : 'Square — balanced';
   // Compression is passed through rather than only being folded into the two terms
@@ -307,7 +324,7 @@ export function deriveEngine(cfg) {
     cyl, displacementL, ratio, compression: cfg.compression,
     bore: cfg.bore, stroke: cfg.stroke,
     boreFlameFactor, sparkPlugs, chamberOffsetK, injection, evapInCylinder,
-    torqueScale, bearingWearMult, bearingFreeBar, bearingEventBar, character, perCylL,
+    torqueScale, bearingWearMult, bearingFreeBar, bearingEventBar, peakPressureLimitBar, character, perCylL,
     camDuration, exhaustCamDuration, springRate, overlapDeg, floatRpm, springPa, bottomEnd,
     balanceShaftFrac, redline,
     configuration: cfg.configuration, valvetrain, valvesPerCyl, follower,

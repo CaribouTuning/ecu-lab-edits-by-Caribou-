@@ -34,6 +34,13 @@ export const AMBIENT_K = 298;
 export const GAMMA_AIR = 1.4;
 
 /**
+ * Stoichiometric air-fuel ratio of gasoline by mass: the AFR the tables and gauges are read
+ * in, as tuners read them (an E85 engine's AFR is still quoted on this scale, as lambda × 14.7).
+ * Each fuel's own ratio is its `OCTANE_OPTS` entry.
+ */
+export const GASOLINE_STOICH = 14.7;
+
+/**
  * Speed of sound in ambient intake air, m/s.
  *
  * sqrt(gamma * R * T) — 346 m/s at 25 C. The reference the inlet Mach index is taken
@@ -51,6 +58,10 @@ export const AMBIENT_C = AMBIENT_K - KELVIN_OFFSET;
 
 /** Pounds per square inch to kilopascals. */
 export const PSI_TO_KPA = 6.895;
+/** Newton-metres per pound-foot. */
+export const NM_PER_LBFT = 1 / 0.7376;
+/** Watts per mechanical horsepower. */
+export const HP_TO_W = 745.7;
 
 /** Kilopascals per bar — cylinder pressures are conventionally quoted in bar. */
 export const KPA_PER_BAR = 100;
@@ -82,3 +93,10 @@ export const INJ_DEADTIME_MS = 1.0;
  * move together.
  */
 export const RHO_AIR = (BARO_KPA * 1000) / (R_AIR * AMBIENT_K);
+
+/**
+ * How far, percent, the delivered mixture may miss the AFR table at full load: where a
+ * professional holds it, and the line the career's strictest customers grade at.
+ */
+export const MIXTURE_TOLERANCE_PCT = 2;
+

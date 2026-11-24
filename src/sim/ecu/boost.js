@@ -53,7 +53,7 @@ export function dutyForHold(gate, psi) {
  *
  * @param {object} input
  * @param {object} input.cal the calibration's `boost` section
- * @param {number[]} input.baseCurve the BUILD tab's boost target curve
+ * @param {number[]} input.baseCurve the boost target curve (TUNE → BOOST; stored on the build)
  * @param {number[]} input.rpmAxis
  * @param {number} input.rpm
  * @param {number} input.throttlePct throttle opening as the ECU reads it

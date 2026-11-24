@@ -1,21 +1,14 @@
-/**
- * Airflow model: hardware in, VE out.
- *
- * This is the ONLY place hardware is allowed to change how the engine breathes. If you are
- * adding a part, it belongs here (or in the knock and fuel terms of `point.js`), never as a
- * bonus multiplier on power. The breathing itself is the cylinder's gas exchange
- * (breathing.js): valves, cam events, the intake runner and the exhaust it pushes against.
- */
+/** Airflow model: hardware in, VE out. */
 
-import { AMBIENT_K, BARO_KPA, PSI_TO_KPA } from './constants.js';
+import { AMBIENT_K, BARO_KPA, GAMMA_AIR, GASOLINE_STOICH, KPA_PER_BAR, PSI_TO_KPA, R_AIR } from './constants.js';
 import { COEFF } from './coefficients.js';
-import { CYL_COUNT } from './hardware.js';
+import { CYL_COUNT, STOCK_EXHAUST_DIA_IN } from './hardware.js';
 import { CAM_BASE_DURATION, deriveEngine, intakeValveAreaRatio, valveFloatRpm } from './engine.js';
 import { clamp } from './math.js';
 import { chargeTempK, INDUCTION_REF_EXHAUST_K } from './thermo.js';
 import { turbineBackPressureKpa } from './turbo.js';
 import { rubbingFmepPa } from './friction.js';
-import { catalystLossShare, exhaustSystemDropKpa, gasExchange, valveEvents } from './breathing.js';
+import { catalystLossShare, catalystSubstrate, exhaustPipeFlow, exhaustSystemDropKpa, gasExchange, valveEvents } from './breathing.js';
 import { LOAD, RPM } from './tables.js';
 
 /**
@@ -48,9 +41,8 @@ export function computeHardwareVE(cfg, mods, hw = {}, axes = null) {
 
 /**
  * The intake runner this engine breathes through: its bore from the intake valves it feeds,
- * its length the one whose torque (filling less friction) peaks at `tuneRpm` (the published torque peak where
- * there is one), found by stepping the length and running the gas exchange. A player's
- * engine may set its own length (`cfg.runnerMm`).
+ * its length the one whose torque (filling less friction) peaks at `tuneRpm` (the published
+ * torque peak where there is one), found by stepping the length and running the gas exchange.
  * @param {object} base the breathing geometry without the runner length
  * @param {number} tuneRpm
  * @param {object|null} [derived] the engine's derived figures, for its friction
@@ -85,7 +77,7 @@ function tunedRunnerM(base, tuneRpm, derived = null, cyl = null) {
       for (let i = 0; i < 2; i++) {
         r = gasExchange(g, { ...op, rpm, exhaustKpa: emp, runnerWaves: r?.runnerWaves });
         const exh = r.freshKg * (cyl ?? 6) * (rpm / 120) * 1.07;
-        emp = BARO_KPA + exhaustSystemDropKpa({ flowKgS: exh, exhaustK: op.exhaustK - COEFF.EXHAUST_PIPE_COOLING_K, pipeDiaIn: 3.0 });
+        emp = BARO_KPA + exhaustSystemDropKpa({ flowKgS: exh, exhaustK: op.exhaustK - COEFF.EXHAUST_PIPE_COOLING_K, pipeDiaIn: STOCK_EXHAUST_DIA_IN });
       }
       return (r.ve / 100) * COEFF.BREATH_IMEP_PER_VE_PA - fmep[n] - (emp - BARO_KPA) * 1000;
     });
@@ -99,9 +91,7 @@ function tunedRunnerM(base, tuneRpm, derived = null, cyl = null) {
     return { peak, atTune: ves[Math.max(0, at)] };
   };
   // Of the lengths whose torque peaks at or above the tune speed, the one that fills best
-  // there: the strongest runner that still peaks where it is meant to. Choosing the length
-  // whose peak lands nearest the speed instead read a flat curve's peak, which jumps between
-  // lengths on small changes, and could pick a weak runner over a strong one beside it.
+  // there: the strongest runner that still peaks where it is meant to.
   let best = null; let bestAt = -Infinity; let nearest = 0.35; let nearestErr = Infinity;
   const search = (from, to, by) => {
     for (let L = from; L <= to + 1e-9; L += by) {
@@ -114,10 +104,21 @@ function tunedRunnerM(base, tuneRpm, derived = null, cyl = null) {
   search(0.1, 1.0, 0.05);
   // No length peaks that high (a speed past every length's reach): the nearest.
   if (best == null) best = nearest;
-  RUNNER_CACHE.set(key, best);
+  keepRunner(key, best);
   return best;
 }
 const RUNNER_CACHE = new Map();
+/**
+ * How many engines' tuned runners are kept, the oldest dropped first: far more than one player
+ * builds, and a bound where the same code serves many (a pull recomputed on a server), where an
+ * unbounded map would grow with every custom engine it was ever asked about.
+ */
+const RUNNERS_KEPT = 4096;
+/** @param {string} key @param {number} length */
+function keepRunner(key, length) {
+  RUNNER_CACHE.set(key, length);
+  while (RUNNER_CACHE.size > RUNNERS_KEPT) RUNNER_CACHE.delete(RUNNER_CACHE.keys().next().value);
+}
 
 /**
  * Primaries merging in each header collector: a bank's cylinders on a V or flat engine (one
@@ -168,8 +169,7 @@ export function breathingGeometry(cfg, phase = {}) {
       : exhaustValves * (Math.PI / 4) * (COEFF.BREATH_THROAT_SHARE * exhaustValveM) ** 2 * COEFF.EXH_PRIMARY_AREA_SHARE,
     // At the collector a primary's wave meets every other branch of the merge, not one pipe:
     // the other primaries into it as well as the collector's outlet (linear junction theory:
-    // Kinsler & Frey, branched pipes; Blair, Design and Simulation of Four-Stroke Engines,
-    // ch. 2), so it reflects as into their summed area.
+    // Kinsler & Frey, branched pipes; Blair, Design and Simulation of Four-Stroke Engines, ch.
     exhaustReflection: reflectionCoefficient(phase.headers
       ? COEFF.EXH_COLLECTOR_AREA_HEADERS + (primariesPerCollector(cfg) - 1)
       : COEFF.EXH_COLLECTOR_AREA_MANIFOLD),
@@ -179,9 +179,7 @@ export function breathingGeometry(cfg, phase = {}) {
       intakeAdvanceDeg: phase.intakeCamAdvanceDeg ?? 0,
       maxLiftM: intakeLiftM, exhaustMaxLiftM: exhaustLiftM,
       // A cam card's installed intake centreline (moved by an intake phaser's advance) and
-      // lobe separation, which fix the exhaust centreline at 2 * LSA - ICL before TDC. Each
-      // phaser moves only its own lobe: the separation handed on is the one that keeps the
-      // exhaust centreline where the card puts it, and valveEvents adds an exhaust retard.
+      // lobe separation, which fix the exhaust centreline at 2 * LSA - ICL before TDC.
       iclDeg: cfg.iclDeg != null ? cfg.iclDeg - (phase.intakeCamAdvanceDeg ?? 0) : null,
       lsaDeg: cfg.lsaDeg != null ? cfg.lsaDeg - (phase.intakeCamAdvanceDeg ?? 0) / 2 : null,
     }),
@@ -230,20 +228,68 @@ export function hardwareVeAt(cfg, mods, hw = {}) {
     intakeCamAdvanceDeg = 0, exhaustCamRetardDeg = 0,
   } = hw;
   // The same engine's breathing is asked for by its factory calibration, its VE truth, the
-  // advisor and every pull: one grid per engine, kept, so no cell is solved twice. Keyed on
-  // everything below that the gas exchange reads.
-  const key = JSON.stringify([cfg, !!mods.headers, !!mods.intercooler, turboOn, turbine?.effectiveAreaM2 ?? null,
+  // advisor and every pull: one grid per engine, kept, so no cell is solved twice.
+  const { bottomEndRatedRpm: _rated, bottomEnd: _parts, ...breathed } = cfg;
+  const key = JSON.stringify([breathed, !!mods.headers, !!mods.intercooler, turboOn, turbine?.effectiveAreaM2 ?? null,
     exhaustDia, fuel?.stoich ?? null, intakeCamAdvanceDeg, exhaustCamRetardDeg, COEFF.BREATH_VALVE_CD]);
   const kept = VE_READERS.get(key);
   if (kept) { VE_READERS.delete(key); VE_READERS.set(key, kept); return kept; }
-  const reader = buildVeReader(cfg, mods, { turboOn, turbine, exhaustDia, fuel, intakeCamAdvanceDeg, exhaustCamRetardDeg });
+  const reader = buildVeReader(cfg, mods, { turboOn, turbine, exhaustDia, fuel, intakeCamAdvanceDeg, exhaustCamRetardDeg }, key);
   VE_READERS.set(key, reader);
-  if (VE_READERS.size > VE_READERS_KEPT) VE_READERS.delete(VE_READERS.keys().next().value);
+  if (VE_READERS.size > VE_READERS_KEPT) { const gone = VE_READERS.keys().next().value; VE_READERS.delete(gone); VE_NODES.delete(gone); }
   return reader;
 }
 
 /** Engines' breathing grids kept, most recently used last. */
 const VE_READERS = new Map();
+/** Each kept grid's solved nodes, by the same key: what another thread can be handed. */
+const VE_NODES = new Map();
+/** Nodes solved elsewhere for a grid not built here yet, waiting for it. */
+const VE_SEEDS = new Map();
+
+/**
+ * Everything the gas exchange has solved in this thread: each engine's grid nodes and its
+ * tuned runner lengths. Another thread running the same code on the same engine hands this
+ * back (`seedBreathing`), so the work is done once, off the thread that draws the screen.
+ * @returns {{grids: [string, [number, number][]][], runners: [string, number][]}}
+ */
+export function breathingSnapshot() {
+  return { grids: [...VE_NODES].map(([k, m]) => [k, [...m]]), runners: [...RUNNER_CACHE] };
+}
+
+/**
+ * Takes in nodes and runner lengths another thread solved with this same code
+ * (`breathingSnapshot`). They are the numbers this thread would compute, so a reading is the
+ * same whichever thread solved it; only the time is saved.
+ * @param {{grids?: [string, [number, number][]][], runners?: [string, number][]}} snap
+ * @param {{verify?: boolean}} [opts] `verify`: solved by an earlier session, so checked before use
+ */
+export function seedBreathing(snap, { verify = false } = {}) {
+  if (!verify) for (const [k, v] of snap?.runners ?? []) if (!RUNNER_CACHE.has(k)) keepRunner(k, v);
+  for (const [k, nodes] of snap?.grids ?? []) {
+    if (verify) {
+      // Kept apart until the grid is built, and checked then (`buildVeReader`): solved by an
+      // earlier build of this code, they may not be the numbers this one computes.
+      if (!VE_NODES.has(k) && !VE_SEEDS.has(k)) VE_UNVERIFIED.set(k, new Map(nodes));
+      continue;
+    }
+    const live = VE_NODES.get(k);
+    const into = live ?? VE_SEEDS.get(k) ?? new Map();
+    for (const [n, v] of nodes) if (!into.has(n)) into.set(n, v);
+    if (!live) VE_SEEDS.set(k, into);
+  }
+  while (VE_SEEDS.size > VE_READERS_KEPT) VE_SEEDS.delete(VE_SEEDS.keys().next().value);
+  while (VE_UNVERIFIED.size > VE_READERS_KEPT) VE_UNVERIFIED.delete(VE_UNVERIFIED.keys().next().value);
+}
+/**
+ * Nodes this device solved in an earlier session (`seedBreathing(…, { verify: true })`),
+ * waiting for their grid. Used only if a few of them, solved again, come out exactly the same:
+ * any change to the breathing since makes them differ, and then all of them are dropped.
+ */
+const VE_UNVERIFIED = new Map();
+/** How many saved nodes, spread evenly across the grid's speeds and pressures, are solved again
+ * to check a saved grid before it is used. */
+const VE_VERIFY_NODES = 8;
 /** How many: an engine's phases and bolt-on variants several times over, a few MB at most. */
 const VE_READERS_KEPT = 48;
 
@@ -272,37 +318,39 @@ function veFinish(cfg, fuel) {
  * @param {import('./engine.js').EngineConfig} cfg
  * @param {{headers?: boolean, intercooler?: boolean}} mods
  * @param {object} hw
+ * @param {string|null} [key] the grid's key in `VE_READERS`, to register its nodes under
  * @returns {(rpm: number, mapKpa: number) => number}
  */
-function buildVeReader(cfg, mods, hw) {
+function buildVeReader(cfg, mods, hw, key = null) {
   const { turboOn, turbine, exhaustDia, fuel, intakeCamAdvanceDeg, exhaustCamRetardDeg } = hw;
   const g = breathingGeometry(cfg, { intakeCamAdvanceDeg, exhaustCamRetardDeg, headers: !!mods.headers });
   const cyl = CYL_COUNT[cfg.configuration];
-  const pipeDiaIn = exhaustDia ?? 3.0;
+  const pipeDiaIn = exhaustDia ?? STOCK_EXHAUST_DIA_IN;
   // The longer lobe floats first (engine.js `deriveEngine`).
   const finish = veFinish(cfg, fuel);
-  const stoich = fuel?.stoich ?? 14.7;
-  const cache = new Map();
+  const stoich = fuel?.stoich ?? GASOLINE_STOICH;
+  // Nodes another thread already solved for this engine (`seedBreathing`), and this grid's
+  // own nodes registered for handing on (`breathingSnapshot`).
+  const cache = (key != null && VE_SEEDS.get(key)) || new Map();
+  if (key != null) { VE_SEEDS.delete(key); VE_NODES.set(key, cache); }
 
   /** The gas exchange at one grid node, computed once. */
   const node = (ri, mi) => {
     const key = ri * 4096 + mi;
     const hit = cache.get(key);
     if (hit != null) return hit;
+    const val = solveNode(ri, mi);
+    cache.set(key, val);
+    return val;
+  };
+  /** The gas exchange at one grid node. */
+  const solveNode = (ri, mi) => {
     const rpm = Math.max(VE_GRID_RPM, ri * VE_GRID_RPM);
     const mapKpa = Math.max(VE_GRID_KPA, mi * VE_GRID_KPA);
     const boostPsi = Math.max(0, (mapKpa - BARO_KPA) / PSI_TO_KPA);
     const intakeK = chargeTempK(boostPsi, !!mods.intercooler);
     // Exhaust manifold pressure is set by the flow it passes, which is set by the breathing:
     // repeated substitution from atmospheric; three passes settle it well inside 0.1% VE.
-    // Each pass is the next cycle: it starts from the waves the last one left in the runner.
-    // The burned gas the exhaust stroke starts from is set by the mixture, not by how much
-    // of it there is: a stoichiometric charge burns to the same temperature at any density.
-    // So every cell runs on the full-charge, stoichiometric exhaust temperature, the one the
-    // induction solve prices the turbine on (thermo.js `INDUCTION_REF_EXHAUST_K`).
-    // `exhaustTempK`'s load term is how a probe in the manifold reads a small flow cooled by
-    // the port: taking it as the cylinder's own gas put a light-load, high-speed cylinder
-    // at 600 K and starved its filling (cold residual is dense and hard to push out).
     const tex = INDUCTION_REF_EXHAUST_K;
     let emp = BARO_KPA;
     let r = null;
@@ -316,10 +364,22 @@ function buildVeReader(cfg, mods, hw) {
         ? turbineBackPressureKpa(exhKgS, tex, turbine.effectiveAreaM2) + system
         : BARO_KPA + system;
     }
-    const val = finish(r.ve, rpm);
-    cache.set(key, val);
-    return val;
+    return finish(r.ve, rpm);
   };
+  // Nodes saved from an earlier session: solved again at `VE_VERIFY_NODES` of them, and used only
+  // if they come out exactly the same.
+  const saved = key != null ? VE_UNVERIFIED.get(key) : null;
+  if (saved) {
+    VE_UNVERIFIED.delete(key);
+    // In grid order (speed, then pressure), so the probes span the whole grid, not the order the
+    // nodes happened to be solved in.
+    const keys = [...saved.keys()].sort((a, b) => a - b);
+    const count = Math.min(VE_VERIFY_NODES, keys.length);
+    const probe = [...new Set(Array.from({ length: count }, (_, i) => keys[Math.round((i * (keys.length - 1)) / Math.max(1, count - 1))]))];
+    if (probe.length && probe.every((n) => solveNode(Math.floor(n / 4096), n % 4096) === saved.get(n))) {
+      for (const [n, v] of saved) if (!cache.has(n)) cache.set(n, v);
+    }
+  }
 
   // Read between grid nodes bilinearly, so the curve is smooth to any caller.
   return (rpm, mapKpa) => {
@@ -334,11 +394,38 @@ function buildVeReader(cfg, mods, hw) {
 }
 
 /**
- * One operating point's gas exchange laid open, for the Physics page's live diagram: the
- * same geometry, exhaust back-pressure passes and runner waves as the VE truth computes at
- * that speed and manifold pressure (`buildVeReader`), its last pass kept crank degree by
- * crank degree, and the exhaust system's pressure drop part by part. Nothing here is a second
- * model: every number is one the breathing already makes.
+ * The cylinder's pressure through all four strokes, from the model's two records of it: the
+ * closed cycle as `runCycle` integrates it (intake valve closing to exhaust valve opening) and
+ * the open period as the gas exchange does (exhaust opening to intake closing, through
+ * blowdown, the exhaust stroke, overlap and the intake stroke).
+ * @param {{deg: number[], bar: number[], burned: number[]}} cycleTrace `runCycle`'s trace
+ * @param {{deg: number[], cylKpa: number[]}} exchangeTrace `gasExchangeTrace`'s `trace`
+ * @returns {{phi: number[], bar: number[], burned: number[]}} sorted by crank angle, 0-720°
+ */
+export function fourStrokeTrace(cycleTrace, exchangeTrace) {
+  const rows = [];
+  // The two records overlap, because they time the valves differently: the closed cycle closes
+  // and opens them at their effective (0.050 in) events, the gas exchange at the seat, so it
+  // opens the exhaust valve some 40 degrees sooner.
+  const openFrom = exchangeTrace.deg[0] + 720; // its exhaust opening, in this frame
+  const openTo = exchangeTrace.deg[exchangeTrace.deg.length - 1]; // its intake closing
+  cycleTrace.deg.forEach((d, i) => {
+    const phi = 360 + d;
+    if (phi > openTo && phi < openFrom) rows.push([phi, cycleTrace.bar[i], cycleTrace.burned[i]]);
+  });
+  exchangeTrace.deg.forEach((d, i) => {
+    const phi = d < 0 ? d + 720 : d;
+    rows.push([phi, exchangeTrace.cylKpa[i] / KPA_PER_BAR, phi >= openFrom ? 1 : 0]);
+  });
+  rows.sort((a, b) => a[0] - b[0]);
+  return { phi: rows.map((r) => r[0]), bar: rows.map((r) => r[1]), burned: rows.map((r) => r[2]) };
+}
+
+/**
+ * One operating point's gas exchange laid open, for the Physics page's live diagram: the same
+ * geometry, exhaust back-pressure passes and runner waves as the VE truth computes at that
+ * speed and manifold pressure (`buildVeReader`), its last pass kept crank degree by crank
+ * degree, and the exhaust system's pressure drop part by part.
  * @param {import('./engine.js').EngineConfig} cfg
  * @param {{headers?: boolean, exhaust?: boolean, intercooler?: boolean, catalyst?: 'ceramic'|'metallic'|'none'}} mods
  * @param {{turboOn?: boolean, turbine?: any, exhaustDia?: number, fuel?: any, intakeCamAdvanceDeg?: number, exhaustCamRetardDeg?: number}} hw
@@ -349,8 +436,8 @@ export function gasExchangeTrace(cfg, mods, hw, rpm, mapKpa) {
   const { turboOn = false, turbine = null, exhaustDia, fuel, intakeCamAdvanceDeg = 0, exhaustCamRetardDeg = 0 } = hw ?? {};
   const g = breathingGeometry(cfg, { intakeCamAdvanceDeg, exhaustCamRetardDeg, headers: !!mods.headers });
   const cyl = CYL_COUNT[cfg.configuration];
-  const pipeDiaIn = exhaustDia ?? 3.0;
-  const stoich = fuel?.stoich ?? 14.7;
+  const pipeDiaIn = exhaustDia ?? STOCK_EXHAUST_DIA_IN;
+  const stoich = fuel?.stoich ?? GASOLINE_STOICH;
   const boostPsi = Math.max(0, (mapKpa - BARO_KPA) / PSI_TO_KPA);
   const intakeK = chargeTempK(boostPsi, !!mods.intercooler);
   const tex = INDUCTION_REF_EXHAUST_K;
@@ -366,11 +453,13 @@ export function gasExchangeTrace(cfg, mods, hw, rpm, mapKpa) {
   // The same loss as exhaustSystemDropKpa, part by part, at the flow just found.
   const part = (k) => exhaustSystemDropKpa({ flowKgS: exhKgS, exhaustK: tex - COEFF.EXHAUST_PIPE_COOLING_K, pipeDiaIn, mods: {} }) * (k / partK0);
   const partK0 = COEFF.EXH_K_MANIFOLD + COEFF.EXH_K_CATALYST + COEFF.EXH_K_CATBACK;
-  const sound = Math.sqrt(COEFF.GAMMA_BURNED * 287 * tex);
-  const soundIn = Math.sqrt(1.4 * 287 * intakeK);
+  const sound = Math.sqrt(COEFF.GAMMA_BURNED * R_AIR * tex);
+  const soundIn = Math.sqrt(GAMMA_AIR * R_AIR * intakeK);
   const degPerSec = rpm * 6;
   return {
     rpm, mapKpa, empKpa: emp, exhaustFlowGs: exhKgS * 1000,
+    // The gas each pipe carries and the speed its waves run at, for the diagrams' working.
+    intakeK, exhaustK: tex, intakeSoundMs: soundIn, exhaustSoundMs: sound, cylinders: cyl,
     // The engine's VE as the VE truth makes it of this filling (`veFinish`).
     ve: veFinish(cfg, fuel)(r.ve, rpm), residualFrac: r.residualFrac, backflowShare: r.backflowShare,
     trace: r.trace,
@@ -382,6 +471,7 @@ export function gasExchangeTrace(cfg, mods, hw, rpm, mapKpa) {
       collectorReflection: g.exhaustReflection, headers: !!mods.headers,
       intakeValveMm: g.intakeValveM * 1000, exhaustValveMm: g.exhaustValveM * 1000,
       intakeValves: g.intakeValves, exhaustValves: g.exhaustValves,
+      primariesPerCollector: primariesPerCollector(cfg),
     },
     // A wave's round trip of each pipe in crank degrees at this speed: where it lands in the
     // cycle is what tunes the pipe.
@@ -393,6 +483,14 @@ export function gasExchangeTrace(cfg, mods, hw, rpm, mapKpa) {
       catback: part(mods.exhaust ? COEFF.EXH_K_CATBACK_FREE : COEFF.EXH_K_CATBACK),
       turbine: turboOn && turbine ? turbineBackPressureKpa(exhKgS, tex, turbine.effectiveAreaM2) - BARO_KPA : 0,
     },
+    // The exhaust pipe's gas as that loss prices it (all of the flow, through the one pipe), and
+    // the catalyst's honeycomb: the Physics page shows the working of both.
+    exhaustPipe: {
+      gasK: tex - COEFF.EXHAUST_PIPE_COOLING_K, pipeDiaIn, flowKgS: exhKgS,
+      soundMs: Math.sqrt(COEFF.GAMMA_BURNED * R_AIR * (tex - COEFF.EXHAUST_PIPE_COOLING_K)),
+      ...exhaustPipeFlow({ flowKgS: exhKgS, exhaustK: tex - COEFF.EXHAUST_PIPE_COOLING_K, pipeDiaIn }),
+    },
+    catalyst: mods.catalyst === 'none' ? null : catalystSubstrate(mods.catalyst === 'metallic' ? 'metallic' : 'ceramic'),
   };
 }
 
@@ -403,22 +501,31 @@ export function gasExchangeTrace(cfg, mods, hw, rpm, mapKpa) {
  * @param {import('./engine.js').EngineConfig} cfg
  */
 export function headDefaultsOf(cfg) {
-  const g = breathingGeometry({ ...cfg, intakeLiftMm: undefined, exhaustLiftMm: undefined, exhaustPortCfm: undefined, intakePortCfm: cfg.intakePortCfm, lsaDeg: undefined, iclDeg: undefined });
+  const plain = { ...cfg, intakeLiftMm: undefined, exhaustLiftMm: undefined, exhaustPortCfm: undefined, intakePortCfm: cfg.intakePortCfm, lsaDeg: undefined, iclDeg: undefined };
+  // Every figure but the runner is read with the runner held at any length: none of them
+  // depends on it, and tuning the runner to the engine is the one costly step (about 0.4 s on
+  // a phone each time the block changes).
+  const held = { ...plain, runnerMm: cfg.runnerMm ?? 350 };
+  const g = breathingGeometry(held);
   const camDuration = cfg.camDuration ?? CAM_BASE_DURATION;
   const ivcAbdc = COEFF.IVC_BASE_ABDC + (camDuration - COEFF.IVC_CAM_REF_DURATION) * COEFF.IVC_PER_CAM_DEG;
   const centre = 180 + ivcAbdc - camDuration / 2;
   // A port with no bench figure flows through its throat times the universal discharge
   // coefficient (breathing.js `valveArea`): that area, as the bench would read it.
   const portCfm = (n, dia) => (n * COEFF.BREATH_VALVE_CD * (Math.PI / 4) * (COEFF.BREATH_THROAT_SHARE * dia) ** 2 * FLOW_BENCH_VELOCITY_MS) / CFM_TO_M3S;
-  const headers = breathingGeometry(cfg, { headers: true });
+  const headers = breathingGeometry({ ...cfg, runnerMm: cfg.runnerMm ?? 350 }, { headers: true });
+  let runnerMm = null;
   return {
     intakeLiftMm: COEFF.BREATH_LIFT_PER_DIA * g.intakeValveM * 1000,
     exhaustLiftMm: COEFF.BREATH_LIFT_PER_DIA * g.exhaustValveM * 1000,
     exhaustValveMm: g.exhaustValveM * 1000,
     intakePortCfm: cfg.intakePortCfm ?? portCfm(g.intakeValves, g.intakeValveM),
-    exhaustPortCfm: portCfm(g.exhaustValves, g.exhaustValveM),
+    exhaustPortCfm: cfg.exhaustPortCfm ?? portCfm(g.exhaustValves, g.exhaustValveM),
     lsaDeg: centre, iclDeg: centre,
-    runnerMm: g.runnerLengthM * 1000,
+    get runnerMm() {
+      if (runnerMm == null) runnerMm = breathingGeometry(plain).runnerLengthM * 1000;
+      return runnerMm;
+    },
     headerPrimaryMm: headers.exhaustPrimaryM * 1000,
     headerPrimaryIdMm: Math.sqrt((4 * headers.exhaustPrimaryAreaM2) / Math.PI) * 1000,
   };
@@ -443,3 +550,27 @@ const VE_GRID_KPA = 2;
 function reflectionCoefficient(areaRatio) {
   return (1 - areaRatio) / (1 + areaRatio);
 }
+
+/**
+ * What an exhaust pipe costs at full power: the share of its peak airflow the engine loses on
+ * this pipe against one too big to restrict it, from the same gas exchange that prices the
+ * pipe in every pull (its pressure drop at the flow the engine makes).
+ * @param {import('./engine.js').EngineConfig} cfg
+ * @param {object} mods
+ * @param {object} hw as for hardwareVeAt (turbo, turbine, fuel)
+ * @param {number} pipeDia inches
+ * @param {number} redline rpm
+ * @param {number} mapKpa manifold pressure at full throttle (atmosphere plus any boost)
+ * @returns {number} 0..1
+ */
+export function exhaustPowerCost(cfg, mods, hw, pipeDia, redline, mapKpa) {
+  const flow = (dia) => {
+    const ve = hardwareVeAt(cfg, mods, { ...hw, exhaustDia: dia });
+    let best = 0;
+    for (let rpm = Math.max(1500, redline - 1500); rpm <= redline; rpm += 500) best = Math.max(best, rpm * ve(rpm, mapKpa));
+    return best;
+  };
+  const free = flow(6.0);
+  return free > 0 ? Math.max(0, 1 - flow(pipeDia) / free) : 0;
+}
+

@@ -23,6 +23,10 @@ import { groupByCause } from './fixOrder.js';
 const SCREENS = [
   { re: /\bBUILD (?:→|›|>) FUEL SYSTEM\b/, tab: 'build', section: 'fuel', label: 'BUILD › FUEL SYSTEM' },
   { re: /\bBUILD (?:→|›|>) INDUCTION\b/, tab: 'build', section: 'induction', label: 'BUILD › INDUCTION' },
+  // The short block, the head and cam, and the ignition parts are on BUILD's Engine page.
+  { re: /\bBUILD (?:→|›|>) SHORT BLOCK\b/, tab: 'build', section: 'engine', label: 'BUILD › SHORT BLOCK' },
+  { re: /\bBUILD (?:→|›|>) HEADS AND CAM\b/, tab: 'build', section: 'engine', label: 'BUILD › HEADS AND CAM' },
+  { re: /\bBUILD (?:→|›|>) IGNITION\b/, tab: 'build', section: 'engine', label: 'BUILD › IGNITION' },
   { re: /\bBUILD (?:→|›|>) ENGINE\b/, tab: 'build', section: 'engine', label: 'BUILD › ENGINE' },
   { re: /\bBUILD (?:→|›|>) EXHAUST\b/, tab: 'build', section: 'exhaust', label: 'BUILD › EXHAUST' },
   { re: /\bTUNE (?:→|›|>) AIRFLOW\b/, tab: 'tune', section: 'airflow', label: 'TUNE › AIRFLOW' },

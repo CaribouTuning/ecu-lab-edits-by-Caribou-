@@ -20,11 +20,7 @@ import { randomBuild, rng } from './randomBuilds.js';
 
 const POINTS = 1500;
 const BUILDS = 120;
-// Operating points per random engine: 1500 points on 300 engines. Each new engine tunes its
-// intake runners from the gas exchange on its first breathing call (airflow.js
-// tunedRunnerM), about two seconds, so one engine per point, rebuilt for each of the
-// thirteen properties, ran for hours. The points are as many and as random as before; each
-// engine is built once and shared.
+// Operating points per random engine: 1500 points on 300 engines.
 const POINTS_PER_BUILD = 5;
 const ENGINES = new Map();
 /** @param {number} buildSeed */
@@ -330,11 +326,10 @@ describe('whole pulls on random builds', () => {
         const ecuActed = (p.protect?.length ?? 0) > 0 || p.knockPull > 0 || l.knockPull > 0
           || p.misfire > 0 || p.cutPct > 0 || p.duty >= 100
           // Its own boost control, where it changed what the turbo did: the ECU runs its boost
-          // table and closed-loop wastegate, not the BUILD curve the original model runs on, and
-          // where the turbo runs out of flow it can shut the gate a step sooner (random build
-          // 10020 at 4700 RPM: 218 against 196 kPa ahead of the turbine at the same boost).
-          // Judged on the boost made and the pressure ahead of the turbine, not on the target,
-          // which differs by a tenth of a psi almost everywhere and would excuse every turbo point.
+          // table and closed-loop wastegate, not the BUILD curve the original model runs on,
+          // and where the turbo runs out of flow it can shut the gate a step sooner (random
+          // build 10020 at 4700 RPM: 218 against 196 kPa ahead of the turbine at the same
+          // boost).
           || Math.abs((p.boostPsi ?? 0) - (l.boostPsi ?? 0)) > 0.05 || Math.abs((p.emp ?? 0) - (l.emp ?? 0)) > 1;
         // One unit of rounding: the ECU prices the injector pulse through its own dead time,
         // which on a mis-scaled injector moves the charge by a hundredth of a percent.

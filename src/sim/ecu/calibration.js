@@ -135,11 +135,14 @@ export function defaultEcuCalibration({ derived = {}, gate = { type: 'electronic
       accel: curve(TPS_RATE_AXIS, (r) => Math.min(16, r * 0.022)),
       accelColdMult: curve(ECT_AXIS, (t) => Math.max(1, 2.0 - t * 0.0125)),
       accelDecayS: 0.35,
-      decelEnlean: 0.6,
+      decelEnlean: 1,
       dfcoEnabled: true,
       dfcoEnterRpm: 1850,
       dfcoExitRpm: 1600,
-      dfcoMinEctC: 45,
+      dfcoMinEctC: -10,
+      // Cut and return speeds raised with the engine cold (a calibration: the patents give
+      // the mechanism, not this table): +600 RPM at 20 °C, nothing once warm.
+      dfcoColdRpm: curve(ECT_AXIS, (t) => Math.max(0, Math.round((70 - t) * 12))),
       cylTrim: Array.from({ length: cyl }, () => 0),
       bankTrim: [0, 0],
       comp: map2(rpmAx, mapAx, () => 100),
@@ -224,6 +227,10 @@ export function defaultEcuCalibration({ derived = {}, gate = { type: 'electronic
       gainDown: 0.00045,
       damp: 0.018,
       bleed: COEFF.IDLE_BLEED_RATE,
+      // The spark a closed throttle idles on, short of MBT so the idle controller has spark
+      // to add when a load lands: Nissan's VQ35DE service manual sets 15 ± 5° BTDC at idle.
+      // Blended in below IDLE_SPARK_MAX_RPM; above it the spark table runs.
+      sparkBase: curve(ECT_AXIS, () => 15),
       sparkGain: COEFF.IDLE_SPARK_GAIN,
       sparkLimit: COEFF.IDLE_SPARK_LIMIT,
       acRpmAdd: 50,
@@ -381,13 +388,15 @@ export const ECU_META = [
   { path: 'fuel.accelDecayS', section: 'fuel', group: 'Transient', label: 'Accel enrichment decay', kind: 'number', unit: 's', min: 0.05, max: 2, step: 0.05, decimals: 2, pro: true,
     help: 'How long the added fuel lasts. It should match how long the wall film takes to build.' },
   { path: 'fuel.decelEnlean', section: 'fuel', group: 'Transient', label: 'Decel enleanment', kind: 'number', unit: '×', min: 0, max: 2, step: 0.05, decimals: 2, pro: true,
-    help: 'Fuel removed when the throttle closes, as a share of what the same rate would add on opening. The wall film gives its fuel back as the manifold empties, so without this a lift goes rich.' },
+    help: 'How much of the port wall film\'s returning fuel the ECU takes out of its injections, for as long as the film drains: 1 is all of what its film model estimates. The film gives its fuel back as the manifold empties after a lift, most of all on a cold engine, so with less a lift goes rich, and a cold overrun goes rich enough to misfire and pop in the exhaust.' },
   { path: 'fuel.dfcoEnabled', section: 'fuel', group: 'Transient', label: 'Overrun fuel cut', kind: 'bool', options: onOff,
     help: 'Closed throttle above idle, the injectors switch off entirely: engine braking, no fuel burned.' },
   { path: 'fuel.dfcoEnterRpm', section: 'fuel', group: 'Transient', label: 'Fuel cut above', kind: 'number', unit: 'RPM', min: 1000, max: 4000, step: 50, pro: true,
     help: 'Engine speed above which a closed throttle cuts fuel.' },
   { path: 'fuel.dfcoExitRpm', section: 'fuel', group: 'Transient', label: 'Fuel back on below', kind: 'number', unit: 'RPM', min: 900, max: 3500, step: 50, pro: true,
     help: 'Fuel returns below this, early enough that the engine catches before idle.' },
+  { path: 'fuel.dfcoColdRpm', section: 'fuel', group: 'Transient', label: 'Fuel cut speeds raised when cold', kind: 'curve', unit: 'RPM', xLabel: 'Coolant °C', min: 0, max: 2000, step: 50, pro: true,
+    help: 'Added to both the fuel-cut and fuel-return speeds on a cold engine, as factory calibrations do: the overrun still cuts fuel cold, so a closed throttle does not feed charges too thin to light, and the fuel comes back early enough that the engine does not stall. Take it to zero and lower the coolant limit, or raise the limit, and a cold overrun keeps its fuel: it runs rich, misfires and pops.' },
   { path: 'fuel.comp', section: 'fuel', group: 'Fuel compensation', label: 'Fuel compensation', kind: 'map', unit: '%', xLabel: 'RPM', yLabel: 'MAP kPa', min: 50, max: 150, step: 0.5, decimals: 1,
     help: 'Fine correction on the final pulse, by speed and load — 100 is the calculated fuel, above adds, below removes. Nissan ECUs tune the last few percent here after the airflow model is right; it is a correction on top of the model, not a replacement for it.' },
   { path: 'fuel.targetDelayS', section: 'fuel', group: 'Fuel compensation', label: 'Target lookup delay', kind: 'number', unit: 's', min: 0, max: 2, step: 0.05, decimals: 2,
@@ -472,8 +481,8 @@ export const ECU_META = [
 
   // ---- AIRFLOW ----
   { path: 'config.airModel', section: 'airflow', group: 'Load calculation', label: 'Air-mass strategy', kind: 'enum',
-    options: [{ id: 'blend', label: 'Speed-density + MAF trim' }, { id: 'sd', label: 'Speed-density' }, { id: 'maf', label: 'MAF' }],
-    help: 'How the ECU works out air per cylinder. Speed-density uses MAP, IAT and the VE table; MAF measures airflow directly and ignores VE. The default is the original model: VE for fuel, the MAF\'s error feeding the trims.' },
+    options: [{ id: 'blend', label: 'Speed-density + MAF trim' }, { id: 'sd', label: 'Speed-density' }, { id: 'maf', label: 'MAF' }, { id: 'alphan', label: 'Alpha-N (throttle position)' }],
+    help: 'How the ECU works out air per cylinder. Speed-density uses MAP, IAT and the VE table; MAF measures airflow directly and ignores VE. Alpha-N reads the VE, spark and mixture tables by throttle opening instead of MAP, and works the air out from the barometric pressure: the usual first step converting a carburetted engine, and the choice for big cams and individual throttle bodies, whose manifold pressure is too unsteady to read at idle. It cannot see boost, a blocked filter or a different intake, only where the blade is, so the VE table carries all of that and must be retuned for it. The load rows then mean throttle opening. The default is the original model: VE for fuel, the MAF\'s error feeding the trims.' },
   { path: 'config.cylinderModel', section: 'airflow', group: 'Load calculation', label: 'Model cylinder-to-cylinder distribution', kind: 'bool', options: onOff,
     help: 'Solve each cylinder separately. Real intake manifolds feed some runners better than others and middle cylinders run hotter, so cylinders differ in mixture and knock limit. Slower to compute.' },
   { path: 'airflow.mafTrim', section: 'airflow', group: 'MAF', label: 'MAF transfer correction', kind: 'curve', unit: '%', xLabel: 'Airflow g/s', min: -30, max: 30, step: 0.5, decimals: 1,
@@ -490,7 +499,7 @@ export const ECU_META = [
     options: [{ id: 'closed', label: 'Closed loop (target + PI)' }, { id: 'open', label: 'Open loop (duty table only)' }],
     help: 'Open loop, the wastegate gets the duty in the table and boost is whatever that holds. Closed loop, the ECU compares boost to target and corrects the duty.' },
   { path: 'boost.throttleScale', section: 'boost', group: 'Target', label: 'Target by throttle', kind: 'curve', unit: '%', xLabel: 'Throttle %', min: 0, max: 100, step: 1,
-    help: 'How much of the BUILD boost target is requested at each throttle opening.' },
+    help: 'How much of the Boost target curve (at the top of this page) is requested at each throttle opening.' },
   { path: 'boost.gearLimit', section: 'boost', group: 'Target', label: 'Boost limit by gear', kind: 'curve', unit: 'psi', xLabel: 'Gear', min: 0, max: 40, step: 0.5, decimals: 1,
     help: 'Most boost allowed in each gear. First and second are traction-limited: torque the tyre cannot use is just wheelspin. The dyno pulls in 4th.' },
   { path: 'boost.iatComp', section: 'boost', group: 'Target', label: 'Intake temperature compensation', kind: 'curve', unit: 'psi', xLabel: 'IAT °C', min: -15, max: 5, step: 0.5, decimals: 1,
@@ -503,7 +512,7 @@ export const ECU_META = [
     help: 'Duty accumulated per psi of error per second. It removes steady error, but winds up while the turbo spools and overshoots when it arrives.' },
   { path: 'boost.iWindowPsi', section: 'boost', group: 'Closed loop', label: 'Integral active within', kind: 'number', unit: 'psi', min: 0.5, max: 30, step: 0.5, decimals: 1, pro: true,
     help: 'The integrator only runs this close to target — the usual defence against wind-up while spooling.' },
-  { path: 'boost.maxDuty', section: 'boost', group: 'Closed loop', label: 'Maximum duty', kind: 'number', unit: '%', min: 0, max: 100, step: 1, pro: true,
+  { path: 'boost.maxDuty', section: 'boost', group: 'Closed loop', label: 'Maximum duty', kind: 'number', unit: '%', min: 0, max: 100, step: 1,
     help: 'The most duty the controller may command.' },
   { path: 'boost.rampPsiS', section: 'boost', group: 'Closed loop', label: 'Target ramp rate', kind: 'number', unit: 'psi/s', min: 1, max: 200, step: 1, pro: true,
     help: 'How fast the target may rise — a gentler ramp is easier on traction and on the controller.' },
@@ -540,6 +549,8 @@ export const ECU_META = [
     help: 'How fast air is removed when idle is high.' },
   { path: 'idle.damp', section: 'idle', group: 'Airflow', label: 'Damping', kind: 'number', min: 0, max: 0.05, step: 0.0005, decimals: 4, pro: true,
     help: 'Opposes fast changes in engine speed so the controller does not chase its own overshoot.' },
+  { path: 'idle.sparkBase', section: 'idle', group: 'Spark', label: 'Idle spark', kind: 'curve', unit: '°', xLabel: 'Coolant °C', min: -10, max: 45, step: 0.5, decimals: 1,
+    help: 'The spark the engine idles on with the throttle shut, in place of the spark table, blended in as the revs fall toward idle. Factory calibrations idle well short of best torque (Nissan sets 15° BTDC on the VQ35DE): it takes more air to hold the speed, which steadies the idle, and it leaves spark in reserve for the idle controller to add when the A/C or a steering load lands. Advance it to best torque and the engine idles on less air, with nothing in hand.' },
   { path: 'idle.sparkGain', section: 'idle', group: 'Spark', label: 'Idle spark gain', kind: 'number', unit: '°/RPM', min: 0, max: 0.1, step: 0.002, decimals: 3,
     help: 'Spark moves torque on the very next firing, air takes several cycles to arrive. Idle spark catches fast dips; air handles the slow drift.' },
   { path: 'idle.sparkLimit', section: 'idle', group: 'Spark', label: 'Idle spark authority', kind: 'number', unit: '°', min: 0, max: 25, step: 1,
@@ -714,4 +725,41 @@ export function setCal(cal, path, value) {
   const [head, ...rest] = path.split('.');
   if (rest.length === 0) return { ...cal, [head]: value };
   return { ...cal, [head]: setCal(cal?.[head] ?? {}, rest.join('.'), value) };
+}
+
+/** Stock values a later build changed, as [path, old stock, new stock]. */
+/** @type {[string, number, number][]} */
+const STOCK_CHANGES = [
+  ['fuel.dfcoMinEctC', 45, -10],
+  ['fuel.decelEnlean', 0.6, 1],
+];
+
+/** Lays the defaults under a saved section: fills keys that did not exist when it was saved. */
+function fillMissing(saved, fresh) {
+  if (saved == null) return fresh;
+  if (typeof fresh !== 'object' || Array.isArray(fresh) || typeof saved !== 'object' || Array.isArray(saved)) return saved;
+  // A curve or a map is one value: {x, z} or {x, y, z}, never merged key by key.
+  if ('z' in fresh || 'z' in saved) return saved;
+  const out = { ...saved };
+  for (const [k, v] of Object.entries(fresh)) out[k] = fillMissing(saved[k], v);
+  return out;
+}
+
+const getPath = (o, path) => path.split('.').reduce((a, k) => (a == null ? a : a[k]), o);
+
+/**
+ * Brings a saved ECU calibration up to this build: settings that did not exist when it was
+ * saved come in at their stock value, and a stock value a later build changed moves with it
+ * where the player left it at the old stock. Nothing the player set is touched.
+ * @param {object|null|undefined} cal a saved calibration
+ * @returns {object|null|undefined}
+ */
+export function upgradeEcuCalibration(cal) {
+  if (!cal || typeof cal !== 'object') return cal;
+  const cyl = cal.fuel?.cylTrim?.length ?? cal.ignition?.cylTrim?.length ?? 6;
+  let out = fillMissing(cal, defaultEcuCalibration({ derived: { cyl } }));
+  for (const [path, from, to] of STOCK_CHANGES) {
+    if (getPath(cal, path) === from) out = setCal(out, path, to);
+  }
+  return out;
 }

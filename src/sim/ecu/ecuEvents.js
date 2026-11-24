@@ -7,6 +7,7 @@
  */
 
 import { COEFF } from '../coefficients.js';
+import { BARO_KPA, GASOLINE_STOICH, PSI_TO_KPA } from '../constants.js';
 import { clamp, groupRuns, mergeNearbyRuns } from '../math.js';
 import { ballisticFromMs, busiestBank } from '../point.js';
 import { ECU_META } from './calibration.js';
@@ -17,6 +18,9 @@ import { LINEAR_SCALES } from './sensors.js';
  * How big a departure has to be before the pull log reports it — below these it is too
  * small to change a tuning decision, and reporting it would bury the entries that do.
  */
+/** A lean trip this far below the boost asked for names the rows from it up, not only the top, kPa. */
+const LEAN_ROWS_SPAN_KPA = 8;
+
 const REPORT = Object.freeze({
   /** Timing pulled for noise the sensor mistook for knock, degrees. */
   FALSE_KNOCK_DEG: 0.5,
@@ -37,9 +41,10 @@ const REPORT = Object.freeze({
  * @param {import('./strategy.js').EcuHardware} ctx.hw
  * @param {number} ctx.hardCut
  * @param {number} ctx.endRpm
+ * @param {boolean} [ctx.intercooled] an intercooler is fitted: the iatprot fix cannot ask for one
  * @returns {object[]}
  */
-export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm }) {
+export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm, intercooled = false }) {
   const events = [];
   if (!points.length) return events;
   const label = (run) => (run[0].rpm === run[run.length - 1].rpm ? `${run[0].rpm} RPM` : `${run[0].rpm}–${run[run.length - 1].rpm} RPM`);
@@ -83,7 +88,7 @@ export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm }) {
       type: 'boostctl', severity: 1, impact: imp(6, run), ...span(run),
       msg: `Boost cannot be held down to target across ${label(run)} — the wastegate spring is stiffer than the target`,
       cause: `A pneumatic gate stays shut until boost reaches its spring pressure (${hw.gate?.springPsi} psi). The solenoid can only raise that, never lower it, so at ${peak.rpm} RPM a ${peak.boostTarget} psi target is unreachable from below.`,
-      fix: `On BUILD → INDUCTION, fit a softer wastegate spring or an electronic actuator, or raise the boost target to at least the ${hw.gate?.springPsi} psi spring pressure.`,
+      fix: `On BUILD → INDUCTION, fit a softer wastegate spring or an electronic actuator, or raise the boost target on TUNE → BOOST to at least the ${hw.gate?.springPsi} psi spring pressure.`,
     });
   });
   groupRuns(points, (p) => p.gateLimited === 'duty').forEach((run) => {
@@ -91,10 +96,29 @@ export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm }) {
       type: 'boostctl', severity: 1, impact: imp(6, run), ...span(run),
       msg: `Wastegate at maximum duty across ${label(run)} — the target is beyond what the actuator can hold`,
       cause: `At ${cal.boost.maxDuty}% duty the gate still opens below the target. More duty is not available, so boost stops where the gate lets it.`,
-      fix: 'On TUNE → BOOST, raise Maximum duty; or fit a stiffer wastegate spring on BUILD → INDUCTION; or lower the boost target there.',
+      fix: 'On TUNE → BOOST, raise Maximum duty; or fit a stiffer wastegate spring on BUILD → INDUCTION; or lower the boost target on TUNE → BOOST.',
     });
   });
 
+  // A boost cut hides its own cause: the pull logs the engine after boost came out, where the
+  // mixture is fine, so Correct VE from logs never sees the cells that ran lean.
+  const step = (p, re) => (p.boostSteps ?? []).find((x) => re.test(x.label))?.value;
+  const request = (p) => step(p, /^Throttle request/) ?? step(p, /^Base target/) ?? p.boostTarget ?? 0;
+  // Where it ran lean is the pressure it tripped at (`leanTripKpa`), which while the turbo
+  // spools is below the boost asked for: naming the boost asked for sent the player to rows
+  // the engine never reached, one band a pull (a B58 on E85 took 13 pulls).
+  const boostCutLean = (run, tripLambda) => {
+    if (cal.protect.leanAction !== 'boost-cut') return null;
+    const cut = run.filter((p) => request(p) - (p.boostPsi ?? 0) > 1);
+    if (!cut.length) return null;
+    const asked = Math.round(BARO_KPA + Math.max(...cut.map(request)) * PSI_TO_KPA);
+    const trips = cut.map((p) => p.leanTripKpa).filter((k) => k > 0);
+    const from = trips.length ? Math.round(Math.min(...trips)) : asked;
+    const wanted = (cut[0].afrCommanded ?? GASOLINE_STOICH) / GASOLINE_STOICH;
+    const pct = Math.max(1, Math.round((tripLambda / wanted - 1) * 100));
+    const rows = from < asked - LEAN_ROWS_SPAN_KPA ? `the rows from ${from} to ${asked} kPa` : `the rows around ${asked} kPa`;
+    return `The protection took the boost out, so this pull logged the engine where the mixture is fine, and Correct VE from logs cannot see the cells that ran lean. It tripped at λ ${tripLambda.toFixed(2)} at ${from} kPa, asking for about ${asked} kPa: on TUNE → AIRFLOW raise the VE cells in ${rows} across ${label(cut)} by about ${pct}%, then pull again. Once the boost stays in, Correct VE from logs finishes the job.`;
+  };
   groupRuns(points, (p) => has(p, 'lean')).forEach((run) => {
     // The reading that TRIPPED it: the logged point is after the protection acted, and
     // with boost out it reads richer than the limit it crossed.
@@ -109,18 +133,24 @@ export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm }) {
         : `Under boost the mixture was leaner than the λ ${cal.protect.leanLambda} limit, so the ECU ${cal.protect.leanAction === 'fuel-cut' ? 'cut fuel' : cal.protect.leanAction === 'torque' ? 'closed the throttle' : 'took boost out'} to save the pistons.`,
       fix: misread ? 'On TUNE → SENSORS, set the wideband scaling to match the controller.'
         : (peak.nitrousLbMin ?? 0) > 0 ? 'It went lean while the nitrous sprayed: on TUNE → NITROUS, raise Fuel correction while spraying (and on a dry kit, Dry kit fuel). The protection saved the engine; it is not a tune.'
-          : 'The protection saved the engine; it is not the fix. Fix the fuelling entries in this log first. If there are none, check in this order: injector flow rate (TUNE → INJECTORS), VE table (TUNE → AIRFLOW), the boost AFR target (TUNE → FUEL), then injector duty and fuel pump (BUILD → FUEL SYSTEM).',
+          : boostCutLean(run, tripped(peak)) ?? 'The protection saved the engine; it is not the fix. Fix the fuelling entries in this log first. If there are none, check in this order: injector flow rate (TUNE → INJECTORS), VE table (TUNE → AIRFLOW), the boost AFR target (TUNE → FUEL), then injector duty and fuel pump (BUILD → FUEL SYSTEM).',
     });
   });
 
   groupRuns(points, (p) => has(p, 'egt')).forEach((run) => {
-    const peak = run.reduce((a, b) => (b.egt > a.egt ? b : a));
+    // The reading that tripped it, not the cooler one logged after the enrichment acted.
+    const egtOf = (p) => p.egtTripC ?? p.egt;
+    const peak = run.reduce((a, b) => (egtOf(b) > egtOf(a) ? b : a));
     events.push({
       type: 'egtprot', severity: 1, impact: imp(6, run), ...span(run),
-      msg: `Component protection enriching across ${label(run)} (EGT ${peak.egt} °C against a ${cal.protect.egtLimitC} °C limit)`,
+      msg: `Component protection enriching across ${label(run)} (EGT ${egtOf(peak)} °C against a ${cal.protect.egtLimitC} °C limit)`,
       cause: `The exhaust was hotter than the ${hw.turboOn ? 'turbine and exhaust valves' : 'exhaust valves and catalytic converter'} are calibrated for, so the ECU added fuel. Extra fuel absorbs heat evaporating and leaves the burn cooler — at the cost of fuel and some power.${(peak.nitrousLbMin ?? 0) > 0 ? ' Nitrous raises exhaust heat on its own: more fuel burns every cycle, and the retard it needs finishes the burn later.' : ''}`,
       fix: (peak.nitrousLbMin ?? 0) > 0
-        ? 'This is the protection doing its job on the heat nitrous brings. Keep the retard while spraying on TUNE → NITROUS to what the knock needs — more burns later and hotter in the exhaust — and hold the spray mixture near 11.5:1 rather than leaner.'
+        // Leaner than 11.5:1 while spraying, the spray fuel is the lever; at it already, the
+        // heat is the shot's own, and only a smaller shot takes it out.
+        ? (peak.afr > 11.6
+          ? `It ran ${peak.afr.toFixed(1)}:1 while spraying: raise Fuel correction while spraying on TUNE → NITROUS until the spray reads about 11.5:1, and keep the retard while spraying to what the knock needs (more burns later and hotter in the exhaust).`
+          : `It already ran ${peak.afr.toFixed(1)}:1 while spraying, so the heat is the shot's own: run a smaller shot on TUNE → NITROUS, or leave the protection to enrich, which is it doing its job. More retard while spraying than the knock needs makes it hotter.`)
         : 'High EGT means the burn is finishing late. First check this range is not losing timing to knock retard (a knock entry in this log). Then set a slightly richer WOT AFR target here on TUNE → FUEL, so the calibration does on purpose what the protection is doing for you.',
     });
   });
@@ -217,10 +247,23 @@ export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm }) {
       type: 'iatprot', severity: 1, impact: imp(6, run), ...span(run),
       msg: `Intake-temperature protection pulling timing across ${label(run)} (intake air up to ${Math.round(peak.sensedIat)} °C against a ${cal.protect.iatLimitC} °C limit)`,
       cause: `Hot intake air knocks sooner, so the ECU takes ${cal.protect.iatRetardPerC}° of timing out for every degree over the limit — about ${pulled.toFixed(1)}° here, whatever the SPARK table says.`,
-      fix: 'Cool the charge: fit an intercooler on BUILD → INDUCTION, or lower the boost target there. Raising the IAT limit on TUNE → PROTECT only removes the safety net.',
+      // An intercooler already fitted cannot be fitted again: the boost there is the lever.
+      fix: intercooled
+        ? `The intercooler is already doing its work: the charge comes out of the compressor too hot for it at this boost. Lower the boost target across ${label(run)} on TUNE → BOOST (Boost target curve), or run better fuel, which takes the heat with less retard. Raising the IAT limit on TUNE → PROTECT only removes the safety net.`
+        : 'Cool the charge: fit an intercooler on BUILD → INDUCTION, or lower the boost target on TUNE → BOOST. Raising the IAT limit on TUNE → PROTECT only removes the safety net.',
     });
   });
 
+  // A knock cut hides its own cause, as a lean cut does: the pull logs the engine at the boost
+  // left after the cut, often clean, so no knock entry stands above this one to follow.
+  const hiddenKnock = (run) => {
+    const cut = run.filter((p) => (p.knockTripDeg ?? 0) > 0 && request(p) - (p.boostPsi ?? 0) > 1);
+    if (!cut.length) return null;
+    const trip = Math.max(...cut.map((p) => p.knockTripDeg));
+    const asked = Math.round(BARO_KPA + Math.max(...cut.map(request)) * PSI_TO_KPA);
+    const take = Math.max(2, Math.round(trip - 1));
+    return `The protection took the boost out, so this pull logged the engine below the boost that knocked, and the knock entry it would have made is not here. It tripped with the knock control pulling ${trip.toFixed(1)}° asking for about ${asked} kPa: on TUNE → SPARK take about ${take}° out of the cells in the rows around ${asked} kPa across ${label(cut)}, then pull again. Better fuel or less boost there (BUILD) raises or meets the limit instead.`;
+  };
   groupRuns(points, (p) => has(p, 'knock')).forEach((run) => {
     // Point at the entry that is actually driving it: noise, the spray, or real knock.
     const fromNoise = run.some((p) => (p.knockFalse ?? 0) > REPORT.FALSE_KNOCK_DEG);
@@ -232,7 +275,9 @@ export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm }) {
       type: 'knockprot', severity: 2, impact: imp(10, run), ...span(run),
       msg: `Knock protection cut boost across ${label(run)}`,
       cause: `Knock control was pulling more than ${cal.protect.knockRetardDeg}° — running that much retard is hot and inefficient, so the ECU took ${cal.protect.knockBoostCutPsi} psi out as well.`,
-      fix: `This follows from ${source.length ? source.join(' and ') : 'the knock entry in this log (AFR target, then timing, in those cells on TUNE → FUEL and TUNE → SPARK)'}: fix ${source.length > 1 ? 'those' : 'that'} and this goes away. Lowering the boost target there on BUILD → INDUCTION also works.`,
+      fix: source.length || !hiddenKnock(run)
+        ? `This follows from ${source.length ? source.join(' and ') : 'the knock entry in this log (AFR target, then timing, in those cells on TUNE → FUEL and TUNE → SPARK)'}: fix ${source.length > 1 ? 'those' : 'that'} and this goes away. Lowering the boost target there on TUNE → BOOST also works. With the boost cut, this pull never reached the boost rows above here at these speeds: once it stays in, the next pull runs them for the first time and may find their limits too, so expect to set a few more cells then.`
+        : hiddenKnock(run),
     });
   });
 
@@ -251,8 +296,8 @@ export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm }) {
         ? `Port kit duty passed ${cal.protect.dutyLimitPct}%. Beyond it the port injectors cannot add fuel as boost adds air: the port share table is sending the kit more of the fuel than it can flow.`
         : `Duty passed ${cal.protect.dutyLimitPct}%. Beyond it the injectors cannot add fuel as boost adds air.`,
       fix: port
-        ? 'On BUILD → FUEL SYSTEM, fit a larger port injection kit (then set its ECU scaling on TUNE → INJECTORS), or lower the port share where it runs out on TUNE → INJECTORS so the direct injectors carry more. Or lower the boost target on BUILD → INDUCTION.'
-        : 'On BUILD → FUEL SYSTEM, fit larger injectors — sized to run about 80–85% duty at peak — and enter their flow rate on TUNE → INJECTORS. Or lower the boost target on BUILD → INDUCTION.',
+        ? 'On BUILD → FUEL SYSTEM, fit a larger port injection kit (then set its ECU scaling on TUNE → INJECTORS), or lower the port share where it runs out on TUNE → INJECTORS so the direct injectors carry more. Or lower the boost target on TUNE → BOOST.'
+        : 'On BUILD → FUEL SYSTEM, fit larger injectors — sized to run about 80–85% duty at peak — and enter their flow rate on TUNE → INJECTORS. Or lower the boost target on TUNE → BOOST.',
     });
   });
 
@@ -282,16 +327,19 @@ export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm }) {
     });
   });
 
-  groupRuns(points, (p) => has(p, 'torque')).forEach((run) => {
+  // One note for the whole pull: it is one table, and a factory plateau held by boost
+  // drops in and out of the limit as the torque wanders round it, which read as three.
+  mergeNearbyRuns(groupRuns(points, (p) => has(p, 'torque')), Infinity).forEach((run) => {
     const peak = run[0];
     events.push({
       type: 'torquelimit', severity: 1, impact: imp(6, run), ...span(run),
-      msg: `Torque limited to ${peak.torqueLimitNm} Nm across ${label(run)} (by ${cal.torque.method})`,
+      msg: `Torque held to the calibration's limit (${peak.torqueLimitNm} Nm at ${peak.rpm} RPM)${/** @type {any} */ (run).intermittent ? ' on and off' : ''} across ${label(run)}, by ${cal.torque.method}`,
       cause: cal.torque.method === 'spark'
         ? 'Spark retard took the torque out: the burn phases late, so less of it pushes the piston and more of it heats the exhaust.'
         : cal.torque.method === 'throttle' ? 'The throttle closed to hold torque at the limit — the cleanest way, less air and less fuel.'
           : cal.torque.method === 'boost' ? 'Boost was reduced to hold torque at the limit.' : 'Cylinders were cut to hold torque at the limit.',
-      fix: 'On TUNE → TORQUE, raise the torque limit (by gear or by RPM) if the drivetrain is rated for it.',
+      fix: `This is the engine computer's own torque limit, not a fault: a factory turbo engine is rated as a torque plateau and its computer trims ${cal.torque.method === 'boost' ? 'boost' : 'torque'} to hold it (the hardware could make more). To go further, raise Crank torque limit by RPM on TUNE → TORQUE where the drivetrain is rated for it, then tune what the extra load needs: the boost, the mixture and the timing, a step at a time, reading this log after each pull.`,
+      note: true,
     });
   });
 
@@ -347,7 +395,7 @@ export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm }) {
       cause: spark
         ? `The plug gap needs ${peak.sparkKvNeed} kV to break down at this cylinder pressure, and the coil can make ${peak.sparkKvHave} kV at this dwell. Boost and advance both raise the gas density at the gap, and it takes more voltage to arc through denser gas.`
         : `The mixture (λ ${peak.lambda}) is outside what a flame will cross — it lights at the plug and dies.`,
-      fix: spark ? 'Close the plug gap or fit higher-output coils on BUILD → ENGINE, or raise coil dwell on TUNE → SPARK.' : 'The mixture is too far off to light. Fix the fuelling entries in this log first: injector flow rate (TUNE → INJECTORS), the fuel the ECU assumes and the AFR target (TUNE → FUEL).',
+      fix: spark ? 'Close the plug gap or fit higher-output coils on BUILD → IGNITION, or raise coil dwell on TUNE → SPARK.' : 'The mixture is too far off to light. Fix the fuelling entries in this log first: injector flow rate (TUNE → INJECTORS), the fuel the ECU assumes and the AFR target (TUNE → FUEL).',
     });
   });
 
@@ -366,7 +414,7 @@ export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm }) {
         const fits = Object.values(LINEAR_SCALES.map).filter((m) => m.max >= top * 1.05).sort((a, b) => a.max - b.max)[0];
         return fits
           ? `On BUILD → INDUCTION, fit a MAP sensor that reads past the ${Math.round(top)} kPa this engine makes — the ${fits.label.split(' (')[0]} — then set the matching MAP scaling on TUNE → SENSORS.`
-          : `This engine makes ${Math.round(top)} kPa, past every MAP sensor offered: lower the boost target on BUILD → INDUCTION until a 4 bar sensor reads it, and set the matching MAP scaling on TUNE → SENSORS.`;
+          : `This engine makes ${Math.round(top)} kPa, past every MAP sensor offered: lower the boost target on TUNE → BOOST until a 4 bar sensor reads it, and set the matching MAP scaling on TUNE → SENSORS.`;
       })(),
     });
   });

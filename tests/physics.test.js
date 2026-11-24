@@ -63,6 +63,9 @@ describe('engine architecture', () => {
 
   it('classifies bore/stroke character', () => {
     expect(S.deriveEngine({ ...STOCK, bore: 100, stroke: 80 }).character).toMatch(/Oversquare/);
+    // Square is within 5% either way: an LS1 (99 × 92 mm, 1.08) is oversquare, as it is described.
+    expect(S.deriveEngine({ ...STOCK, bore: 99, stroke: 92 }).character).toMatch(/Oversquare/);
+    expect(S.deriveEngine({ ...STOCK, bore: 86, stroke: 86 }).character).toMatch(/^Square/);
     expect(S.deriveEngine({ ...STOCK, bore: 80, stroke: 100 }).character).toMatch(/Undersquare/);
   });
 
@@ -130,11 +133,7 @@ describe('airflow', () => {
 
   it('keeps every VE cell inside physically sane bounds', () => {
     // A stock engine fills at least a tenth of its cylinder at any speed and manifold
-    // pressure, light load at high speed included. A 300 degree race cam keeps its intake
-    // valve open more than a full turn, seat to seat, so at idle vacuum the exhaust stroke
-    // pushes straight back into the manifold and the cylinder fills with its own exhaust:
-    // why such cams idle at 50-70 kPa and cannot pull 20. It is held to the same floor from
-    // 40 kPa up, and to a finite, positive filling below that.
+    // pressure, light load at high speed included.
     const race = { ...STOCK, compression: 13, camDuration: 300, springRate: 20 };
     for (const cfg of [STOCK, race]) {
       const ve = S.computeHardwareVE(cfg, { intake: true, exhaust: true, headers: true, intercooler: true }, {
@@ -596,10 +595,11 @@ describe('dyno sweep', () => {
       mods: { ...S.DEFAULT_MODS, intercooler: true },
       sweep: { afr: leanAfrAt(0) }, // row 0 = 200 kPa, boosted
     }],
+    // Injectors three-quarters bigger than the ECU is set for: well past λ 0.70, where rich harm starts.
     ['rich', (p) => p.richRisk, {
       cfg: { ...STOCK, camDuration: 290, springRate: 20, compression: 13.5 },
       turboOn: true, boostCurve: [18, 25, 25, 25, 25, 25, 25, 25],
-      injectorCc: 400, ecuInjectorCc: 315,
+      injectorCc: 550, ecuInjectorCc: 315,
     }],
     ['maf', (p) => p.mafFlag, {
       mods: { ...S.DEFAULT_MODS, intake: true },
@@ -1086,13 +1086,8 @@ describe('the inlet Mach index', () => {
   });
 
   /**
-   * MEASURED (November 2026, the gas-exchange model): two engines are still rising gently
-   * at the limiter rather than easing off before it, where real ones ease off by a few
-   * percent. The LS6 gains 1.2% over its last 500 RPM to its 6500 limiter (rated 400 hp at
-   * 6000); the 6.4 HEMI gains 1.9% to its 6400 limiter (rated 475 at 6000). Both stay
-   * within 500 RPM of their ratings (tests/presets.test.js). Each is held to its measured
-   * rise, so a change that makes it climb harder fails; delete an entry when its engine
-   * peaks before its limiter.
+   * MEASURED (November 2026, the gas-exchange model): two engines are still rising gently at
+   * the limiter rather than easing off before it, where real ones ease off by a few percent.
    */
   const FLAT_TO_LIMITER = { ls6: 0.017, 'hemi-392': 0.024 };
 
@@ -1564,8 +1559,8 @@ describe('exhaust gas temperature', () => {
     it('reads coolest at the lightest load, not hottest', () => {
       // The pull's load is a throttle opening (the throttle body sets the manifold pressure
       // from it, throttle.js), so the comparison is by the manifold pressure each point ran:
-      // wherever a light throttle holds the manifold under half an atmosphere, the exhaust
-      // is cooler than full throttle at the same speed.
+      // wherever a light throttle holds the manifold under half an atmosphere, the exhaust is
+      // cooler than full throttle at the same speed.
       const wot = peakEgtAt(S.BARO_KPA).points;
       const light = peakEgtAt(20).points.filter((p) => p.map < 50);
       expect(light.length).toBeGreaterThan(10);

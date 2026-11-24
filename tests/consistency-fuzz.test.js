@@ -66,7 +66,11 @@ describe('the advisor and the pull log agree on random builds', () => {
     expect(failures).toEqual([]);
   });
 
-  it('flag a mixture on the fuel advisor wherever the pull logs it lean or rich', () => {
+  it('answer every lean or rich entry on TUNE: the target where it is wrong, the fuelling where the engine misses it', () => {
+    // A target is never moved to make up for a VE table or injector data that misses it (the
+    // engine would run the wrong mixture again the moment the fuelling is put right): where the
+    // pull ran off a sound target, TUNE names the miss (missed mixture, to the VE table), as
+    // the log does; where the target itself is outside its band, TUNE marks the target.
     const failures = [];
     for (const build of builds) {
       const { pull, advice } = advise(makeEngine({ build }));
@@ -74,9 +78,32 @@ describe('the advisor and the pull log agree on random builds', () => {
         const pts = pull.points.filter((p) => p.rpm >= e.rpmStart && p.rpm <= e.rpmEnd);
         if (pts.every((p) => p.fuelLimited)) continue; // injectors out of time: a hardware event, not a table
         const want = e.type === 'rich' ? 1 : -1; // richen = suggested below current
-        const flagged = advice.fuelAdv.some((c) => !c.bracketOnly && c.rpm >= e.rpmStart - 1000 && c.rpm <= e.rpmEnd + 1000
+        const targetMarked = advice.fuelAdv.some((c) => !c.bracketOnly && c.rpm >= e.rpmStart - 1000 && c.rpm <= e.rpmEnd + 1000
           && Math.sign(c.delta) === want && Math.abs(c.delta) > 0.3);
-        if (!flagged) failures.push(`seed ${build.seed}: ${e.type} across ${e.rpmStart}-${e.rpmEnd} with nothing on the fuel advisor`);
+        const missNamed = (advice.missedMix ?? []).some((m) => m.rpm >= e.rpmStart && m.rpm <= e.rpmEnd && m.lean === (e.type !== 'rich'));
+        if (!targetMarked && !missNamed) failures.push(`seed ${build.seed}: ${e.type} across ${e.rpmStart}-${e.rpmEnd} with nothing on TUNE`);
+        // And the log agrees about which it is: a miss is not sent to the target.
+        if (!targetMarked && missNamed && /richen the AFR target|lean(er)? the AFR target/i.test(String(e.fix ?? '').split('.')[0])) {
+          failures.push(`seed ${build.seed}: ${e.type} across ${e.rpmStart}-${e.rpmEnd} sends a fuelling miss to the target`);
+        }
+      }
+    }
+    expect(failures).toEqual([]);
+  });
+
+  it('never send the player to the AFR table when the engine is missing it, and say so on TUNE too', () => {
+    // A player's turbo V8 ran 14.1:1 against a 12.9:1 target: the log said "richen the
+    // target", TUNE's mixture advisor passed the table. The table was right; the fuelling
+    // was not. On any build, a missed target is named on both screens, as the fuelling.
+    const failures = [];
+    for (const build of builds) {
+      const { pull, advice } = advise(makeEngine({ build }));
+      const missed = pull.events.filter((e) => e.type === 'missedmix');
+      if (missed.length && !(advice.missedMix ?? []).length) failures.push(`seed ${build.seed}: the log says the engine missed the AFR table, TUNE says nothing`);
+      for (const e of pull.events) {
+        if (/less fuel than the table asks for/.test(e.cause ?? '') && /richen the AFR target/.test(e.fix ?? '') && !/^Fuel first/.test(e.fix ?? '')) {
+          failures.push(`seed ${build.seed}: ${e.type} blames the target first though the engine missed it`);
+        }
       }
     }
     expect(failures).toEqual([]);
@@ -86,7 +113,7 @@ describe('the advisor and the pull log agree on random builds', () => {
     // Every "BUILD → X" or "TUNE → X" in a fix must name a real view, or the advice is
     // a dead end however right it is.
     const views = {
-      BUILD: ['ENGINE', 'INDUCTION', 'FUEL SYSTEM', 'EXHAUST'],
+      BUILD: ['ENGINE', 'SHORT BLOCK', 'HEADS AND CAM', 'IGNITION', 'INDUCTION', 'FUEL SYSTEM', 'EXHAUST', 'BOLT-ONS'],
       TUNE: ['AIRFLOW', 'SPARK', 'FUEL', 'INJECTORS', 'SENSORS', 'BOOST', 'VVT', 'IDLE', 'PROTECT', 'TORQUE', 'NITROUS'],
     };
     const failures = [];

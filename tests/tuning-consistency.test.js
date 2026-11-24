@@ -82,14 +82,16 @@ describe('the pull log reads like a knock log', () => {
 
   it('names the load row the engine was on, and how much to take out', () => {
     const knock = makeEngine({ build: TURBO_10 }).pull(100).events.find((e) => e.type === 'knock');
-    expect(knock.fix).toMatch(/pull about \d+° of timing from the \d+ kPa load row|load rows \(it ran at \d+ kPa/);
+    // The cells it names, with the number TUNE marks under each (the same reading of the pull).
+    expect(knock.fix).toMatch(/lower the (cell|\d+ cells) marked past the knock limit to the number under each: \d+ kPa at [\d,]+ RPM from -?[\d.]+° to -?\d+°|Timing alone can't fix this at \d+ kPa/);
   });
 });
 
 describe('the pull log blames the right table for a bad mixture', () => {
   it('sends a lean mixture from wrong injector scaling to the fuelling, not the AFR table', () => {
     const lean = makeEngine({ build: { ecuInjectorCc: 550 } }).pull(100).events.find((e) => e.type === 'lean');
-    expect(lean.cause).toMatch(/target is fine/);
+    expect(lean.cause).toMatch(/the fuelling is not delivering what the table asks for/);
+    expect(lean.cause).not.toMatch(/target itself is also/);
     expect(lean.fix).toMatch(/TUNE → INJECTORS/);
     expect(lean.fix).not.toMatch(/richen/i);
   });
@@ -103,7 +105,8 @@ describe('the pull log blames the right table for a bad mixture', () => {
 
   it('sends a rich mixture from wrong injector scaling to the fuelling, not the AFR table', () => {
     const rich = makeEngine({ build: { ecuInjectorCc: 200 } }).pull(100).events.find((e) => e.type === 'rich');
-    expect(rich.fix).toMatch(/fuelling is off, not the target/);
+    expect(rich.fix).toMatch(/so the fuelling is off\./);
+    expect(rich.fix).toMatch(/TUNE → INJECTORS/);
   });
 });
 

@@ -256,10 +256,9 @@ export function runCycle({
   // at wall temperature and takes no part in combustion, then comes back out on
   // expansion. This is where most unburnt hydrocarbon actually comes from.
   const creviceM3 = clearanceM3 * COEFF.CREVICE_VOLUME_FRAC;
-  // MOLAR EXPANSION (thermo.js molarExpansion): the products hold more moles than the
-  // charge they came from, so each slice that burns raises the pressure by that share as
-  // well as by its heat. Without it a rich mixture, whose products gain the most moles,
-  // was charged for its unburned CO and H2 and paid nothing back.
+  // MOLAR EXPANSION (thermo.js molarExpansion): the products hold more moles than the charge
+  // they came from, so each slice that burns raises the pressure by that share as well as by
+  // its heat.
   const molarGain = products ? molarExpansion(products) - 1 : 0;
 
   let p = trappedPa;
@@ -499,10 +498,7 @@ export function runCycle({
     blowbyFrac,
     knockIntegral,
     mfb50Deg,
-    // The share of the charge still unburned when the exhaust valve opens. Nil at any
-    // timing near MBT; with the spark well after top dead centre (an overrun burble, a
-    // badly retarded map) the flame is still crossing the chamber at EVO, and that charge
-    // finishes burning in the exhaust manifold: heat the piston never saw, and the pops.
+    // The share of the charge still unburned when the exhaust valve opens.
     unburnedAtEvoFrac: 1 - burnedFraction(evoAtdc),
   };
 }
@@ -521,12 +517,15 @@ export function runCycle({
  * @param {number} trappedPa charge pressure at intake valve close, Pa
  * @returns {number} K
  */
-export function octaneIndexK(trappedK, trappedPa) {
+export function octaneIndexK(trappedK, trappedPa, rpm = null) {
   const e = (COEFF.GAMMA_UNBURNED - 1) / COEFF.GAMMA_UNBURNED;
   const t15 = (t, p) => t * Math.pow(COEFF.OCTANE_K_REF_PA / Math.max(1, p), e);
   const ron = t15(COEFF.OCTANE_RON_TEST_INTAKE_K, COEFF.ATM_PA);
   const mon = t15(COEFF.OCTANE_MON_TEST_INTAKE_K, COEFF.ATM_PA);
-  return clamp((t15(trappedK, trappedPa) - ron) / (mon - ron), COEFF.OCTANE_K_MIN, COEFF.OCTANE_K_MAX);
+  // Engine speed moves K too (COEFF.OCTANE_K_PER_RPM): the shorter the time the end gas has,
+  // the more a fuel's MON, measured at the faster and hotter of the two tests, decides it.
+  const speed = rpm == null ? 0 : COEFF.OCTANE_K_PER_RPM * (rpm - COEFF.OCTANE_K_RPM_REF);
+  return clamp((t15(trappedK, trappedPa) - ron) / (mon - ron) + speed, COEFF.OCTANE_K_MIN, COEFF.OCTANE_K_MAX);
 }
 
 /**
@@ -541,9 +540,9 @@ export function octaneIndexK(trappedK, trappedPa) {
  * @param {number} trappedPa
  * @returns {number}
  */
-export function octaneIndex(fuel, trappedK, trappedPa) {
+export function octaneIndex(fuel, trappedK, trappedPa, rpm = null) {
   if (fuel.ron == null || fuel.mon == null) return fuel.octane;
-  return fuel.ron - octaneIndexK(trappedK, trappedPa) * (fuel.ron - fuel.mon);
+  return fuel.ron - octaneIndexK(trappedK, trappedPa, rpm) * (fuel.ron - fuel.mon);
 }
 
 /**
@@ -821,7 +820,7 @@ export function cycleInputsFor({
     // O₂ and the kernel forms faster. Carried only when nitrous is in the cylinder, so
     // every other cycle's inputs are exactly what they were.
     ...(n2oG > 0 ? { flameDevDeg: flameDevelopmentDeg(airChargeG, n2oG) } : {}),
-    octaneNumber: octaneIndex(fuel, trappedK, trappedPa),
+    octaneNumber: octaneIndex(fuel, trappedK, trappedPa, rpm),
     lambda,
     // The products' own gamma at this mixture (burnedGammaShift): exactly the constant at
     // stoichiometric, a little higher rich or lean.

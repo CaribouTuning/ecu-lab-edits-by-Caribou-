@@ -17,14 +17,14 @@
  */
 
 import { throttleBoreM } from '../throttle.js';
-import { BARO_KPA, DRIVETRAIN_EFF, KELVIN_OFFSET, PSI_TO_KPA } from '../constants.js';
+import { BARO_KPA, DRIVETRAIN_EFF, KELVIN_OFFSET, NM_PER_LBFT, PSI_TO_KPA } from '../constants.js';
 import { trappedAirGrams } from '../cycle.js';
-import { OCTANE_OPTS } from '../hardware.js';
+import { OCTANE_OPTS, STOCK_EXHAUST_DIA_IN } from '../hardware.js';
 import { needsAirmass, readEcuTable } from '../layouts.js';
 import { clamp } from '../math.js';
 import { busiestBank, evaluatePoint } from '../point.js';
 import { CURVE_RPM, RPM } from '../tables.js';
-import { chargeTempK, INDUCTION_REF_EXHAUST_K } from '../thermo.js';
+import { chargeHeatEff, chargeTempK, INDUCTION_REF_EXHAUST_K } from '../thermo.js';
 import { solveInduction } from '../turbo.js';
 import { boostTarget, steadyGate } from './boost.js';
 import { DYNO_GEAR, portShareAt } from './calibration.js';
@@ -40,7 +40,6 @@ import { nitrousDelivery, nitrousFraction } from './nitrousControl.js';
 import { readSensor, widebandTrueFor } from './sensors.js';
 import { camTargets, veAtPhase } from './vvt.js';
 
-const NM_PER_LBFT = 1 / 0.7376;
 
 /**
  * Everything physical the ECU is attached to, gathered once per pull.
@@ -94,20 +93,12 @@ const NM_PER_LBFT = 1 / 0.7376;
  */
 
 /**
- * A manifold pressure, read against the table as a factory ECU's "normalized load" does:
- * as a share of the air pressure outside, so a wide-open throttle is a wide-open throttle
- * at any altitude. The fuel table is indexed by absolute pressure, and its enrichment rows
- * sit at the top of it: wide open at 2000 m the engine sees 78 kPa, which an unnormalized
- * lookup reads as a cruise cell, and a stock engine went to lambda 1.00 at full throttle
- * and lost far more power than the air alone takes. Above ambient (boost) the table is read
- * as it is, from ambient up. At sea level the scale is exactly 1.
- *
- * Only for the fuel lookup. VE is physical, indexed by the pressure the cylinder sees, and
- * spark has its own barometric correction (`ignition.baroCorr`).
+ * A manifold pressure, read against the table as a factory ECU's "normalized load" does: as a
+ * share of the air pressure outside, so a wide-open throttle is a wide-open throttle at any
+ * altitude.
  * @param {number} mapKpa sensed manifold pressure
  * @param {number} baroKpa the barometric pressure the ECU saw at key-on
  * @returns {{mapKpa: number, scale: number}} the pressure to read at, and the factor it
- *   was scaled by (1 above ambient, or at sea level)
  */
 export function ambientNormalized(mapKpa, baroKpa) {
   if (!(baroKpa < BARO_KPA)) return { mapKpa, scale: 1 };
@@ -185,14 +176,15 @@ export function cylinderDistribution(derived, configuration) {
  * @param {number} [input.cylIdx] which cylinder, when solving them separately
  * @param {ReturnType<typeof import('../blower.js').solveBlower>} [input.blower] a
  *   supercharger's state at this point: its efficiency sets the charge the IAT sensor reads
+ * @param {number|null} [input.compressorEff] a turbo compressor's efficiency at this point, off its map
  * @returns {{input: object, sensed: object, breakdown: object}}
  */
 export function resolveEcuPoint({
-  cal, hw, cond, tables, rpm, mapKpa, boostPsi, veActual, cam, empKpa, dyn = {}, cylIdx, blower = null,
+  cal, hw, cond, tables, rpm, mapKpa, boostPsi, veActual, cam, empKpa, dyn = {}, cylIdx, blower = null, compressorEff = null,
 }) {
   const env = cond.env;
   const faults = /** @type {Record<string, any>} */ (cond.faults ?? {});
-  const chargeK = chargeTempK(boostPsi, hw.mods.intercooler, env, blower && blower.boostPsi > 0 ? blower.eta : undefined);
+  const chargeK = chargeTempK(boostPsi, hw.mods.intercooler, env, chargeHeatEff({ blower, boostPsi, compressorEff }));
 
   // ---- SENSORS. The ECU knows nothing it cannot measure.
   const mapPart = hw.sensorHw?.map ?? '3bar';
@@ -228,14 +220,26 @@ export function resolveEcuPoint({
   // ---- BASE TABLES, read at the load the ECU believes: manifold pressure, or (on a
   // layout that reads spark by air per cylinder, layouts.js) the air its own VE table
   // and sensors work out.
-  const veBase = readEcuTable(tables, 've', rpm, { mapKpa: sMap });
+  //
+  // ALPHA-N reads all three by THROTTLE instead: the opening, as a share of the outside
+  // air's pressure, on the same load rows a pull uses (`loadKpa / 101.3` is a throttle
+  // opening). Its VE table then holds the cylinder's fill against the outside air, not
+  // against the manifold, and the air sum runs on the barometric pressure: Speeduino's and
+  // MegaSquirt's alpha-N, with the barometric correction on. It is how a carburetted
+  // engine is first converted (no MAP signal worth reading on a big cam at idle), and its
+  // blind spot is real: it cannot see boost or a blocked filter, only where the blade is.
+  const alphaN = cal.config.airModel === 'alphan';
+  const sTps = dyn.sensedTpsPct ?? 100;
+  const ecuLoadKpa = alphaN ? clamp(sTps, 0, 100) / 100 * BARO_KPA : sMap;
+  const airSumKpa = alphaN ? env.baroKpa : sMap;
+  const veBase = readEcuTable(tables, 've', rpm, { mapKpa: ecuLoadKpa });
   const camVe = read2(cal.airflow.camVeCorr, rpm, cam.intakeAdvDeg);
   const veVal = veBase * (1 + camVe / 100);
   const ecuAirG = needsAirmass(tables.layout)
-    ? trappedAirGrams({ veActual: veVal, mapKpa: sMap, chargeK: sIatC + KELVIN_OFFSET, sweptM3: (hw.derived.displacementL / hw.derived.cyl) / 1000 })
+    ? trappedAirGrams({ veActual: veVal, mapKpa: airSumKpa, chargeK: sIatC + KELVIN_OFFSET, sweptM3: (hw.derived.displacementL / hw.derived.cyl) / 1000 })
     : 0;
-  const timingBase = readEcuTable(tables, 'timing', rpm, { mapKpa: sMap, airmassG: ecuAirG });
-  const afrLoad = ambientNormalized(sMap, env.baroKpa);
+  const timingBase = readEcuTable(tables, 'timing', rpm, { mapKpa: ecuLoadKpa, airmassG: ecuAirG });
+  const afrLoad = alphaN ? { mapKpa: ecuLoadKpa, scale: 1 } : ambientNormalized(sMap, env.baroKpa);
   const afrBase = readEcuTable(tables, 'afr', rpm, { mapKpa: afrLoad.mapKpa, airmassG: ecuAirG * afrLoad.scale });
 
   // ---- SPARK: base, then every correction in the order the ECU stacks them.
@@ -258,6 +262,9 @@ export function resolveEcuPoint({
     addT('IAT protection', -(sIatC - cal.protect.iatLimitC) * cal.protect.iatRetardPerC);
   }
   addT('High-det map', dyn.highDet ? -cal.ignition.highDetRetard : 0);
+  // The idle spark table takes over from the spark table as a closed throttle falls to idle.
+  const idleW = dyn.idleSparkBlend ?? 0;
+  if (idleW > 0 && cal.idle.sparkBase) addT('Idle spark table', idleW * (read1(cal.idle.sparkBase, sEctC) - timing));
   addT('Idle spark control', dyn.idleSparkDeg ?? 0);
   addT('Overrun retard', dyn.decel ? -cal.ignition.decelRetard : 0);
   addT('Limiter / torque retard', -(dyn.extraRetardDeg ?? 0));
@@ -381,6 +388,7 @@ export function resolveEcuPoint({
     // wet kit the correction is usually a reduction.
     ...(nitrous?.injFuelKgS ? { extraFuelG: (nitrous.injFuelKgS * 1000) / (hw.derived.cyl * (rpm / 2) / 60) } : {}),
     sensedMapKpa: sMap,
+    ...(alphaN ? { ecuLoadKpa, airSumKpa } : {}),
     sensedIatK: sIatC + KELVIN_OFFSET,
     airModel: cal.config.airModel,
     mafNetFactor,
@@ -414,6 +422,7 @@ export function resolveEcuPoint({
       turbine: hw.turboOn ? hw.turbine : null, exhaustDia: hw.exhaustDia ?? null,
       ...(empKpa != null ? { empKpa } : {}),
       ...(blower ? { blower } : {}),
+      ...(compressorEff != null ? { compressorEff } : {}),
       // A wet kit's fuel jet is an orifice on the same rail as the injectors, so it flows
       // with the pressure the pump holds.
       ...(nitrous ? { nitrous: { n2oKgS: nitrous.n2oKgS, fuelKgS: nitrous.wetFuelKgS * rail.flowScale, frac: nFrac, bottleK: cond.nitrous?.bottleK ?? env.ambientK, bottlePsi: nitrous.bottlePsi } } : {}),
@@ -517,6 +526,15 @@ export function ecuSteadyPoint({ cal, hw, cond, tables, rpm, loadKpa, traceCycle
   // AFTER the protection acted — boost out, so richer — and reporting that reading made
   // the log say "λ 0.96, leaner than the λ 1.02 limit".
   let leanTripLambda = 0;
+  // The manifold pressure the ECU read when that lean tripped it: while the turbo spools it
+  // trips below the boost asked for, and the cells to raise are the ones it ran there.
+  let leanTripKpa = 0;
+  // The exhaust temperature that tripped the EGT enrichment: the logged point is after it
+  // acted, cooler than the limit it crossed (as `leanTripLambda` is for the lean protection).
+  let egtTripC = 0;
+  // The knock retard that tripped the knock protection's boost cut: after the cut the pull
+  // logs the engine at less boost, where it may not knock at all.
+  let knockTripDeg = 0;
   const mod = { ...NO_INTERVENTION };
   // The pump's delivery against how freely the system leaks: a weak pump or low oil, and
   // worn crank bearings (damage.js `oilConductance`).
@@ -568,19 +586,20 @@ export function ecuSteadyPoint({ cal, hw, cond, tables, rpm, loadKpa, traceCycle
     }
     if (P.leanEnabled && sensedLambda > P.leanLambda && resolved.sensed.mapKpa > P.leanMinKpa && mod.cutFrac < 1) {
       protect.add('lean');
+      if (sensedLambda > leanTripLambda) leanTripKpa = resolved.sensed.mapKpa;
       leanTripLambda = Math.max(leanTripLambda, sensedLambda);
       changed = applyAction(P.leanAction, mod, P.boostCutPsi, hw.turboOn) || changed;
     }
     if (P.egtEnabled && pt.egt > P.egtLimitC) {
       const want = Math.min(P.egtEnrichMaxPct, mod.extraFuelPct + ((pt.egt - P.egtLimitC) / 10) * P.egtEnrichPctPer10C);
-      if (want > mod.extraFuelPct + E.EGT_ENRICH_DEADBAND_PCT) { mod.extraFuelPct = want; changed = true; protect.add('egt'); }
+      if (want > mod.extraFuelPct + E.EGT_ENRICH_DEADBAND_PCT) { mod.extraFuelPct = want; changed = true; protect.add('egt'); egtTripC = Math.max(egtTripC, pt.egt); }
     }
     // Heavy knock control drops the ECU onto its high-detonation map.
     if (!mod.highDet && cal.ignition.highDetRetard > 0 && pt.knockPull > cal.ignition.highDetTriggerDeg) {
       mod.highDet = true; changed = true; protect.add('highdet');
     }
     if (P.knockEnabled && hw.turboOn && pt.knockPull > P.knockRetardDeg && mod.boostCutPsi < E.BOOST_CUT_STACK_MAX_PSI) {
-      mod.boostCutPsi += P.knockBoostCutPsi; changed = true; protect.add('knock');
+      mod.boostCutPsi += P.knockBoostCutPsi; changed = true; protect.add('knock'); knockTripDeg = Math.max(knockTripDeg, pt.knockPull);
     }
     if (P.dutyEnabled && hw.turboOn && busiestBank(pt).duty > P.dutyLimitPct && mod.boostCutPsi < E.BOOST_CUT_STACK_MAX_PSI) {
       mod.boostCutPsi += P.boostCutPsi; changed = true; protect.add('duty');
@@ -629,7 +648,9 @@ export function ecuSteadyPoint({ cal, hw, cond, tables, rpm, loadKpa, traceCycle
     ecuStoich: Number(resolved.sensed.ecuFuel.stoich.toFixed(2)),
     torqueLimitNm: Math.round(Math.min(read1(cal.torque.limitByGear, gear), read1(cal.torque.limitByRpm, rpm))),
     protect: [...protect],
-    ...(leanTripLambda > 0 ? { leanTripLambda: Number(leanTripLambda.toFixed(3)) } : {}),
+    ...(leanTripLambda > 0 ? { leanTripLambda: Number(leanTripLambda.toFixed(3)), ...(leanTripKpa > 0 ? { leanTripKpa: Math.round(leanTripKpa) } : {}) } : {}),
+    ...(egtTripC > 0 ? { egtTripC: Math.round(egtTripC) } : {}),
+    ...(knockTripDeg > 0 ? { knockTripDeg: Number(knockTripDeg.toFixed(1)) } : {}),
     breakdown: { ...resolved.breakdown, boost: solved.steps },
     // The closed cycle's pressure trace at the settled point, for the Physics page: the same
     // resolved inputs evaluated once more with the trace kept.
@@ -662,10 +683,12 @@ function settle({ cal, hw, cond, tables, rpm, loadKpa, throttlePct, gear }, m) {
     cal, hw, cond, tables, rpm, mapKpa: solved.man.mapKpa, boostPsi: solved.man.boostPsi,
     veActual: solved.veActual, cam: solved.cam, empKpa: solved.man.empKpa,
     dyn: {
-      steadyTrims: true, extraFuelPct: m.extraFuelPct, extraRetardDeg: m.extraRetardDeg, cutFrac: m.cutFrac,
+      steadyTrims: true, sensedTpsPct: clamp(throttlePct * m.loadScale, 0, 100),
+      extraFuelPct: m.extraFuelPct, extraRetardDeg: m.extraRetardDeg, cutFrac: m.cutFrac,
       cutType: m.cutType, highDet: m.highDet, nitrousFrac: m.nitrousFrac,
     },
     ...(solved.man.blower ? { blower: solved.man.blower } : {}),
+    ...(hw.turboOn ? { compressorEff: solved.man.compressorEff } : {}),
   });
   return { pt, resolved, solved };
 }
@@ -749,8 +772,10 @@ export function solveOperatingPoint({ cal, hw, cond, rpm, loadKpa, throttlePct, 
       intakeKAt: (b) => chargeTempK(b, hw.mods.intercooler, env),
       lambda: 1, exhaustK: INDUCTION_REF_EXHAUST_K, baroKpa: env.baroKpa,
       throttle: { boreM: throttleBoreM(hw.derived), coldAirIntake: !!hw.mods.intake },
-      exhaust: { pipeDiaIn: hw.exhaustDia ?? 3.0, mods: hw.mods },
-      ...(hw.blower ? { blower: hw.blower, blowerRatio: hw.blowerRatio, intakeKAtEff: (b, eta) => chargeTempK(b, hw.mods.intercooler, env, eta) } : {}),
+      exhaust: { pipeDiaIn: hw.exhaustDia ?? STOCK_EXHAUST_DIA_IN, mods: hw.mods },
+      // The charge heat at the compressor's own efficiency, a turbo's off its map or a blower's.
+      intakeKAtEff: (b, eta) => chargeTempK(b, hw.mods.intercooler, env, eta),
+      ...(hw.blower ? { blower: hw.blower, blowerRatio: hw.blowerRatio } : {}),
     });
     const next = camTargets({ cal: cal.vvt, vvt: hw.vvt, rpm, mapKpa: man.mapKpa });
     if (Math.abs(next.intakeAdvDeg - cam.intakeAdvDeg) < 0.5 && Math.abs(next.exhaustRetDeg - cam.exhaustRetDeg) < 0.5) break;

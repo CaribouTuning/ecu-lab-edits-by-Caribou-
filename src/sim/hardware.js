@@ -100,8 +100,10 @@ export const TYPICAL_INTAKE_VALVE_SHARE = { 2: 0.445, 3: 0.36, 4: 0.36, 5: 0.30 
  *           measured friction and never to a power figure. See FRICTION_SCALE_OLDER.
  */
 export const FRICTION_LEVEL_OPTS = [
-  { id: 'modern', label: 'Modern (low friction)' },
-  { id: 'older', label: 'Older (1990s–2000s)' },
+  // Named for what each is, not an era: the 2005 VQ35DE Rev-Up runs the published level and
+  // the same years' LS1 GM's measured one.
+  { id: 'modern', label: 'Published model' },
+  { id: 'older', label: 'GM measured (1.6×)' },
 ];
 
 /** Selectable block and head materials. */
@@ -158,7 +160,19 @@ export const OCTANE_OPTS = [
 export const FUEL_CHOICES = [
   ...OCTANE_OPTS,
   { label: 'Flex', flex: true, bonus: 3, octane: 93, ron: 98, mon: 88, stoich: 14.7, density: 0.745, lhv: 44.0e6 },
+  // US regular, 87 AKI, as sold (E10): about 91 RON and 83 MON, the sensitivity of the
+  // premium above. What GM calibrated its Vortec and Gen III truck engines for (their stock
+  // calibrations, docs/realism.md). Appended, so a saved build's index means what it did:
+  // the fuel picker lists the fuels by octane (FUEL_ORDER).
+  { label: '87', bonus: -3, octane: 87, ron: 91, mon: 83, stoich: 14.7, density: 0.745, lhv: 44.0e6 },
 ];
+
+/** FUEL_CHOICES' indices in the order a fuel picker shows them: pump fuels by octane, then E85, then Flex. */
+export const FUEL_ORDER = Object.freeze(FUEL_CHOICES.map((f, i) => i)
+  .sort((a, b) => {
+    const rank = (f) => (f.flex ? 1e3 : f.stoich < 12 ? 500 : f.octane);
+    return rank(FUEL_CHOICES[a]) - rank(FUEL_CHOICES[b]);
+  }));
 
 /**
  * Real static flow ratings, cc/min.
@@ -171,8 +185,20 @@ export const FUEL_CHOICES = [
  * lower density), so a V6 making 400 wheel hp on E85 needs about 1000 cc at 80% duty.
  * Appended, so a saved build's injector index means what it did.
  */
+/**
+ * An injector by size, marked "(stock)" when it is the one the engine left the factory with:
+ * every engine has its own (650 cc on the turbo BMWs, 440 on the HEMI), so the mark is not
+ * part of an option's name.
+ * @param {number} idx index into INJECTOR_OPTS
+ * @param {number|null} [stockIdx] the engine's factory injector
+ */
+export function injectorLabel(idx, stockIdx = null) {
+  const o = INJECTOR_OPTS[idx];
+  return o ? `${o.cc}cc${idx === stockIdx ? ' (stock)' : ''}` : '';
+}
+
 export const INJECTOR_OPTS = [
-  { label: '315cc (stock)', cc: 315 },
+  { label: '315cc', cc: 315 },
   { label: '440cc', cc: 440 },
   { label: '550cc', cc: 550 },
   { label: '650cc', cc: 650 },
@@ -293,6 +319,15 @@ export const turboAirflowNeedKgS = (displacementL, rpm, boostPsi = 0) =>
  * `compressorOver` flag are written against it, but it does not limit the physics;
  * the map does.
  */
+/** Inlet air density Mitsubishi's volume flows are read at: 20 °C, 101.325 kPa, kg/m³. */
+const MITSUBISHI_INLET_DENSITY = 1.204;
+
+/**
+ * @typedef {{label: string, size: string, id?: string, factory?: boolean, boostCeiling: number,
+ *   etaMax: number, pkFlowKgS: number, pkPr: number, surgeSlope: number, chokeFlowKgS: number}} CompressorOpt
+ */
+
+/** @type {CompressorOpt[]} */
 export const COMPRESSOR_OPTS = [
   {
     label: 'Small', size: 'small', boostCeiling: 12,
@@ -306,7 +341,34 @@ export const COMPRESSOR_OPTS = [
     label: 'Large', size: 'large', boostCeiling: 30,
     etaMax: 0.80, pkFlowKgS: 0.28, pkPr: 2.4, surgeSlope: 0.150, chokeFlowKgS: 0.50,
   },
+  // THE FACTORY COMPRESSORS, one per turbo engine in the catalogue.
+  // The fifth figure moves the surge line left of where scaling the TD03's puts it, where the
+  // maker's own rating shows the factory match running. No IS20 or IS38 map is published (IHI,
+  // the turbo vendors, MyGolfMk7 and the tuning forums were searched, November 2026); scaled
+  // from the TD03's by inducer area, their surge lines put VW's rated torque at the lowest rated
+  // speed (the GTI's 258 lb-ft at 1500 RPM, the Golf R's 280 at 1800) in surge, and the engines
+  // fell 12-14% short there. A factory match runs on the map, so each line sits 5% of flow left
+  // of the point the rating needs in this model (`scripts` probe: GTI 0.0526 kg/s at a pressure
+  // ratio of 2.07, Golf R 0.0660 kg/s at 2.09). A modern ported-shroud compressor surging
+  // further left than a 2006 one is the expected direction. DERIVED FROM THE RATINGS, not from a
+  // measured map: replace with the map when one is found.
+  .../** @type {[string, string, number, number, number][]} */ ([
+    ['Mitsubishi TD03-10TK3 (N54, each)', 'td03-10tk3', 1.0, 24, 1],
+    ['IHI IS20 (EA888 GTI)', 'is20', (42.5 / 35.6) ** 2, 26, 0.80],
+    ['IHI IS38 (EA888 Golf R)', 'is38', (45.2 / 35.6) ** 2, 28, 0.87],
+    ['BMTS twin-scroll (B58)', 'b58', (50.7 / 35.6) ** 2, 28, 1],
+  ]).map(([label, id, area, ceiling, surgeScale]) => {
+    const surgeKgS = 0.034 * area * MITSUBISHI_INLET_DENSITY * surgeScale;
+    const chokeKgS = 0.13 * area * MITSUBISHI_INLET_DENSITY;
+    return {
+      label, size: 'small', id, factory: true, boostCeiling: ceiling,
+      etaMax: 0.76, pkFlowKgS: chokeKgS * 0.57, pkPr: 2.0, surgeSlope: surgeKgS, chokeFlowKgS: chokeKgS,
+    };
+  }),
 ];
+
+/** The index of a factory compressor in COMPRESSOR_OPTS, by its id. @param {string} id */
+export const factoryCompressorIdx = (id) => COMPRESSOR_OPTS.findIndex((c) => c.id === id);
 
 /**
  * Superchargers, from their makers' published figures (see src/sim/blower.js for the
@@ -363,6 +425,9 @@ export const BLOWER_OPTS = [
  * builds at the extremes carry a penalty no purchasable part can clear. Half-inch steps
  * put the worst-case gap at 0.25".
  */
+/** The pipe a build has when it says none: a 3.0 in cat-back, as most of the factory engines. */
+export const STOCK_EXHAUST_DIA_IN = 3.0;
+
 export const EXHAUST_DIA_OPTS = [
   { label: '2.0"', dia: 2.0 },
   { label: '2.5"', dia: 2.5 },

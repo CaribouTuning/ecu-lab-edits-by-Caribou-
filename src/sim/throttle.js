@@ -1,18 +1,4 @@
-/**
- * THE THROTTLE: what a throttle opening does to manifold pressure.
- *
- * A throttle is an orifice. Air flows through the plate's open area at a rate set by the
- * pressure across it (compressible orifice flow, Heywood, Internal Combustion Engine
- * Fundamentals, App. C), and the engine draws air out of the manifold at a rate set by its
- * own breathing at that pressure. Manifold pressure is where the two meet. So the same
- * opening gives near-atmospheric pressure at low speed, where the engine draws little, and
- * deep vacuum at high speed, where it draws much more than the opening can pass: the
- * reason part throttle is not a fixed share of full load.
- *
- * Upstream of the plate the air has come through the intake duct and filter, which lose a
- * share of the dynamic pressure of the flow. That is where a cold air intake's gain is: a
- * freer duct leaves more pressure for the manifold at full throttle.
- */
+/** The throttle: what a throttle opening does to manifold pressure. */
 
 import { BARO_KPA, R_AIR } from './constants.js';
 import { COEFF } from './coefficients.js';
@@ -22,11 +8,9 @@ import { clamp } from './math.js';
 const DEG = Math.PI / 180;
 
 /**
- * Throttle bore for an engine, m: sized, as production throttle bodies are, so the plate
- * wide open costs only a few kPa at the engine's greatest airflow (its redline at 100% VE,
- * sea level). Sizing it for COEFF.THROTTLE_SIZING_DROP_KPA gives about 68 mm for a 3.5 L V6
- * revving to 7000 and 79 mm for a 5.7 L V8 to 6000, against 70-ish and 75-78 mm on the real
- * engines.
+ * Throttle bore for an engine, m: sized, as production throttle bodies are, so the plate wide
+ * open costs only a few kPa at the engine's greatest airflow (its redline at 100% VE, sea
+ * level).
  * @param {{displacementL: number, redline?: number}} derived
  * @returns {number}
  */
@@ -40,8 +24,7 @@ export function throttleBoreM(derived) {
 /**
  * The plate's effective open area at an opening, m^2: the annulus a round plate leaves in a
  * round bore as it turns, A = (pi D^2 / 4)(1 - cos(psi) / cos(psi0)), psi the plate's angle
- * from across the bore, psi0 where it rests closed (Heywood, App. C), plus the leakage past a
- * closed plate; times the discharge coefficient.
+ * from across the bore, psi0 where it rests closed (Heywood, App.
  * @param {number} frac opening, 0 closed to 1 wide open
  * @param {number} boreM
  * @returns {number}

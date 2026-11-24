@@ -26,7 +26,7 @@ import {
   TURBINE_OPTS, acousticDrive, blowerCurve, blowerOf, blowerSpeedRpm, calibrationAdvice, clamp,
   computeEngineerScore, computePullScore, computeTuningScore,
   applyPreset, cellsNotRunBy, stockCalibrationFor, deriveEngine, dutyPreviewRpm, evoAtdcDeg, exhaustGeometry, idealExhaustDiameter, injectorDutyPreview, isLocatable, layoutById, presetById,
-  simulateSweep, turbineWithCount, failedPart, FAILURE_MODES,
+  simulateSweep, turbineWithCount, injectorLabel, stockInjectorIdx, failedPart, FAILURE_MODES,
   veRecommendations, defaultEcuCalibration, dynoConditions, ecuHardwareOf, tankFuel,
   veTruthByPhaseFor, applyVeCorrections, intakeCamAt, portStagingOf, scheduledVeAt, veCorrections, veSamplesFromLive, veSamplesFromPull,
 } from '../sim/index.js';
@@ -383,15 +383,17 @@ export function EcuLabApp() {
   // and a pull a step is not worth re-solving for a hundredth of a percent of wear.
   const hp = Math.round(health.piston), hb = Math.round(health.bearing), hv = Math.round(health.valve);
   const advisorHealth = useMemo(() => ({ piston: hp, bearing: hb, valve: hv }), [hp, hb, hv]);
+  // The injector the engine left the factory with: the one its label marks "(stock)".
+  const stockInj = stockInjectorIdx(build);
   const advisorPull = useMemo(() => simulateSweep({
     loadKpa: 100, ve: deferredTables.ve, veTruth, timing: deferredTables.timing, afr: deferredTables.afr,
     turboOn, boostCurve, octaneBonus, octaneLabel: fuel.label, fuel, injectorCc, ecuInjectorCc,
-    injectorLabel: INJECTOR_OPTS[injIdx].label, mods, mafScalar, derived: engineDerived,
+    injectorLabel: injectorLabel(injIdx, stockInj), mods, mafScalar, derived: engineDerived,
     turbine, compressor, ecu: ecuBundle, layout: deferredTables.layout, exhaustDia: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia,
     ...(blower ? { blower, blowerRatio } : {}), ...(nitrous ? { nitrous } : {}),
     health: advisorHealth,
   }), [deferredTables, veTruth, turboOn, boostCurve, octaneBonus, fuel, injectorCc, ecuInjectorCc,
-       injIdx, mods, mafScalar, engineDerived, turbine, compressor, ecuBundle, exhaustDiaIdx, blower, blowerRatio, nitrous, advisorHealth]);
+       injIdx, stockInj, mods, mafScalar, engineDerived, turbine, compressor, ecuBundle, exhaustDiaIdx, blower, blowerRatio, nitrous, advisorHealth]);
   // Judged on the tables' own breakpoints, at the cam phase the VVT calibration holds.
   const camAt = useMemo(() => intakeCamAt(engineConfig, vvtCal), [engineConfig, vvtCal]);
   // A port kit's staging, from the calibration the advisor's pull runs, so the advisor
@@ -592,7 +594,7 @@ export function EcuLabApp() {
    */
   const sweepArgs = (load, ecu) => ({
     loadKpa: load, ve, veTruth, timing, afr, turboOn, boostCurve, octaneBonus, octaneLabel: fuel.label,
-    fuel, injectorCc, ecuInjectorCc, injectorLabel: INJECTOR_OPTS[injIdx].label, mods, mafScalar, derived: engineDerived,
+    fuel, injectorCc, ecuInjectorCc, injectorLabel: injectorLabel(injIdx, stockInjectorIdx(build)), mods, mafScalar, derived: engineDerived,
     turbine, compressor, ecu, layout, exhaustDia: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia,
     ...(blower ? { blower, blowerRatio } : {}), ...(nitrous ? { nitrous } : {}),
   });

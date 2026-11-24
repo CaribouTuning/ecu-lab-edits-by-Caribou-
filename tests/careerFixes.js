@@ -66,17 +66,26 @@ export const sparkClean = (st) => {
 };
 
 /**
- * Timing put back where the pull log says it was left on the table, the way its advice
- * reads: a degree at a time in the full-load and boost rows, pulling again each time, and a
- * degree back out at the first sign of knock.
+ * Timing put back where TUNE's power hints say the pull measured room for it (the pull log lists
+ * problems only): a degree at a time in the full-load and boost rows, pulling again each time,
+ * and a degree back out at the first sign of knock.
  */
+/** Whether TUNE's power hints show room to add timing in a full-load or boost cell. */
+const roomLeft = (st, p) => {
+  const { args, veTruth, mafErrorBase } = pullInputs({ ...st, session: { ...st.session, loadKpa: 100 } });
+  const a = S.calibrationAdvice({ ve: st.tune.ve, veTruth, timing: st.tune.timing, afr: st.tune.afr, layout: st.tune.layout, derived: args.derived,
+    fuel: args.fuel, mods: args.mods, turboOn: args.turboOn, boostCurve: args.boostCurve, compressor: args.compressor, turbine: args.turbine,
+    camAt: S.intakeCamAt(st.build.engineConfig, st.tune.ecu?.vvt), exhaustDia: args.exhaustDia, injectorCc: args.injectorCc, ecuInjectorCc: args.ecuInjectorCc,
+    mafScalar: args.mafScalar, mafErrorBase, pull: p });
+  return a.underAdvanced.some((c) => axesOf(st, 'timing').load[c.ri] >= 100);
+};
 export const sparkToLog = (st) => {
   let s = st;
   const step = (x, d) => ({ ...x, tune: { ...x.tune, timing: x.tune.timing.map((row, ri) => row.map((v) => (axesOf(x, 'timing').load[ri] >= 100 ? v + d : v))) } });
   for (let i = 0; i < 20; i += 1) {
-    const ev = pull(s).events;
-    if (ev.some((e) => e.type === 'knock')) return step(s, -1);
-    if (!ev.some((e) => e.type === 'timing')) return s;
+    const p = pull(s);
+    if (p.events.some((e) => e.type === 'knock')) return step(s, -1);
+    if (!roomLeft(s, p)) return s;
     s = step(s, 1);
   }
   return s;
@@ -118,9 +127,9 @@ export const TEMPLATE_FIXES = {
   retarded: (s, job) => ({ ...s, tune: { ...s.tune, timing: customerCar({ preset: job.car.preset }).tune.timing } }),
   // E85's charge cooling moves the airflow too, so the real fix ends with a pass from the log.
   e85: (s) => veFix(scaleFix(s), 1),
-  // The safe start (spark out of the boost rows, the mixture richer), then the timing a
-  // tuner puts back from the log: a blanket pull leaves the power on the table.
-  turbo: (s) => sparkToLog(boostSparkAndFuel(s)),
+  // The safe start (spark out of the boost rows, the mixture richer), then the timing a tuner
+  // puts back from the log: a blanket pull leaves the power on the table.
+  turbo: (s) => sparkToLog(boostSparkAndFuel(veFix(mafFix(s), 2))),
   // Then the spark checked against the log, as on any breathing change: intake and headers
   // add charge, and with a stock VQ35HR's 2-degree factory margin a pull can knock until a
   // degree comes out where the log says.
@@ -180,7 +189,10 @@ export const STORY_FIXES = {
   // fuel, as an E85 conversion is finished.
   e85: (s) => storyVeFromLogs(setBuild(s, { ecuInjectorCc: S.INJECTOR_OPTS[s.build.injIdx].cc }), 2),
   'retarded-timing': (s) => ({ ...s, tune: { ...s.tune, timing: customerCar({ preset: 'vq35hr' }).tune.timing } }),
-  'turbo-kit': (s) => boostSparkAndFuel(s),
+  // In the order the log names them: the MAF scalar for the turbo's plumbing (it read 8%
+  // low, which hid an air estimate 5% high under boost), then VE from the log, then spark
+  // and fuel for the boost, as a turbo conversion is finished.
+  'turbo-kit': (s) => boostSparkAndFuel(storyVeFromLogs(mafFix(s), 2)),
   'full-session': (s) => zmul(storyVeFromLogs(setBuild(s, { ecuInjectorCc: S.INJECTOR_OPTS[s.build.injIdx].cc, mafScalar: 1.11 })), 'ignition.knockThreshold', 1.4),
   'blower-power': (s) => boostSparkAndFuel(s, 3, 12.2),
   nitrous: (s) => setCal(setCal(s, 'nitrous.fuelTrimPct', getCal(s, 'nitrous.fuelTrimPct') - 25), 'nitrous.retardDeg', 12),

@@ -10,7 +10,8 @@
  * physics layer testable in plain Node.
  */
 
-import { DRIVETRAIN_EFF, INJ_DEADTIME_MS, KELVIN_OFFSET } from './constants.js';
+import { STOCK_EXHAUST_DIA_IN } from './hardware.js';
+import { DRIVETRAIN_EFF, INJ_DEADTIME_MS, KELVIN_OFFSET, MIXTURE_TOLERANCE_PCT } from './constants.js';
 import { COEFF } from './coefficients.js';
 import {
   cycleInputsFor, cylinderVolumeM3, knockLimitedSpark, lateSparkQuench, mbtFromBurn, paToBar, runCycle, trappedAirGrams,
@@ -22,11 +23,13 @@ import { bestPowerAfr } from './manifold.js';
 import { clamp } from './math.js';
 import { OPEN_LOOP_KPA, effectiveMafFactor } from './tables.js';
 import { N2O, N2O_AIR_EQUIV, chargeWithNitrousK, perCylinderEvent } from './nitrous.js';
-import { chargeTempK, exhaustTempK } from './thermo.js';
+import { chargeHeatEff, chargeTempK, exhaustTempK } from './thermo.js';
 
 /**
  * @typedef {object} PointInput
  * @property {boolean} [traceCycle] return the closed cycle's pressure trace as `cycleTrace`
+ * @property {number|null} [compressorEff] a turbo compressor's adiabatic efficiency at this
+ *   point, off its map (`solveInduction`); the charge is heated at it
  * @property {number} rpm engine speed
  * @property {number} mapKpa manifold absolute pressure, kPa
  * @property {number} boostPsi gauge boost, psi
@@ -92,9 +95,14 @@ import { chargeTempK, exhaustTempK } from './thermo.js';
  *   through the injectors; negative takes fuel out
  * @property {number} [sensedMapKpa] manifold pressure as the ECU's MAP sensor reports it
  * @property {number} [sensedIatK] charge temperature as the ECU's IAT sensor reports it
- * @property {'blend'|'sd'|'maf'} [airModel] how the ECU works out air mass. `blend` is the
+ * @property {'blend'|'sd'|'maf'|'alphan'} [airModel] how the ECU works out air mass. `blend` is the
  *   original model: speed-density from the VE table, with the MAF's error feeding the
- *   trims. `sd` is pure speed-density. `maf` fuels from the MAF reading and ignores VE
+ *   trims. `sd` is pure speed-density. `maf` fuels from the MAF reading and ignores VE.
+ *   `alphan` reads VE by throttle opening and runs the air sum on barometric pressure
+ * @property {number} [ecuLoadKpa] the load the ECU read its tables by, when it is not the
+ *   MAP sensor (alpha-N: the throttle opening as a share of 101.3 kPa)
+ * @property {number} [airSumKpa] the pressure the ECU's air sum runs on, when it is not
+ *   the MAP sensor (alpha-N: the barometric pressure)
  * @property {number} [mafNetFactor] the MAF's total reading error after the ECU's own
  *   transfer-function correction, as a multiplier on true airflow
  * @property {number} [openLoopKpa] MAP above which the ECU stops trimming
@@ -141,7 +149,7 @@ export function evaluatePoint(input) {
   const {
     rpm, mapKpa, boostPsi, veVal, veActualVal, timingVal, afrCommanded,
     fuel, mods, mafScalar, mafErrorBase,
-    injectorCc, ecuInjectorCc, derived, compressor, turbine = null, traceCycle = false,
+    injectorCc, ecuInjectorCc, derived, compressor, turbine = null, traceCycle = false, compressorEff = null,
     empKpa: empOverride, wastegateRelief = 0, ecu: E = null, blower = null, nitrous = null, cam = null, wear = null,
     exhaustDia = null,
   } = input;
@@ -155,7 +163,9 @@ export function evaluatePoint(input) {
   // A supercharger brings its own compressor: its ceiling and its efficiency, which set
   // how hot the charge arrives. Without one, the turbo's compressor as always.
   const compressorOver = blower ? false : boostPsi > compressor.boostCeiling;
-  const isenEff = blower && blower.boostPsi > 0 ? blower.eta : undefined;
+  // The charge is heated at the compressor's own efficiency where this point sits: a
+  // supercharger's, or a turbo's off its map (solveInduction's compressorEff).
+  const isenEff = chargeHeatEff({ blower, boostPsi, compressorEff });
   const chargeK = E ? chargeTempK(boostPsi, mods.intercooler, E.env, isenEff) : chargeTempK(boostPsi, mods.intercooler, undefined, isenEff);
   const chargeC = chargeK - KELVIN_OFFSET;
 
@@ -198,7 +208,7 @@ export function evaluatePoint(input) {
     ? airChargeG
     : trappedAirGrams({
       veActual: veVal,
-      mapKpa: E?.sensedMapKpa ?? mapKpa,
+      mapKpa: E?.airSumKpa ?? E?.sensedMapKpa ?? mapKpa,
       chargeK: E?.sensedIatK ?? chargeK,
       sweptM3: vCylM3,
     });
@@ -206,8 +216,9 @@ export function evaluatePoint(input) {
   const mafGps = (airChargeG * derived.cyl * (rpm / 2)) / 60;
 
   // --- MAF error / fuel trim. Open loop above OPEN_LOOP_KPA (near WOT).
-  const netFactor = airModel === 'sd' ? 1 : (E?.mafNetFactor ?? mafErrorBase * mafScalar);
-  const ecuMapKpa = E?.sensedMapKpa ?? mapKpa;
+  const netFactor = airModel === 'sd' || airModel === 'alphan' ? 1 : (E?.mafNetFactor ?? mafErrorBase * mafScalar);
+  // Open loop starts at a LOAD: manifold pressure, or on alpha-N the throttle opening.
+  const ecuMapKpa = E?.ecuLoadKpa ?? E?.sensedMapKpa ?? mapKpa;
   const openLoop = ecuMapKpa >= (E?.openLoopKpa ?? OPEN_LOOP_KPA);
   const effFactor = E ? ecuTrimmedFactor(netFactor, openLoop, E) : effectiveMafFactor(netFactor, mapKpa);
   const trimPct = (effFactor - 1) * 100;
@@ -281,7 +292,7 @@ export function evaluatePoint(input) {
   const empKpa = empOverride ?? exhaustManifoldKpa({
     turboOn: !!mods.turboFitted, exhaustFlowKgS, exhaustK: turbineInletK,
     turbine, wastegateRelief, ...(E?.env?.baroKpa ? { baroKpa: E.env.baroKpa } : {}),
-    pipeDiaIn: exhaustDia ?? 3.0, mods,
+    pipeDiaIn: exhaustDia ?? STOCK_EXHAUST_DIA_IN, mods,
   });
 
   // --- THE CYCLE ITSELF. Everything from here is read off an integrated pressure
@@ -320,6 +331,22 @@ export function evaluatePoint(input) {
   // any of them. This is what the ECU's knock control is protecting against.
   const threshold = knockLimitedSpark(cyc);
   const margin = threshold - timingVal;
+  // The knock limit this point would have with the mixture its AFR table asks for: the same
+  // air, the same cycle, the table's fuel. Only where the engine missed the table by more
+  // than the tolerance, and never on the spray (its fuel is the kit's). Once the fuelling is
+  // fixed this is the limit the cells meet, so the spark a pull asks for is set from the
+  // lower of the two: the log and TUNE both read it from here (advisors.js pullCellLimits).
+  const lambdaTable = afrCommanded / 14.7;
+  const thresholdAtTable = !n2o && lambdaTable > 0 && Math.abs(lambdaActual / lambdaTable - 1) * 100 > MIXTURE_TOLERANCE_PCT
+    ? knockLimitedSpark(cycleInputsFor({
+      rpm, mapKpa, empKpa, intakeK: cylChargeK,
+      airChargeG: airChargeG * held,
+      burnedFuelG: Math.min(airChargeG / (lambdaTable * fuel.stoich), airChargeG / fuel.stoich) * held,
+      fuelMassG: (airChargeG / (lambdaTable * fuel.stoich)) * held,
+      lambda: lambdaTable, fuel,
+      derived: cycDerived, ...(E?.cam ? { cam: E.cam } : cam ? { cam } : {}),
+    }))
+    : null;
   const knockPull = E?.knock ? ecuKnockRetard(margin, E.knock) : (margin < 0 ? Math.min(COEFF.MAX_KNOCK_RETARD, -margin) : 0);
   const usedTiming = timingVal - knockPull;
 
@@ -365,7 +392,8 @@ export function evaluatePoint(input) {
   // --- MECHANICAL LOAD. Torque is what the engine gives you; peak cylinder pressure is
   // what it costs the metal. Both come off the same trace, so they cannot disagree.
   const peakPressure = paToBar(cycle.peakPressurePa);
-  const pressureRisk = peakPressure > COEFF.PEAK_PRESSURE_LIMIT_BAR;
+  const pressureLimitBar = derived.peakPressureLimitBar ?? COEFF.PEAK_PRESSURE_LIMIT_BAR;
+  const pressureRisk = peakPressure > pressureLimitBar;
 
   // The CYCLE's own answer — the burned zone at exhaust valve open, blown down to the
   // manifold. Retard shows up here for the real reason rather than a per-degree
@@ -392,13 +420,16 @@ export function evaluatePoint(input) {
   // oil film off the bores, fouls plugs and costs power. Slower than knock, still damage.
   const richRisk = lambdaActual < COEFF.RICH_DAMAGE_LAMBDA && mapKpa >= 55;
   const valveRisk = leanRisk && boostPsi > 3;
-  const mafFlag = Math.abs(trimPct) > 8 && (mods.intake || mods.turboFitted);
+  // A MAF reading the air wrong by more than a professional's tolerance
+  // (MIXTURE_TOLERANCE_PCT) fuels the engine that far off.
+  const mafFlag = Math.abs(trimPct) > MIXTURE_TOLERANCE_PCT && (mods.intake || mods.turboFitted);
   const injMismatch = Math.abs(injectorCc / ecuInjectorCc - 1) > 0.05;
 
   // What only exists once the ECU is modelled. Kept out of the base record entirely when
   // it is not, so an ECU-less evaluation is the same record it always was, field for field.
   const ecuFields = E ? {
-    sensedMap: Number((E.sensedMapKpa ?? mapKpa).toFixed(0)),
+    sensedMap: Number((E.sensedMapKpa ?? mapKpa).toFixed(1)),
+    ...(E.ecuLoadKpa != null ? { ecuLoad: Number(E.ecuLoadKpa.toFixed(1)) } : {}),
     sensedIat: Number(((E.sensedIatK ?? chargeK) - KELVIN_OFFSET).toFixed(0)),
     fuelMass: Number((deliveredFuelG * 1000).toFixed(2)),
     fuelCmd: Number((fuelMassG * 1000).toFixed(2)),
@@ -451,6 +482,7 @@ export function evaluatePoint(input) {
     iat: Number(chargeC.toFixed(0)), airCharge: Number(airChargeG.toFixed(3)),
     boostPsi: Number(boostPsi.toFixed(1)), trimPct: Number(trimPct.toFixed(1)),
     threshold: Number(threshold.toFixed(1)), margin: Number(margin.toFixed(1)),
+    ...(thresholdAtTable != null ? { thresholdAtTable: Number(thresholdAtTable.toFixed(1)) } : {}),
     chargeIndex: Number(chargeIndex.toFixed(3)),
     mbtIdeal: Number(mbtIdeal.toFixed(1)), openLoop,
     egt: Math.round(egtC),
@@ -474,7 +506,7 @@ export function evaluatePoint(input) {
     knockIntegral: Number(cycle.knockIntegral.toFixed(3)),
     endGasK: Math.round(cycle.peakEndGasK),
     knock: knockPull > 0, knockPull, fuelLimited, leanRisk, richRisk, valveRisk,
-    egtRisk, pressureRisk, mafFlag, compressorOver, injMismatch,
+    egtRisk, pressureRisk, ...(pressureRisk ? { pressureLimitBar } : {}), mafFlag, compressorOver, injMismatch,
     ...ecuFields,
     // Nitrous, only while it flows: what the jets are passing, what cooled the charge,
     // and the bottle behind them.

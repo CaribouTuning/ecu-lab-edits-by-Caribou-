@@ -13,7 +13,7 @@ const advise = (eng, octaneIdx) => {
   const cc = S.INJECTOR_OPTS[build.injIdx].cc;
   return S.calibrationAdvice({
     ve: eng.tables.ve, veTruth: eng.veTruth, timing: eng.tables.timing, afr: eng.tables.afr, layout: eng.tables.layout, camAt: eng.camAt,
-    derived: eng.derived, fuel: S.OCTANE_OPTS[octaneIdx], mods: build.mods, turboOn: build.turboOn,
+    derived: eng.derived, fuel: S.FUEL_CHOICES[octaneIdx], mods: build.mods, turboOn: build.turboOn,
     boostCurve: build.boostCurve, compressor: eng.compressor, turbine: eng.turbine,
     injectorCc: cc, ecuInjectorCc: cc, mafScalar: build.mafScalar ?? 1,
     mafErrorBase: S.mafErrorFactor(build.mods, build.turboOn), exhaustDia: S.EXHAUST_DIA_OPTS[build.exhaustDiaIdx].dia,
@@ -49,7 +49,9 @@ const adviseWithPull = (eng, tables = eng.tables, mafScalar = eng.build.mafScala
   });
 };
 const where = (cells) => cells.map((c) => `${c.map} kPa / ${c.rpm} rpm`);
-const logged = (eng) => [100, 70, 40].flatMap((k) => eng.pull(k).events.map((e) => `${k} kPa: ${e.type}`));
+// A note (the factory turbo engines' own torque limit) tells the player something without
+// anything being wrong, so it is not a problem in the log.
+const logged = (eng) => [100, 70, 40].flatMap((k) => eng.pull(k).events.filter((e) => !e.note).map((e) => `${k} kPa: ${e.type}`));
 
 describe('a stock engine tells one story on every screen', () => {
   // Past MBT is not dangerous, but TUNE says so, and a factory table that TUNE marks up is a
@@ -96,6 +98,15 @@ describe('RESET ALL TO STOCK', () => {
     expect(logged(eng)).toEqual([]);
   });
 
+  it.each(['n54', 'b58-m1', 'ea888-gti'])('%s: gives back the factory torque limit with the tables', (id) => {
+    // Reset by its hardware alone, a factory turbo engine came back without the engine computer's
+    // torque limit its preset carries (presets.js factoryTorqueLimit), and made more than stock.
+    const p = S.applyPreset(S.presetById(id));
+    const stock = S.stockCalibrationFor({ ...p });
+    expect(stock.ecu.torque.method).toBe(p.ecu.torque.method);
+    expect(stock.ecu.torque.limitByRpm.z).toEqual(p.ecu.torque.limitByRpm.z);
+  });
+
   it('writes no boost cells for a turbo the factory never fitted', () => {
     // A VQ35DE with a turbo bolted on: its stock is the factory NA calibration, on axes that
     // stop at full throttle without boost. Calculating the boost cells would tune them for
@@ -120,19 +131,20 @@ describe('RESET ALL TO STOCK', () => {
 });
 
 describe('cells the pull did not run', () => {
-  // The default table with its 40 kPa row 18° advanced: past the knock limit there (at
-  // 40 kPa there is little end-gas pressure to knock with, so it takes more than it did
-  // before the rod length was corrected, and more again once an uneven stoichiometric
-  // mixture stopped releasing all of its heat: thermo.js, heatReleasedShare).
+  // The default table with its 70 kPa row 25° advanced: past the knock limit there. (It was
+  // the 40 kPa row 18° advanced; with the knock model anchored to real calibrations, a 40 kPa
+  // cylinder on its cam schedule has too little end-gas pressure to knock even so, as on a
+  // real engine, and the 70 kPa row is the part-throttle row that can.)
+  const ROW = 70;
   const knockingAt40 = () => {
     const eng = makeEngine({});
-    eng.tables.timing = eng.tables.timing.map((row, ri) => ((eng.tables.layout?.timing.load ?? S.LOAD)[ri] === 40 ? row.map((v, ci) => (ci === 0 ? v : Math.min(S.SPARK_MAX_DEG, v + 18))) : row));
+    eng.tables.timing = eng.tables.timing.map((row, ri) => ((eng.tables.layout?.timing.load ?? S.LOAD)[ri] === ROW ? row.map((v, ci) => (ci === 0 ? v : Math.min(S.SPARK_MAX_DEG, v + 25))) : row));
     return eng;
   };
 
-  it('are judged against the player\'s own pull: a pull through the 40 kPa row runs it, a full-throttle pull does not', () => {
+  it('are judged against the player\'s own pull: a pull through the 70 kPa row runs it, a full-throttle pull does not', () => {
     const eng = knockingAt40();
-    const flagged = adviseWithPull(eng).overAdvanced.filter((c) => c.map === 40);
+    const flagged = adviseWithPull(eng).overAdvanced.filter((c) => c.map === ROW);
     expect(flagged.length).toBeGreaterThan(0);
     expect(S.cellsNotRunBy(flagged, eng.pull(100))).toEqual(flagged);
     // A pull's load is a throttle opening: 40% throttle holds this engine near full manifold
@@ -185,11 +197,8 @@ describe('the advisor judges a turbo by the boost it makes', () => {
 
 describe('a turbo bolted onto a factory engine can be tuned by following the advice', () => {
   it('one round of TUNE\'s advice on the extended tables clears the knock, and the knock cut with it', async () => {
-    // SANDBOX: a stock VQ35HR, a turbo at 7 psi, 650 cc injectors scaled, the axes extended
-    // (the new boost cells carry the edge row, marked not tuned). Knock past 4300 RPM
-    // tripped the knock protection, which cut the boost below 4300 RPM; the advisor read the
-    // cut target as the turbo's reach, never advised the cells that knocked, and the cut
-    // came back on every pull however closely the player followed it.
+    // Sandbox: a stock VQ35HR, a turbo at 7 psi, 650 cc injectors scaled, the axes extended
+    // (the new boost cells carry the edge row, marked not tuned).
     const { reducer, ACTIONS } = await import('../src/ui/state/reducer.js');
     const { makeInitialState } = await import('../src/ui/state/initialState.js');
     const { pullInputs } = await import('../src/ui/state/pullInputs.js');
@@ -197,8 +206,8 @@ describe('a turbo bolted onto a factory engine can be tuned by following the adv
     let st = reducer(makeInitialState({ blank: true }), { type: ACTIONS.APPLY_PRESET, preset: S.applyPreset(S.presetById('vq35hr')) });
     // On the breakpoints sized to the engine, the TUNE layout switch's 16 × 16: a factory
     // engine starts on the game's 8 × 6 grid, whose 150 and 200 kPa rows its factory
-    // calibration already fills, so the extended, untuned boost rows this guards only exist
-    // on the sized grid.
+    // calibration already fills, so the extended, untuned boost rows this guards only exist on
+    // the sized grid.
     st = reducer(st, /** @type {any} */ (layoutSwitch(st, 'engine')));
     const set = (field, value) => { st = reducer(st, { type: ACTIONS.SET_BUILD_FIELD, field, value }); };
     set('turboOn', true); set('boostCurve', st.build.boostCurve.map(() => 7)); set('injIdx', 3); set('ecuInjectorCc', 650);

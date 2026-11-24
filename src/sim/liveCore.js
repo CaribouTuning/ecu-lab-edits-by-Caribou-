@@ -1,11 +1,7 @@
 /**
- * What the live engine and its engine management (src/sim/ecu/liveEcu.js) both stand on:
- * the engine's rotational constants, the noisy lagged sensor, the manifold pressure a
- * throttle settles at, and the tachometer and airflow gauges.
- *
- * A leaf of its own so that `live.js` (which calls the engine management) and `liveEcu.js`
- * (which needs these) do not import each other. `live.js` re-exports all of it, so
- * nothing outside changes.
+ * What the live engine and its engine management (src/sim/ecu/liveEcu.js) both stand on: the
+ * engine's rotational constants, the noisy lagged sensor, the manifold pressure a throttle
+ * settles at, and the tachometer and airflow gauges.
  */
 
 import { BARO_KPA } from './constants.js';
@@ -25,19 +21,8 @@ export const REDLINE_CUT = 7600;
 /** How far past the redline the limiter cuts fuel. */
 export const LIMITER_OVERSHOOT_RPM = 100;
 /**
- * Below this crank speed a crank sensor produces no usable signal, so the ECU reports
- * zero rather than a small number, RPM.
- *
- * A variable-reluctance pickup's output voltage is proportional to how fast a tooth goes
- * past it; with nothing turning there are no teeth and no signal, and reading noise off a
- * stationary crank is not a measurement. Without this the tachometer sat at about 28 RPM
- * for ever after the engine was switched off, which is what a stopped engine looked like:
- * still running.
- *
- * Here rather than in COEFF deliberately. The fingerprint hashes COEFF whole, so a
- * coefficient added there moves the fixture even when — as here — it cannot move a single
- * dyno figure. This is a property of the tachometer, it sits with the rest of the live
- * model's own constants above, and the gate stays meaningful.
+ * Below this crank speed a crank sensor produces no usable signal, so the ECU reports zero
+ * rather than a small number, RPM.
  */
 export const CRANK_SENSOR_MIN_RPM = 30;
 
@@ -77,10 +62,7 @@ export function liveRandom(s = null) {
 
 /**
  * Engine speed as the manifold vacuum model reads it: against a fixed RPM datum, not this
- * engine's redline (see COEFF.MANIFOLD_VACUUM_RPM_NORM). Callers pass a speed already
- * held to the redline, so no ceiling is needed here: an engine built to 11,000 RPM keeps
- * pulling harder vacuum all the way up, as it does below the datum.
- *
+ * engine's redline (see COEFF.MANIFOLD_VACUUM_RPM_NORM).
  * @param {number} rpm engine speed, held to the redline
  * @returns {number}
  */
@@ -90,16 +72,6 @@ export function vacuumSpeedFrac(rpm) {
 
 /**
  * Manifold pressure the throttle and engine settle at, before any boost.
- *
- * A closed throttle at high RPM pulls far harder vacuum than the same opening at idle,
- * because the engine is trying to pump much more air through the same restriction; that
- * RPM term is what lets the engine decelerate on a closed throttle. Valve overlap lets
- * exhaust back into the intake at low speed, so a big cam simply cannot pull strong
- * vacuum at idle — which is why cammed engines idle high and lumpy.
- *
- * Shared with the live engine management (src/sim/ecu/liveEcu.js), which passes the
- * overlap its cam phasers have added.
- *
  * @param {number} aFrac throttle opening, 0..1
  * @param {number} nFrac engine speed against COEFF.MANIFOLD_VACUUM_RPM_NORM
  * @param {number} overlapDeg valve overlap, degrees
@@ -115,15 +87,6 @@ export function steadyManifoldKpa(aFrac, nFrac, overlapDeg) {
 
 /**
  * The tachometer and airflow gauges: lagged, noisy readings of engine speed and MAF.
- * Overlap makes the idle lope, and the lope shows on the tach. Shared with the live
- * engine management, which reads its other sensors itself.
- *
- * A CRANK SENSOR THAT IS NOT TURNING READS ZERO, and reads it exactly. Everything else
- * here is a real transducer with lag and noise, but a stationary crank presents no teeth
- * to the pickup, so there is no signal to be noisy — the ECU sees no pulses and reports
- * no speed. Left as a noisy reading it never settled, and a switched-off engine showed a
- * tachometer wandering around 28 RPM for as long as you cared to watch it.
- *
  * @param {object} s live state, updated in place (`lope`, `sensedRpm`, `sensedMaf`)
  * @param {object|null} pt this step's operating point
  * @param {number} dt seconds

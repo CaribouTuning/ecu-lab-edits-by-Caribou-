@@ -181,6 +181,9 @@ export const REACHABLE_SLACK_KPA = 2;
  */
 export const OPEN_LOOP_KPA = 85;
 
+/** Columns at or below this speed are the idle columns: run under MBT on purpose. */
+export const IDLE_COLUMN_MAX_RPM = 1000;
+
 /**
  * How much of the MAF error survives into the mixture the cylinder actually gets.
  *
