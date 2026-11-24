@@ -61,7 +61,7 @@ const UNRUN_KNOCK_CELL_CAP = 12;
 /**
  * Grades how clean a calibration is, from the pull's event log.
  *
- * @param {{events: {type?: string, impact?: number, msg: string}[]}} result a completed sweep
+ * @param {{events: {type?: string, impact?: number, msg: string, note?: boolean}[]}} result a completed sweep
  * @param {{ri: number, ci: number}[]} [unrunKnockCells] cells the advisor says are past the
  *   knock limit and this pull did not run, so its log cannot have shown them
  * @returns {{score: number, label: string, deductions: string[], advisories: string[]}}
@@ -76,7 +76,9 @@ export function computeTuningScore(result, unrunKnockCells = []) {
     deductions.push(`-${d}  TUNE flags ${unrunKnockCells.length} spark cell${unrunKnockCells.length === 1 ? '' : 's'} past the knock limit that this pull did not run. Pull at those loads to see it, then pull the timing back.`);
   }
   result.events.forEach((e) => {
-    if (HARDWARE_EVENT_TYPES.has(e.type)) {
+    // A note (the engine computer's own torque limit, say) tells the player something about the
+    // tune without anything being wrong: shown with the advisories, never deducted.
+    if (HARDWARE_EVENT_TYPES.has(e.type) || e.note) {
       advisories.push(e.msg);
       return;
     }
@@ -149,6 +151,8 @@ function compressionDeduction(compression, headroom) {
  * @param {{size: string, boostCeiling: number, chokeFlowKgS?: number}} input.compressor
  *   the fitted compressor, already scaled for a twin setup (`compressorWithCount`)
  * @param {number} input.exhaustDiaError inches the fitted pipe differs from ideal
+ * @param {number|null} [input.exhaustPowerCost] share of full power the fitted pipe costs
+ *   (airflow.js exhaustPowerCost); graded on this when given
  * @param {number} input.dutyPreview injector duty at current demand, percent
  * @param {number} input.displacementL
  * @param {{label: string, bonus: number}} input.fuel the octane option fitted
@@ -156,7 +160,7 @@ function compressionDeduction(compression, headroom) {
  * @returns {{score: number, label: string, deductions: string[]}}
  */
 export function computeEngineerScore({
-  engineConfig, turboOn, peakBoostPsi, turbine, compressor, exhaustDiaError, dutyPreview,
+  engineConfig, turboOn, peakBoostPsi, turbine, compressor, exhaustDiaError, exhaustPowerCost = null, dutyPreview,
   displacementL, fuel, mods, supercharged = false,
 }) {
   let score = 100;
@@ -276,8 +280,10 @@ export function computeEngineerScore({
   }
   // Only a pipe too small for the power costs anything in the physics (its pressure drop at
   // high flow); an oversized one gains little and loses nothing, so it is not marked.
-  if (exhaustDiaError < -0.3) {
-    score -= 8; deductions.push('-8 Exhaust pipe too small for the power: back-pressure costs the top end');
+  if (exhaustPowerCost != null ? exhaustPowerCost > 0.05 : exhaustDiaError < -0.3) {
+    score -= 8; deductions.push(exhaustPowerCost != null
+      ? `-8 Exhaust pipe too small for the power: its back-pressure costs about ${Math.round(exhaustPowerCost * 100)}% at the top end`
+      : '-8 Exhaust pipe too small for the power: back-pressure costs the top end');
   }
   if (dutyPreview > 95) {
     score -= 12; deductions.push('-12 Injectors undersized for current demand');

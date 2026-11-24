@@ -72,10 +72,20 @@ describe('the crank pays for the boost', () => {
     expect(w / 745.7).toBeLessThan(60);
   });
 
-  it('part throttle opens the bypass: no boost and almost nothing to pay', () => {
-    const cruise = at(pullWith('m90', {}, 70), 3000);
+  it('light throttle opens the bypass: no boost and almost nothing to pay', () => {
+    // A cruise: the throttle holds the manifold well into vacuum, which holds the valve open.
+    const cruise = at(pullWith('m90', {}, 25), 3000);
+    expect(101.3 - cruise.map).toBeGreaterThan(17);
     expect(cruise.boostPsi).toBe(0);
     expect(cruise.blowerHp).toBeLessThan(3);
+  });
+
+  it('the bypass follows manifold vacuum, not the pedal: most of the way open, it boosts', () => {
+    // At 70% throttle a big throttle body holds next to no vacuum, so the actuator's spring
+    // shuts the valve and the blower makes boost, as it does on the road under load.
+    const part = at(pullWith('m90', {}, 70), 3000);
+    const full = at(pullWith('m90'), 3000);
+    expect(part.boostPsi).toBeGreaterThan(0.5 * full.boostPsi);
   });
 });
 

@@ -1,36 +1,6 @@
 /**
- * The factory fuel strategy: what each engine's own calibration asks the mixture to be,
- * at every speed and load. `factoryCalibration` (presets.js) writes the fuel table from it.
- *
- * WHAT REAL CALIBRATIONS DO
- * Every production ECU in the catalogue runs closed loop at stoichiometric (lambda 1)
- * wherever the catalyst has to work: idle, cruise and light acceleration. Enrichment comes
- * in progressively as load rises, not as a step: Nissan's fuel target table is laid out on
- * the base fuel schedule (load) against rpm, and any cell other than 14.7 is open loop
- * (UpRev Nissan Tuning Guide, Rev 8, Feb 2022, p. 9); GM's power enrichment is enabled by
- * throttle and MAP and then commands an equivalence ratio that varies with rpm (HP Tuners
- * VCM Editor help, GM > Engine > Fuel Control > Power Enrich). Near the top of the rev
- * range the target goes richer again, to hold exhaust and catalyst temperature down
- * (component protection), which is why stock engines are usually richer at redline than
- * at peak torque.
- *
- * How rich depends on the engine. Port-injected naturally aspirated engines run about
- * lambda 0.85 at full throttle. Modern direct-injection turbo engines built for emissions
- * (B58, EA888 gen 3) hold lambda 1 through most of a full-throttle pull and only richen
- * near redline. The older twin-turbo N54 runs well rich under boost.
- *
- * HOW SURE THESE ARE
- * Factory calibrations are not published. The figures below come from what can be cited:
- * tuners' documentation of the tables, and logs of stock cars posted by tuners and owners.
- * Each engine's `sources` says which, and `confidence` says how firm they are:
- *   'validated' read out of stock calibrations themselves, through definitions each image's
- *              own identifier confirmed (the GM engines: ECU Lab Pro's calibration benchmark)
- *   'logged'   stock-car logs from more than one source agree on the shape and the numbers
- *   'reported' the shape is documented, the numbers are owners' and tuners' reports
- *   'family'   no engine-specific figure was found; it follows its maker's documented
- *              strategy and its siblings' numbers
- * A stock calibration file read from the car (UpRev, HP Tuners, MHD, EcuTek) is the only
- * better source. If one becomes available, it replaces the figures here.
+ * The factory fuel strategy: what each engine's own calibration asks the mixture to be, at
+ * every speed and load.
  */
 
 import { interp1 } from './math.js';
@@ -42,6 +12,9 @@ import { interp1 } from './math.js';
  * @property {number} enrichFromKpa closed-loop lambda 1 at or below this manifold pressure
  *   (naturally aspirated) or, for a turbo engine, this much boost in kPa above barometric
  * @property {number} enrichFullKpa the full-load target is reached here (same convention)
+ * @property {FuelStrategy} [offBoost] a turbo plan's targets up to barometric pressure, as a
+ *   naturally aspirated plan: full-throttle enrichment before the turbo makes boost, which the
+ *   boost ramp then starts from
  * @property {'validated'|'logged'|'reported'|'family'} confidence
  * @property {string[]} sources
  * @property {string} note
@@ -182,10 +155,21 @@ const GENERIC_NA = {
   ...NA_PORT, wot: [[1000, 0.88], [3000, 0.87], [5000, 0.85], [7000, 0.83], [11000, 0.82]],
   confidence: 'family', sources: [UPREV, HPT_PE], note: 'A port-injected, naturally aspirated engine\'s usual strategy.',
 };
-/** @type {FuelStrategy} */
+/**
+ * A port-injected turbo engine of the player's (or a turbo fitted to a naturally aspirated one).
+ * Full throttle runs open loop from where the ECU leaves closed loop, as the naturally aspirated
+ * plan does, and richer with boost: a speed-density turbo map enriches its full-throttle cells
+ * from the atmospheric row up, since the engine passes through them at full throttle while the
+ * turbo spools (GM's own power enrichment, the LS plans above, which a turbo LS keeps, commands about lambda 0.81-0.86
+ * at full throttle). Lambda 1 there would leave the spool-up cells at 14.7, the leanest a full-load
+ * cell can be.
+ * @type {FuelStrategy}
+ */
 const GENERIC_TURBO = {
   turbo: true, enrichFromKpa: 0, enrichFullKpa: 30, wot: [[1500, 0.86], [3000, 0.82], [5000, 0.8], [7000, 0.79], [11000, 0.78]],
-  confidence: 'family', sources: [JB4_N54], note: 'A turbo engine\'s usual strategy: lambda 1 off boost, rich under it.',
+  offBoost: GENERIC_NA,
+  confidence: 'family', sources: [JB4_N54, HPT_PE],
+  note: 'A port-injected turbo engine\'s usual strategy: closed loop at part throttle, enriched at full throttle from the atmospheric row up, richer under boost.',
 };
 
 /**
@@ -199,17 +183,14 @@ const GENERIC_TURBO = {
 export function fuelStrategyFor(id, turbo) {
   const own = FACTORY_FUEL[id ?? ''];
   if (own && !!own.turbo === turbo) return own;
+  // A turbo fitted to an engine with its own naturally aspirated plan keeps that plan's
+  // full-throttle enrichment off boost (a turbo LS keeps GM's power enrichment) and adds boost's.
+  if (turbo && own && !own.turbo) return { ...GENERIC_TURBO, offBoost: own };
   return turbo ? GENERIC_TURBO : GENERIC_NA;
 }
 
 /**
  * The lambda the factory calibration asks for at a speed and manifold pressure.
- *
- * Naturally aspirated: lambda 1 up to `enrichFromKpa`, blending to the full-load target by
- * `enrichFullKpa`. Turbo: lambda 1 off boost, blending to the full-load target as boost
- * rises over `enrichFullKpa` kPa above barometric, so a part-boost cell is not fuelled as if
- * it were the top of a pull.
- *
  * @param {FuelStrategy} s
  * @param {number} rpm
  * @param {number} kpa manifold pressure, absolute
@@ -218,6 +199,17 @@ export function fuelStrategyFor(id, turbo) {
  * @returns {number}
  */
 export function factoryLambda(s, rpm, kpa, turbo, baroKpa) {
+  // Up to barometric pressure a plan with off-boost targets runs them; boost then ramps from
+  // the atmospheric target to the boosted one, so the two meet without a step.
+  if (turbo && s.offBoost) {
+    const atm = factoryLambda(s.offBoost, rpm, Math.min(kpa, baroKpa), false, baroKpa);
+    if (kpa <= baroKpa) return atm;
+    const boosted = factoryLambda({ ...s, offBoost: undefined }, rpm, kpa, true, baroKpa);
+    const full = interp1(s.wot.map((q) => q[0]), s.wot.map((q) => q[1]), rpm);
+    // The boost ramp's share of the way from lambda 1 to the boosted target, applied from atm.
+    const k = full === 1 ? 1 : (1 - boosted) / (1 - full);
+    return atm + (Math.min(atm, full) - atm) * k;
+  }
   const p = turbo ? kpa - baroKpa : kpa;
   const span = s.enrichFullKpa - s.enrichFromKpa;
   const t = p <= s.enrichFromKpa ? 0 : p >= s.enrichFullKpa ? 1 : (p - s.enrichFromKpa) / span;

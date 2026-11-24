@@ -21,9 +21,9 @@ import { blowerOf } from './blower.js';
 import { defaultEcuCalibration, setCal } from './ecu/calibration.js';
 import { dynoConditions, ecuHardwareOf, intakeCamAt, scheduledVeAt, tankFuel, veTruthByPhaseFor } from './ecu/context.js';
 import { deriveEngine } from './engine.js';
-import { COMPRESSOR_OPTS, EXHAUST_DIA_OPTS, INJECTOR_OPTS, TURBINE_OPTS, compressorWithCount, turbineWithCount } from './hardware.js';
+import { COMPRESSOR_OPTS, EXHAUST_DIA_OPTS, INJECTOR_OPTS, TURBINE_OPTS, injectorLabel, compressorWithCount, turbineWithCount } from './hardware.js';
 import { clone2D } from './math.js';
-import { applyPreset, presetById } from './presets.js';
+import { applyPreset, presetById, stockInjectorIdx } from './presets.js';
 import { dutyPreviewRpm, injectorDutyPreview, mafErrorFactor, simulateSweep } from './sweep.js';
 import { DEFAULT_AFR, DEFAULT_BOOST, DEFAULT_ENGINE_CONFIG, DEFAULT_MODS, DEFAULT_TIMING } from './tables.js';
 
@@ -96,7 +96,7 @@ export function buildRig({ preset, build: patch = {}, cal: calPatch = {}, env, f
   const sweepArgs = (loadKpa = 100) => ({
     loadKpa, ...tables, veTruth, turboOn: build.turboOn, boostCurve: build.boostCurve,
     octaneLabel: fuel.label, fuel, injectorCc: INJECTOR_OPTS[build.injIdx].cc,
-    ecuInjectorCc: build.ecuInjectorCc, injectorLabel: INJECTOR_OPTS[build.injIdx].label,
+    ecuInjectorCc: build.ecuInjectorCc, injectorLabel: injectorLabel(build.injIdx, stockInjectorIdx(build)),
     mods: build.mods, mafScalar: build.mafScalar ?? p?.mafScalar ?? 1, derived, turbine, compressor,
     // The engine's own exhaust: its backpressure is part of how it breathes and what the
     // advisor and the factory calibration price.

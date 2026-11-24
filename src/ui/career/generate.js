@@ -289,16 +289,17 @@ const TEMPLATES = /** @type {Template[]} */ ([
   {
     id: 'turbo', minLevel: 1, cars: ['v6'], needs: { training: ['spark'] },
     make: ({ r, level }) => {
-      // From 7 psi: below that a naturally aspirated table survives the boost, and there
-      // is no fault to find.
-      const psi = r.int(7, 8 + Math.min(2, level));
+      // From 8 psi, on 91: below that a naturally aspirated table survives the boost through an
+      // intercooler (knock model anchored to real calibrations: 7 psi keeps 0.6 degrees in hand),
+      // and there is no fault to find.
+      const psi = r.int(8, 9 + Math.min(2, level));
       const curve = [0, 0, Math.round(psi * 0.4), Math.round(psi * 0.75), psi, psi, psi, Math.max(0, psi - 1)];
       return {
         tier: 2, pay: payAt(1400, level, r), rep: 12,
         says: `Bolted on a turbo kit: ${psi} psi, intercooler, 550s. The kit said the ECU would “adapt”. It pulls hard, then it rattles and goes flat.`,
         wants: 'I want to use the boost, but I don’t want to blow it up.',
         work: ['Turbo kit fitted, injectors scaled', 'Road test and tune for boost'],
-        carBuild: (b) => ({ turboOn: true, boostCurve: curve, injIdx: 2, ecuInjectorCc: 550, octaneIdx: 1, mods: { ...b.mods, intercooler: true } }),
+        carBuild: (b) => ({ turboOn: true, boostCurve: curve, injIdx: 2, ecuInjectorCc: 550, octaneIdx: 0, mods: { ...b.mods, intercooler: true } }),
         params: { psi },
         checks: [
           { type: 'events', kind: 'complaint', types: ['knock', 'knockprot'], label: 'No rattle under boost' },

@@ -149,9 +149,16 @@ describe('where in a pull the last life runs out', () => {
   });
 
   it('a dyno pull that spends the bearings fails part way and ends there', () => {
-    // 13.5:1 on pump fuel: a peak pressure the bearings pay for on every pull. (Worn rings
-    // would be the wrong part to test this on: the charge they leak takes the knock with it.)
-    const eng = makeEngine({ build: { engineConfig: { ...S.DEFAULT_ENGINE_CONFIG, compression: 13.5 } } });
+    // 14 psi on a naturally aspirated bottom end, intercooled, on E85 so it does not knock: a
+    // peak pressure the bearings pay for on every pull (about 90 bar averaged, against the 72
+    // the NA bottom end carries free). 13.5:1 naturally aspirated no longer does, as it does
+    // not on real engines. (Worn rings would be the wrong part to test this on: the charge they
+    // leak takes the knock with it.)
+    const cc = S.INJECTOR_OPTS.find((o) => o.cc === 1050).cc;
+    const eng = makeEngine({ build: {
+      turboOn: true, boostCurve: S.CURVE_RPM.map((r) => (r < 1000 ? 0 : 14)), compressorIdx: 2, mods: { ...S.DEFAULT_MODS, intercooler: true },
+      octaneIdx: 3, injIdx: S.INJECTOR_OPTS.findIndex((o) => o.cc === cc), ecuInjectorCc: cc,
+    } });
     const fresh = S.simulateSweep({ ...sweepOf(eng), health: NEW });
     expect(fresh.wear.bearing).toBeGreaterThan(0);
     const r = S.simulateSweep({ ...sweepOf(eng), health: { ...NEW, bearing: fresh.wear.bearing / 2 } });
@@ -290,10 +297,7 @@ describe('a stock engine run as its maker meant lasts', () => {
 
   it('a turbo bolted on before the tables are tuned costs a little per pull, not half the engine', () => {
     // The ECU's knock control hears it and pulls timing: knock at the limit, which is what
-    // knock control is for. It once cost 19% of the pistons per pull.
-    // On breakpoints sized to the NA engine, whose top row is 100 kPa: the boost reads the edge,
-    // the NA spark, as on an engine the player has not yet extended the tables for. (On the
-    // game's 8 × 6 its factory calibration already has knock-limited 150 and 200 kPa rows.)
+    // knock control is for.
     const sized = S.presetLayout(S.presetById('vq35hr'), { rpmCount: 16, loadCount: 16 });
     const eng = makeEngine({ preset: 'vq35hr', layout: sized, build: { turboOn: true, boostCurve: Array(8).fill(7), injIdx: 3, ecuInjectorCc: 650 } });
     const r = S.simulateSweep({ ...sweepOf(eng), health: NEW });

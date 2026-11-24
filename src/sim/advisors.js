@@ -7,23 +7,26 @@
  * The advisors report the gap; closing it is the player's job.
  */
 
-import { BARO_KPA, PSI_TO_KPA } from './constants.js';
+import { BARO_KPA, GASOLINE_STOICH, MIXTURE_TOLERANCE_PCT, PSI_TO_KPA, R_AIR } from './constants.js';
 import { COEFF } from './coefficients.js';
+import { STOCK_EXHAUST_DIA_IN } from './hardware.js';
 import { hardwareVeAt } from './airflow.js';
 import { chargeIndexOf } from './knock.js';
 import { mbtForCell, trappedAirGrams } from './cycle.js';
 import { exhaustManifoldKpa } from './friction.js';
-import { chargeTempK, exhaustTempK } from './thermo.js';
-import { clamp, curveAt, interp1 } from './math.js';
+import { chargeHeatEff, chargeTempK, exhaustTempK } from './thermo.js';
+import { clamp, curveAt, groupRuns, interp1 } from './math.js';
 import { evaluatePoint, portKitBlend, stagedPortShare } from './point.js';
 import { wearEffects } from './damage.js';
-import { reachableKpa } from './manifold.js';
+import { bestPowerAfr, reachableKpa } from './manifold.js';
 import { inductionAtMap } from './turbo.js';
+import { veCorrections, veSamplesFromPull } from './veLearn.js';
+import { throttleBoreM, throttledMapKpa } from './throttle.js';
 import {
   GAME_LAYOUT, kpaForLoad, layoutById, loadForKpa, needsAirmass, readEcuTable, sameAxes, truthReader,
 } from './layouts.js';
 import {
-  OPEN_LOOP_KPA, REACHABLE_SLACK_KPA, SPARK_MAX_DEG, SPARK_MIN_DEG, interpolationRoomDeg,
+  IDLE_COLUMN_MAX_RPM, INTERP_SAMPLE_FRACTIONS, interpolationRoomDeg, OPEN_LOOP_KPA, REACHABLE_SLACK_KPA, SPARK_MAX_DEG, SPARK_MIN_DEG,
 } from './tables.js';
 
 /**
@@ -46,6 +49,14 @@ const BOOST_CUTTING = new Set(['knock', 'duty', 'overboost', 'lean', 'torque', '
 
 /** A cell must sit more than this far past a ceiling before it is worth reporting. */
 const ADVANCE_TOLERANCE_DEG = 1.0;
+/**
+ * How far past best-power timing a cell must sit before TUNE hints that it could come back.
+ * Torque is flat around MBT: 2 degrees past it costs about 0.1% (sweep.js's
+ * SPARK_LOSS_PER_DEG2), less than a dyno repeats to, and tuners call that "at MBT". A factory
+ * table read between its rows, at a torque-limited point, sits up to about 1.7 degrees past it.
+ * (Knock keeps the 1-degree tolerance: past that ceiling the engine is hurting itself.)
+ */
+const PAST_MBT_TOLERANCE_DEG = 2.0;
 
 /** A cell has to be leaving this much advance on the table before it is worth chasing. */
 export const UNDER_ADVANCED_DEG = 3.0;
@@ -56,22 +67,44 @@ const PULL_CEILING_RPM = 160;
 const PULL_CEILING_KPA = 4;
 
 /** Mixture error worth reporting, AFR points. Below this it is calibration noise. */
-const MIX_NOTABLE_AFR = 0.45;
+export const MIX_NOTABLE_AFR = 0.45;
+/**
+ * Under boost the band is tighter: there the target is the knock and temperature margin, not a
+ * factory's choice, and a tuner sets it to the tenth.
+ */
+export const MIX_NOTABLE_BOOST_AFR = 0.2;
+
+/** The pull log's and the mixture advisor's line for a missed mixture (constants.js). */
+export const MISSED_MIX_PCT = MIXTURE_TOLERANCE_PCT;
+
+/** Whether a pull point missed its AFR target by more than MISSED_MIX_PCT. @param {{afr: number, afrCommanded: number}} p */
+export const missesTarget = (p) => Math.abs(p.afr / p.afrCommanded - 1) * 100 > MISSED_MIX_PCT;
+/**
+ * Whether a pull point ran without nitrous spraying. A spraying point is the nitrous's to judge
+ * (TUNE → NITROUS: its retard and its fuel, which the pull log names): the base tables meet
+ * neither its charge nor its spark there, so they are never graded against it.
+ * @param {{nitrousLbMin?: number}} p
+ */
+export const offSpray = (p) => !((p.nitrousLbMin ?? 0) > 0);
 
 /**
- * The mixtures a production calibration actually runs at full load, as lambda. A cell
- * inside the band is a calibration choice, not an error: factories run richer than best
- * power for exhaust and catalyst temperature, and direct-injection engines built for
- * emissions run stoichiometric (factoryFuel.js has the sources).
- *
- * RICH: lambda 0.74. The richest power enrichment in 26 stock GM calibrations is the
- * LM7's 0.749 (ECU Lab Pro, gm-benchmark.json); richer than any of those is fuel no
- * factory spends.
- * LEAN, port injection: best power plus MIX_NOTABLE_AFR, as before.
- * LEAN, direct injection: stoichiometric, where stock B58 and EA888 logs sit through a
- * full-throttle pull; in-cylinder evaporation cools the charge, and the knock model
- * already charges the spark for it.
+ * Why the engine missed the mixture its AFR table asks for, in the order a tuner checks:
+ * injectors out of time, the pump, the injector flow the ECU is set for, the MAF scaling, and
+ * only then the ECU's air estimate (the VE table).
+ * @param {object[]} points the pull points where it missed
+ * @param {{injectorCc?: number, ecuInjectorCc?: number}} parts
+ * @returns {'injectors'|'pump'|'injscale'|'maf'|'ve'}
  */
+export function missedMixCause(points, { injectorCc, ecuInjectorCc } = {}) {
+  const lean = points.some((p) => p.afr > p.afrCommanded);
+  if (lean && points.some((p) => p.fuelLimited)) return 'injectors';
+  if (lean && points.some((p) => p.fuelStarved)) return 'pump';
+  if (injectorCc && ecuInjectorCc && Math.abs(injectorCc / ecuInjectorCc - 1) > 0.02) return 'injscale';
+  if (points.some((p) => p.mafFlag)) return 'maf';
+  return 've';
+}
+
+/** The mixtures a production calibration actually runs at full load, as lambda. */
 const MIX_RICHEST_LAMBDA = 0.74;
 
 /** How far past stoichiometric a direct-injection cell may read before it is lean: sensor noise. */
@@ -79,6 +112,25 @@ const MIX_DI_MARGIN_AFR = 0.15;
 
 /** Full load for the lean edge: where the factory enrichment is complete (factoryFuel.js). */
 const MIX_FULL_LOAD_KPA = 97;
+
+/**
+ * What an ALPHA-N VE table should hold: the cylinder's fill against the OUTSIDE air at a
+ * throttle opening, because that ECU reads its row by throttle and works the air out from the
+ * barometric pressure.
+ * @param {(rpm: number, mapKpa: number) => number} veAt the engine's true breathing
+ * @param {{displacementL: number, redline?: number}} derived
+ * @param {{intake?: boolean}} [mods]
+ * @returns {(rpm: number, loadKpa: number) => number} fill (%) at a throttle row, the row
+ */
+export function alphaNFillAt(veAt, derived, mods = {}) {
+  const boreM = throttleBoreM(derived);
+  const sweptM3 = derived.displacementL / 1000;
+  return (rpm, loadKpa) => {
+    const engineFlowAt = (m) => (veAt(rpm, m) / 100) * sweptM3 * ((m * 1000) / (R_AIR * 298)) * (rpm / 120);
+    const map = throttledMapKpa({ throttleFrac: clamp(loadKpa / BARO_KPA, 0, 1), engineFlowAt, boreM, coldAirIntake: !!mods.intake });
+    return (veAt(rpm, map) * map) / BARO_KPA;
+  };
+}
 
 /**
  * Compares the player's VE table against what the current hardware would flow, and
@@ -155,13 +207,15 @@ export function veRecommendations(currentVe, cfg, mods, hw, axes = GAME_LAYOUT.v
  * @param {object} input
  * @returns {number} MBT spark advance, degrees BTDC
  */
-function mbtAtRow({ rpm, mapKpa, veCell, afrCell, fuel, mods, derived, turboOn, turbine, exhaustDia = null }) {
-  const chargeK = chargeTempK(Math.max(0, (mapKpa - BARO_KPA) / PSI_TO_KPA), mods.intercooler);
+function mbtAtRow({ rpm, mapKpa, veCell, afrCell, fuel, mods, derived, turboOn, turbine, exhaustDia = null, compressorEff = null }) {
+  const boostPsi = Math.max(0, (mapKpa - BARO_KPA) / PSI_TO_KPA);
+  // Heated as the dyno heats it: at the compressor map's efficiency at this cell.
+  const chargeK = chargeTempK(boostPsi, mods.intercooler, undefined, chargeHeatEff({ boostPsi, compressorEff }));
   const airG = trappedAirGrams({
     veActual: veCell, mapKpa, chargeK,
     sweptM3: (derived.displacementL / derived.cyl) / 1000,
   });
-  const lambda = afrCell / 14.7;
+  const lambda = afrCell / GASOLINE_STOICH;
   // Burnable mass releases the heat; delivered mass evaporates. Fixed together with
   // `factoryCalibration` — a spark advisor that disagrees with the generator is the
   // false alarm #34 removed.
@@ -174,44 +228,124 @@ function mbtAtRow({ rpm, mapKpa, veCell, afrCell, fuel, mods, derived, turboOn, 
       turboOn, turbine: turboOn ? turbine : null,
       exhaustFlowKgS: ((airG + burnedFuelG) / 1000) * derived.cyl * (rpm / 2) / 60,
       exhaustK: exhaustTempK({ chargeIndex: chargeIndexOf(veCell, mapKpa), lambda }),
-      pipeDiaIn: exhaustDia ?? 3.0, mods,
+      pipeDiaIn: exhaustDia ?? STOCK_EXHAUST_DIA_IN, mods,
     }),
   });
 }
 
 /**
- * One cell of mixture advice. Scaling the commanded value by target/delivered prices the
- * error the engine actually made, and lands on the number to type in (rule 3 below).
+ * Past what the engine reads, no row may ask for more than the row under it. A tuner fills the
+ * boost rows past the highest the engine has run with that row's numbers or safer, so a boost
+ * spike, a hotter day or a wastegate that sticks meets less spark and a richer mixture, never
+ * more: the knock limit only falls with pressure.
+ * @param {number[][]} table
+ * @param {{load: number[], rpm: number[]}} axes
+ * @param {(rpm: number) => number} reachAt kPa the engine reaches at a speed
+ * @param {(axes: any, rpm: number, load: number) => number} kpaOf
+ * @param {'spark'|'afr'} kind
+ * @param {(ri: number, ci: number) => number|null} [advised] what this advice already tells a
+ * @param {(ri: number, ci: number) => boolean} [judged] whether a pull judged the cell: the row
+ *   bracketing the reach is left to the pull only where the pull read it in force
+ * @returns {object[]} cells, each with its suggestion: the row under it
  */
-function fuelCell(ri, ci, rpm, rowKpa, rowLoad, bracketOnly, current, pt, direct) {
-  // Inside the band the factory's choice stands; outside it, the advice is best power.
-  // The lean edge ramps with load, as the factory's enrichment does: stoichiometric is a
-  // calibration's own choice where open loop begins (OPEN_LOOP_KPA), and the best-power
-  // edge applies from full load (MIX_FULL_LOAD_KPA) up.
-  const full = clamp((rowKpa - OPEN_LOOP_KPA) / (MIX_FULL_LOAD_KPA - OPEN_LOOP_KPA), 0, 1);
-  const portEdge = pt.bestAfr + MIX_NOTABLE_AFR;
-  const partEdge = 14.7 + MIX_NOTABLE_AFR;
-  // Direct injection: stoichiometric stays a factory choice at full load too.
-  const leanEdge = Math.max(portEdge, partEdge * (1 - full) + portEdge * full, direct ? 14.7 + MIX_DI_MARGIN_AFR : 0);
-  const outside = pt.afr > leanEdge || pt.afr < 14.7 * MIX_RICHEST_LAMBDA;
-  const suggestedAfr = outside ? current * (pt.bestAfr / Math.max(0.1, pt.afr)) : current;
+function beyondReachCells(table, axes, reachAt, kpaOf, kind, advised = () => null, judged = () => true) {
+  const out = [];
+  const tol = kind === 'spark' ? ADVANCE_TOLERANCE_DEG : 0.05;
+  axes.rpm.forEach((rpm, ci) => {
+    // Not the idle and cranking columns: boost at idle speed is not a state the engine holds,
+    // and a factory table writes those cells for the start (a B58's 500 RPM column keeps
+    // 14.7:1 in its boost rows), as the rest of the advice already leaves them.
+    if (rpm <= IDLE_COLUMN_MAX_RPM) return;
+    const reach = reachAt(rpm);
+    let cap = null;
+    let bracketSeen = false;
+    for (let ri = axes.load.length - 1; ri >= 0; ri -= 1) {
+      const rowKpa = kpaOf(axes, rpm, axes.load[ri]);
+      const v = table[ri][ci];
+      const to = advised(ri, ci);
+      // Spark follows the number the row under it is advised (once a pull has judged it), not
+      // whatever a half-finished edit left there: else a beyond-reach cell chased each edit.
+      const settled = to != null && (kind === 'spark' || to < v) ? to : v;
+      if (rowKpa <= reach + 1e-6) { cap = settled; continue; }
+      // The first row past the reach brackets it: the ECU blends it in, the pull ran it, and
+      // the pull judges it (a richer boost row can take more spark than the row under it).
+      // Only the rows past that one are never read.
+      // A pull that crossed it too thinly to judge it (a turbo LS1's 200 kPa cells, read for a
+      // tenth of the blend at 155 kPa, kept 26 degrees over a 150 kPa row knocked down to 16) has
+      // not: it follows the row under it like the rest.
+      if (!bracketSeen) {
+        bracketSeen = true;
+        if (judged(ri, ci) || cap === null) { cap = settled; continue; }
+      }
+      if (cap === null) continue;
+      if (v - cap > tol) {
+        out.push({
+          ri, ci, rpm, map: Number(rowKpa.toFixed(1)), current: v, suggested: cap, delta: Number((cap - v).toFixed(1)),
+          knockCeiling: cap, mbt: cap, beyondReach: true, outside: true,
+        });
+      } else cap = v;
+    }
+  });
+  return out;
+}
+
+/**
+ * The AFR targets (on petrol's scale) that are safe and make power at a manifold pressure: the
+ * band TUNE judges a FUEL cell's target against and the pull log names a target outside of.
+ * Inside it the factory's or the player's choice stands.
+ * @param {{kpa: number, bestAfr: number, boostPsi: number, direct: boolean}} input `direct`:
+ *   a direct-injected engine, which may run stoichiometric at full load as its factory does
+ * @returns {{lean: number, rich: number}} the leanest and richest target in the band
+ */
+export function mixtureBand({ kpa, bestAfr, boostPsi, direct }) {
+  const full = clamp((kpa - OPEN_LOOP_KPA) / (MIX_FULL_LOAD_KPA - OPEN_LOOP_KPA), 0, 1);
+  // The tight boost band is for port injection: a direct-injected engine's factory runs leaner
+  // under boost on its in-cylinder cooling (the B58's own sourced table sits there), and the
+  // advisor must not call a factory calibration wrong.
+  const portEdge = bestAfr + (boostPsi > 1 && !direct ? MIX_NOTABLE_BOOST_AFR : MIX_NOTABLE_AFR);
+  const partEdge = GASOLINE_STOICH + MIX_NOTABLE_AFR;
   return {
+    lean: Math.max(portEdge, partEdge * (1 - full) + portEdge * full, direct ? GASOLINE_STOICH + MIX_DI_MARGIN_AFR : 0),
+    rich: GASOLINE_STOICH * MIX_RICHEST_LAMBDA,
+  };
+}
+
+/**
+ * One cell of mixture advice: THE TARGET ITSELF, against what is safe and makes power at the
+ * cell's own pressure. The FUEL table is the mixture the player chooses; whether the engine
+ * gets it is the fuelling's job (the VE table, the MAF, the injectors), which the pull log and
+ * TUNE → AIRFLOW answer. A target is never moved to make up for a fuelling error: a tuner fixes
+ * the air until the wideband reads the target, then the target can be changed and the mixture
+ * follows (HP Academy, "AFR target vs VE table"). Scaling the cell by target/delivered did the
+ * opposite: an LS1 with a turbo, running rich on its old VE table, was told to type 13.8 and
+ * 14.3 into its boost cells, then 12.6 once the VE was corrected.
+ */
+function fuelCell(ri, ci, rpm, rowKpa, rowLoad, bracketOnly, current, pt, direct, pastRedline = false) {
+  // Judged at the row's own pressure (a bracket row, which only the advice reads, where it is
+  // in force).
+  const kpa = bracketOnly && Number.isFinite(pt.map) ? pt.map : rowKpa;
+  const v = afrTargetVerdict({ value: current, kpa, direct });
+  // A column past the redline is never run at its own speed: the engine meets it only blended
+  // into the speeds below, and its target is carried on from them.
+  const outside = !pastRedline && v.outside;
+  const suggestedAfr = outside ? v.suggested : current;
+  // A direct-injected cell judged as a port one would be: where a pull finds no spark the table
+  // holds is safe, the factory's stoichiometric choice no longer stands (calibrationAdvice).
+  const port = direct ? afrTargetVerdict({ value: current, kpa, direct: false }) : null;
+  return {
+    ...(port ? { portOutside: !pastRedline && port.outside, portSuggested: port.suggested } : {}),
     ri, ci, rpm, map: Number(rowKpa.toFixed(1)), load: rowLoad, bracketOnly, current,
     suggested: Number(suggestedAfr.toFixed(1)),
     delta: Number((suggestedAfr - current).toFixed(1)),
-    delivered: Number(pt.afr.toFixed(2)), target: Number(pt.bestAfr.toFixed(2)), outside,
-    duty: pt.duty,
+    delivered: Number(pt.afr.toFixed(2)), target: Number(v.bestAfr.toFixed(2)), outside,
+    lean: outside && v.lean,
+    duty: pt.duty, fuelLimited: !!pt.fuelLimited,
   };
 }
 
 /**
  * The most manifold pressure the engine reaches at each speed, kPa absolute: the cells the
  * advisor judges, and the ones TUNE draws as reached.
- *
- * Highest manifold pressure the boost controller is even asking for at this speed. A
- * supercharger asks for nothing (its boost is what the pulley makes), so there the pull's
- * own boost is the answer.
- *
  * @param {object} input
  * @param {boolean} input.turboOn
  * @param {number[]} input.boostCurve
@@ -220,19 +354,9 @@ function fuelCell(ri, ci, rpm, rowKpa, rowLoad, bracketOnly, current, pt, direct
  */
 export function reachKpaAt({ turboOn, boostCurve, pull = null }) {
   const blowerPull = !turboOn && pull?.points?.some((p) => p.blowerRpm != null) ? pull.points : null;
-  // A turbo makes the boost its turbine can drive, which at low speed is far below the
-  // target: judged by the target alone, a 175 kPa cell at 750 RPM, which this engine never
-  // reaches, was flagged as past the knock limit. With a pull to read, a turbo reaches what
-  // the pull measured at that speed (never more than the target), except where a protection
-  // cut the boost there: that shortfall is the tune's, and the cell is reached once it is fixed.
-  // The pull's logged target is the target AFTER the protection's cut, so where a
-  // protection cut the boost the cell is judged at the BUILD curve's own target. Read from
-  // the pull's target, a knock cut hid the cells whose knock tripped it: they were never
-  // advised, kept their knock, and the cut came back on every pull. Below the pull's first
-  // speed nothing was measured, so there the boost it achieved at that speed stands.
-  // Read by the manifold pressure the pull logged, not atmospheric plus its boost: the intake
-  // duct and the throttle lose a few kPa before the manifold (throttle.js), and reach counted
-  // from the barometer put a turbo engine into the gap toward a row it never ran.
+  // A turbo makes the boost its turbine can drive, which at low speed is far below the target:
+  // judged by the target alone, a 175 kPa cell at 750 RPM, which this engine never reaches,
+  // was flagged as past the knock limit.
   const turboPull = turboOn && pull?.points?.length
     ? pull.points.map((p) => ({
       rpm: p.rpm,
@@ -296,7 +420,9 @@ export function reachKpaAt({ turboOn, boostCurve, pull = null }) {
  *   at a speed and pressure (crank degrees), when the engine has an intake phaser,
  *   `health`, the engine's condition (absent: as new), and `portKit`, a fitted port kit's
  *   staging on the calibration the pull runs (`portStagingOf` in ecu/calibration.js)
- * @returns {{spark: object[], fuelAdv: object[], overAdvanced: object[], underAdvanced: object[], pastMbt: object[], wrongMix: object[]}}
+ * @returns {{spark: object[], fuelAdv: object[], overAdvanced: object[], underAdvanced: object[], pastMbt: object[], wrongMix: object[], missedMix?: object[], spray?: {knockDeg: number, mixOffPct: number, rich: boolean}|null}}
+ *   `spray`: what a pull met while its nitrous sprayed (worst knock past the limit, worst
+ *   mixture miss), which the base tables are not judged on
  */
 export function calibrationAdvice({
   ve, veTruth, timing, afr, layout = null, derived, fuel, mods, turboOn, boostCurve,
@@ -320,7 +446,6 @@ export function calibrationAdvice({
   const airmass = needsAirmass(tables.layout);
   const read = (name, rpm, kpa) => readEcuTable(tables, name, rpm, { mapKpa: kpa, airmassG: airmass ? ecuAirAt(rpm, kpa) : 0 });
   const kpaOf = (axes, rpm, v) => kpaForLoad(axes, rpm, v, ecuAirAt);
-  const loadOf = (axes, rpm, kpa) => loadForKpa(axes, rpm, kpa, ecuAirAt);
 
   const reachAt = reachKpaAt({ turboOn, boostCurve, pull });
   // What the engine reaches at full throttle: the bound a suggestion to add timing must
@@ -350,11 +475,30 @@ export function calibrationAdvice({
     if (!turboOn || blowerPull) return plain;
     const key = `${hardwareKey}|${curveAt(boostCurve, rpm)}|${rpm}:${mapKpa.toFixed(2)}`;
     if (!inductionMemo.has(key)) {
-      const s = inductionAtMap({
-        rpm, mapKpa, boostTargetPsi: curveAt(boostCurve, rpm), turbine, compressor,
-        veAt: (m) => (truthAt ? truthAt(rpm, m) : read('ve', rpm, m)), derived,
+      const solve = (m) => inductionAtMap({
+        rpm, mapKpa: m, boostTargetPsi: curveAt(boostCurve, rpm), turbine, compressor,
+        veAt: (x) => (truthAt ? truthAt(rpm, x) : read('ve', rpm, x)), derived,
         intakeKAt: (b) => chargeTempK(b, mods.intercooler),
+        intakeKAtEff: (b, eta) => chargeTempK(b, mods.intercooler, undefined, eta),
       });
+      let s = solve(mapKpa);
+      // PAST WHAT THE TURBO MAKES HERE, at the edge it does make. A row graded a little past the
+      // boost target (the reach's slack), or a boost row this speed cannot spool to, has no
+      // solve of its own; graded with no backpressure and no compressor heat at all, a 10.3:1
+      // V6's 200 kPa row at 22 psi read a knock limit of -33 degrees where the pull at that
+      // pressure met +4.7, and every cell of the row was called past what spark can fix. As the
+      // factory generator does (presets.js chargeKAt), the cell takes the backpressure and the
+      // compressor's efficiency at the highest pressure the turbo reaches at this speed, at its
+      // own pressure.
+      if (!s && mapKpa > BARO_KPA) {
+        let lo = BARO_KPA; let hi = mapKpa; let edge = null;
+        for (let i = 0; i < 14 && hi - lo > 0.25; i += 1) {
+          const mid = (lo + hi) / 2;
+          const at = solve(mid);
+          if (at) { edge = at; lo = mid; } else hi = mid;
+        }
+        if (edge) s = { ...edge, boostPsi: plain.boostPsi };
+      }
       inductionMemo.set(key, s ?? plain);
     }
     return inductionMemo.get(key);
@@ -404,27 +548,82 @@ export function calibrationAdvice({
    * pressure — so this is the ceiling that genuinely applies BETWEEN two rows.
    */
   const ceilingMemo = new Map();
-  // THE LOG OVERRULES HERE TOO. Where the pull ran at this speed and pressure, the knock
-  // limit it met is the one that holds: the static point below prices a part-spooled turbo's
-  // charge and backpressure as an estimate, and capped a 130 kPa row at 0.8 degrees where
-  // the pull at 133 kPa measured 8.2.
+  // The log overrules here too. Where the pull ran at this speed and pressure, the knock limit
+  // it met is the one that holds: the static point below prices a part-spooled turbo's charge
+  // and backpressure as an estimate, and capped a 130 kPa row at 0.8 degrees where the pull at
+  // 133 kPa measured 8.2.
   const pullNear = (rpm, mapKpa) => {
     let best = null; let bestD = Infinity;
     for (const p of pull?.points ?? []) {
-      if (Math.abs(p.rpm - rpm) > PULL_CEILING_RPM || Math.abs(p.map - mapKpa) > PULL_CEILING_KPA || !Number.isFinite(p.threshold)) continue;
+      if (!offSpray(p) || Math.abs(p.rpm - rpm) > PULL_CEILING_RPM || Math.abs(p.map - mapKpa) > PULL_CEILING_KPA || !Number.isFinite(p.threshold)) continue;
       const d = Math.abs(p.rpm - rpm) / PULL_CEILING_RPM + Math.abs(p.map - mapKpa) / PULL_CEILING_KPA;
       if (d < bestD) { bestD = d; best = p; }
     }
     return best;
   };
-  const ceilingAt = (rpm, mapKpa) => pullNear(rpm, mapKpa)?.threshold ?? staticCeilingAt(rpm, mapKpa);
+  // The knock limit once the fuelling hits the AFR table, where it misses it (point.js
+  // `thresholdAtTable`): the lower of the two, as the pull's own cells are graded, so a cell no
+  // pull ran is not numbered on a mixture the next Correct VE from logs takes away. A B58 with
+  // its VE running rich was told 11° in an unrun 145 kPa cell, then 8° once the VE was fixed.
+  const limitOf = (q) => Math.min(q.threshold, q.thresholdAtTable ?? Infinity);
+  // The knock limit once the fuelling is right: on the VE that Correct VE from logs would write
+  // (the table scaled by the mixture delivered over the one asked for), not on the engine's
+  // true VE. The two differ by design where something else carries part of the charge: a port
+  // kit's fuel takes the room of air on boost, so its factory VE table sits under the true VE
+  // with the mixture on target, and judged on the true VE a factory-tuned B58 with a kit was
+  // marked past the knock limit at 190 kPa on a pull that never knocked. Infinity where the
+  // mixture is already on target.
+  /** @param {any} at the point on the table as it is @param {number} ve the table's VE there @param {(v: number) => any} evalAt */
+  const fuelledRightAt = (at, ve, evalAt) => {
+    const ratio = at?.afr && at?.afrCommanded ? at.afr / at.afrCommanded : 1;
+    return Math.abs(ratio - 1) > 1e-3 ? evalAt(ve * ratio).threshold : Infinity;
+  };
+  // The log CORRECTS the model; it does not stand in for it at another pressure.
+  // A little above what a full-throttle pull measured at this speed, its own limit carried up at
+  // the rate the pull log carries it between rows (COEFF.KNOCK_CARRY_MAX_KPA): the static point
+  // there extrapolates the turbo off its own state. Null where it does not apply.
+  const fullPull = !!pull && (pull.loadKpa ?? 0) >= FULL_THROTTLE_LOAD_KPA;
+  const carriedAt = (rpm, mapKpa) => {
+    if (!fullPull) return null;
+    let top = null;
+    for (const q of pull.points) {
+      if (!offSpray(q) || !Number.isFinite(q.threshold) || Math.abs(q.rpm - rpm) > PULL_CEILING_RPM) continue;
+      if (!top || Math.abs(q.rpm - rpm) < Math.abs(top.rpm - rpm)) top = q;
+    }
+    if (!top || mapKpa <= top.map + PULL_CEILING_KPA || mapKpa > top.map + COEFF.KNOCK_CARRY_MAX_KPA) return null;
+    return limitOf(top) - (COEFF.KNOCK_LIMIT_DEG_PER_PSI / PSI_TO_KPA) * (mapKpa - top.map);
+  };
+  // Knock only gets likelier with pressure, so a limit the pull measured at this speed at a
+  // higher pressure is a floor under the limit here. Without it, a gap between two rows the pull
+  // ran above was graded on the static estimate alone: an EA888 with 4 psi more boost, its
+  // 220 kPa cell clean on the pull at 1,450 RPM, had the 205 kPa cell under it called past
+  // anything spark could fix (-10°) on a pull with no knock at all.
+  const measuredAbove = (rpm, mapKpa) => {
+    let near = null;
+    for (const q of pull?.points ?? []) {
+      if (!offSpray(q) || !Number.isFinite(q.threshold) || q.map < mapKpa || Math.abs(q.rpm - rpm) > PULL_CEILING_RPM) continue;
+      if (!near || Math.abs(q.rpm - rpm) < Math.abs(near.rpm - rpm)) near = q;
+    }
+    return near ? limitOf(near) : -Infinity;
+  };
+  const ceilingAt = (rpm, mapKpa) => {
+    const carried = carriedAt(rpm, mapKpa);
+    if (carried != null) return carried;
+    const p = pullNear(rpm, mapKpa);
+    const est = staticCeilingAt(rpm, mapKpa);
+    return Math.max(p ? est + (limitOf(p) - staticCeilingAt(p.rpm, p.map)) : est, measuredAbove(rpm, mapKpa));
+  };
   const staticCeilingAt = (rpm, mapKpa) => {
     const key = `${rpm}|${mapKpa}`;
     if (!ceilingMemo.has(key)) {
-      ceilingMemo.set(key, pointAt(rpm, mapKpa, {
-        veVal: read('ve', rpm, mapKpa), veActualVal: truthAt ? truthAt(rpm, mapKpa) : undefined,
-        timingVal: read('timing', rpm, mapKpa), afrCommanded: read('afr', rpm, mapKpa),
-      }).threshold);
+      const veVal = read('ve', rpm, mapKpa); const truth = truthAt ? truthAt(rpm, mapKpa) : undefined;
+      const args = { timingVal: read('timing', rpm, mapKpa), afrCommanded: read('afr', rpm, mapKpa) };
+      const here = pointAt(rpm, mapKpa, { veVal, veActualVal: truth, ...args });
+      // And on the mixture it will get once the fuelling is right, where that is lower: read off
+      // the VE table alone, this estimate moved with every Correct VE from logs although nothing
+      // the pull measured had (a B58's unrun 145 kPa cell went from 11° to 8°).
+      const right = fuelledRightAt(here, veVal, (v) => pointAt(rpm, mapKpa, { veVal: v, veActualVal: truth, ...args }));
+      ceilingMemo.set(key, Math.min(limitOf(here), right));
     }
     return ceilingMemo.get(key);
   };
@@ -457,8 +656,12 @@ export function calibrationAdvice({
   const T = L.timing;
   const A = L.afr;
   const sharedAxes = sameAxes(T, A);
+  // A column the engine never reads: the one before it already sits at or past the redline, so
+  // the ECU's interpolation never reaches it.
+  const pastLimit = (axes, ci) => ci > 0 && derived.redline != null && axes.rpm[ci - 1] >= derived.redline;
   T.load.forEach((rowLoad, ri) => {
     T.rpm.forEach((rpm, ci) => {
+      if (pastLimit(T, ci)) return;
       const gradeKpa = gradingKpa(T, ri, rpm);
       if (gradeKpa === null) return;                                          // rule 2
       // A row graded away from its own pressure is ADVISED but never CLASSIFIED.
@@ -495,17 +698,27 @@ export function calibrationAdvice({
       //
       // This is the rule `factoryCalibration` writes its spark table with. The two must
       // not disagree about what good timing looks like.
-      const knockCeiling = pt.threshold - KNOCK_SAFETY_DEG;
+      // On the mixture the cell will get once the fuelling is right, where that is lower: a VE
+      // table a little rich (inside the mixture tolerance, so no `thresholdAtTable`) raised the
+      // limit, and Correct VE from logs then took 3° back off a number already typed.
+      const fuelledRight = fuelledRightAt(pt, veCell, (v) => pointAt(rpm, gradeKpa, {
+        veVal: v, veActualVal: truthAt ? truthAt(rpm, rowKpa) : undefined, timingVal: timing[ri][ci], afrCommanded: afrCell,
+      }));
+      // A little above what a full-throttle pull measured at this speed, that limit carried up.
+      const carried = carriedAt(rpm, gradeKpa);
+      const limitHere = carried ?? Math.min(limitOf(pt), fuelledRight);
+      const knockCeiling = limitHere - KNOCK_SAFETY_DEG;
       const mbt = mbtAtRow({
         rpm, mapKpa: gradeKpa, veCell, afrCell,
         fuel, mods, derived: kitAt(rpm, gradeKpa, pt.fuelCmd / 1000)?.derived ?? derived, turboOn, turbine, exhaustDia,
+        compressorEff: inductionAt(rpm, gradeKpa).compressorEff ?? null,
       });
       const safeTiming = clamp(
-        Math.round(Math.min(knockCeiling, mbt) * 2) / 2, SPARK_MIN_DEG, SPARK_MAX_DEG,
+        Math.floor(Math.min(knockCeiling, mbt) + 1e-9), SPARK_MIN_DEG, SPARK_MAX_DEG,
       );
       spark.push({
-        ri, ci, rpm, map: Number(rowKpa.toFixed(1)), load: rowLoad, bracketOnly, current: timing[ri][ci], suggested: safeTiming,
-        delta: Number((safeTiming - timing[ri][ci]).toFixed(1)), knocking: pt.knock,
+        ri, ci, rpm, map: Number(rowKpa.toFixed(1)), gradeKpa, load: rowLoad, bracketOnly, current: timing[ri][ci], suggested: safeTiming,
+        delta: Number((safeTiming - timing[ri][ci]).toFixed(1)), knocking: carried != null ? timing[ri][ci] > carried : pt.knock,
         mbt: Number(mbt.toFixed(1)), knockCeiling: Number(knockCeiling.toFixed(1)),
         // Which ceiling bound the suggestion. Useful on its own, but it says nothing
         // about danger: a cell can sit past both with MBT the lower of the two. Danger
@@ -513,7 +726,11 @@ export function calibrationAdvice({
         knockLimited: knockCeiling < mbt,
         unbounded: pt.threshold >= COEFF.KNOCK_UNBOUNDED_BTDC,
       });
-      if (sharedAxes) fuelAdv.push(fuelCell(ri, ci, rpm, rowKpa, rowLoad, bracketOnly, afr[ri][ci], pt, derived.injection === 'direct'));
+      // Direct injection may run stoichiometric under load, as the factory does, but not
+      // where no spark the table holds is safe: there a factory map enriches to raise the
+      // knock limit, and the pull log's knock entry asks for it. One story either way.
+      const noSafeSpark = knockCeiling < SPARK_MIN_DEG;
+      if (sharedAxes) fuelAdv.push(fuelCell(ri, ci, rpm, rowKpa, rowLoad, bracketOnly, afr[ri][ci], pt, derived.injection === 'direct' && !noSafeSpark, derived.redline != null && rpm > derived.redline));
     });
   });
 
@@ -522,6 +739,7 @@ export function calibrationAdvice({
   if (!sharedAxes) {
     A.load.forEach((rowLoad, ri) => {
       A.rpm.forEach((rpm, ci) => {
+        if (pastLimit(A, ci)) return;
         const gradeKpa = gradingKpa(A, ri, rpm);
         if (gradeKpa === null) return;
         const rowKpa = kpaOf(A, rpm, rowLoad);
@@ -529,7 +747,7 @@ export function calibrationAdvice({
           veVal: read('ve', rpm, rowKpa), veActualVal: truthAt ? truthAt(rpm, rowKpa) : undefined,
           timingVal: read('timing', rpm, rowKpa), afrCommanded: afr[ri][ci],
         });
-        fuelAdv.push(fuelCell(ri, ci, rpm, rowKpa, rowLoad, Math.abs(gradeKpa - rowKpa) > 1e-6, afr[ri][ci], pt, derived.injection === 'direct'));
+        fuelAdv.push(fuelCell(ri, ci, rpm, rowKpa, rowLoad, Math.abs(gradeKpa - rowKpa) > 1e-6, afr[ri][ci], pt, derived.injection === 'direct', derived.redline != null && rpm > derived.redline));
       });
     });
   }
@@ -564,80 +782,143 @@ export function calibrationAdvice({
   // cross. And it only ever lowers a suggestion, so it cannot make advice more aggressive
   // than the per-row grading already allows.
   const byCell = new Map(spark.map((c) => [`${c.ri}|${c.ci}`, c]));
-  T.rpm.forEach((rpm, ci) => {
-    for (let ri = 1; ri < T.load.length; ri++) {
-      const here = byCell.get(`${ri}|${ci}`);
-      const above = byCell.get(`${ri - 1}|${ci}`);        // one row up = more pressure
-      if (!here) continue;
-      // Only the part of the gap the engine actually enters needs protecting. At 14 psi
-      // the manifold peaks at 197.9 kPa, so a 150-200 gap is entered 96% of the way;
-      // at no boost it is not entered at all and the pair is left alone.
-      const hereKpa = kpaOf(T, rpm, T.load[ri]);
-      const span = kpaOf(T, rpm, T.load[ri - 1]) - hereKpa;
-      const entered = clamp((reachAt(rpm) - hereKpa) / span, 0, 1);
-      // ADVICE IS FOR EVERY PULL, NOT ONLY THIS ONE. The verdicts follow the pull the player
-      // made, but a suggestion to ADD timing is typed into a cell the engine also reads on
-      // its way into boost, at full throttle, on the boost curve it is built with. Advised
-      // only from a part-throttle pull, a turbo engine's 100 kPa row was raised into knock,
-      // the next full-throttle pull lowered it, the next part-throttle pull raised it again:
-      // following the advice never ended. So the room it may suggest is the room across
-      // everything the build reaches, the row above read as the table holds it if no pull
-      // graded it.
-      const enteredAdvice = Math.max(entered, clamp((reachFull(rpm) - hereKpa) / span, 0, 1));
-      const aboveNow = above ? above.current : timing[ri - 1]?.[ci];
-      const aboveAdvised = above ? above.suggested : aboveNow;
-      // Neither row can knock at any advance it could carry, so nothing between them can:
-      // knock only gets likelier with pressure.
-      if (enteredAdvice <= 0 || aboveAdvised == null || (here.unbounded && (above?.unbounded ?? false))) continue;
-      const room = interpolationRoomDeg({
-        ceilingAtFrac: (f) => ceilingAt(rpm, hereKpa + f * span) - KNOCK_SAFETY_DEG,
-        aboveDeg: aboveAdvised,
-        entered: enteredAdvice,
-      });
-      if (room < here.suggested) {
-        here.suggested = clamp(Math.floor(room * 2) / 2, SPARK_MIN_DEG, SPARK_MAX_DEG);
-        here.delta = Number((here.suggested - here.current).toFixed(1));
-        here.interpolationLimited = true;
+  // The cells a full-throttle pull ran with a real share, off the spray: where both cells of a
+  // gap are among them, the pull's own limits judge the gap (judgeAgainstPull).
+  const pulledCells = new Set();
+  const sparkCellsOf = pullSparkCells({ tables, derived, mods });
+  for (const p of pull?.points ?? []) {
+    if (!offSpray(p)) continue;
+    for (const c of sparkCellsOf(p)) if (c.w >= IN_FORCE_WEIGHT) pulledCells.add(`${c.ri}|${c.ci}`);
+  }
+  /**
+   * The cap between rows, given which cells the player will type (those listed past the knock
+   * limit): run on the model's listing first, then again on the pull's own (judgeAgainstPull).
+   * @param {(c: any) => boolean} typed
+   */
+  const capRows = (typed) => {
+    T.rpm.forEach((rpm, ci) => {
+      for (let ri = 1; ri < T.load.length; ri++) {
+        const here = byCell.get(`${ri}|${ci}`);
+        const above = byCell.get(`${ri - 1}|${ci}`);        // one row up = more pressure
+        if (!here) continue;
+        // Only the part of the gap the engine actually enters needs protecting. At 14 psi
+        // the manifold peaks at 197.9 kPa, so a 150-200 gap is entered 96% of the way;
+        // at no boost it is not entered at all and the pair is left alone.
+        const hereKpa = kpaOf(T, rpm, T.load[ri]);
+        const span = kpaOf(T, rpm, T.load[ri - 1]) - hereKpa;
+        const entered = clamp((reachAt(rpm) - hereKpa) / span, 0, 1);
+        // Advice is for every pull, not only this one. The verdicts follow the pull the player
+        // made, but a suggestion to ADD timing is typed into a cell the engine also reads on its
+        // way into boost, at full throttle, on the boost curve it is built with.
+        const enteredAdvice = Math.max(entered, clamp((reachFull(rpm) - hereKpa) / span, 0, 1));
+        // Where a full-throttle pull ran through this gap, its own knock limits at the pressures it
+        // met judge both cells (judgeAgainstPull): estimated here first, against the row above's
+        // unjudged number, the excess fell on the lower row at 1/(1 - f) and a 100 kPa cell was
+        // told 3 deg under a 150 kPa cell told 7. Only the part of the gap the pull did not enter
+        // is protected here.
+        if (pull && entered > 0 && enteredAdvice <= entered + 1e-6 && pulledCells.has(`${ri}|${ci}`) && pulledCells.has(`${ri - 1}|${ci}`)) continue;
+        const aboveNow = above ? above.current : timing[ri - 1]?.[ci];
+        // The row above as the player will have it: its number where it is listed to change, its
+        // current one (or the room it is offered, if more) where it is not. Counted on a number
+        // nothing tells the player to type, a B58's 145 kPa cell was told 11°, then 8° once the
+        // 160 kPa row above it, which the pull itself judged safe, was seen to stay at 11.
+        const aboveAdvised = above ? (typed(above) ? above.suggested : Math.max(above.current, above.suggested)) : aboveNow;
+        // Neither row can knock at any advance it could carry, so nothing between them can:
+        // knock only gets likelier with pressure.
+        if (enteredAdvice <= 0 || aboveAdvised == null || (here.unbounded && (above?.unbounded ?? false))) continue;
+        const room = interpolationRoomDeg({
+          ceilingAtFrac: (f) => ceilingAt(rpm, hereKpa + f * span) - KNOCK_SAFETY_DEG,
+          aboveDeg: aboveAdvised,
+          entered: enteredAdvice,
+        });
+        if (room < here.suggested) {
+          here.suggested = clamp(Math.floor(room + 1e-9), SPARK_MIN_DEG, SPARK_MAX_DEG);
+          here.delta = Number((here.suggested - here.current).toFixed(1));
+          here.interpolationLimited = true;
+        }
+        // ADVICE AND JUDGEMENT NEED DIFFERENT BASELINES, and sharing one was quietly
+        // wrong. `room` above is what this cell may carry once the row ABOVE has taken
+        // the advice — correct for a suggestion, because that is the table the player
+        // would end up with. It is not what the CURRENT table does: the ECU blends the
+        // numbers actually in the table, so judging this cell against a neighbour's
+        // suggested value condemns it for advance it never meets.
+        //
+        // Judged against the table as it stands, therefore. When the two agree the
+        // result is identical; where they differ, this is the one that answers "is the
+        // table in front of me dangerous".
+        // Judged only over what this pull entered, between rows it graded.
+        if (entered <= 0 || !above) continue;
+        // Except where the row above is itself past its own knock limit, so listed to come down:
+        // then the blend is unsafe because of that row, and its own advice fixes it.
+        const judged = interpolationRoomDeg({
+          ceilingAtFrac: (f) => ceilingAt(rpm, hereKpa + f * span) - KNOCK_SAFETY_DEG,
+          aboveDeg: typed(above) && above.suggested < above.current ? above.suggested : above.current,
+          entered,
+        });
+        // A cell the interpolated path binds is DANGEROUS, not merely sub-optimal: the
+        // sweep really does detonate at that pressure. So the ceiling this cell is judged
+        // against comes down with the advice, and the existing classification below reports
+        // it in the same breath as any other cell past the knock limit. Reporting the
+        // suggestion without the warning would leave the player with a number to type and
+        // no reason for it.
+        here.knockCeiling = Math.min(here.knockCeiling, Number(judged.toFixed(1)));
+        // And the suggestion may not carry more than the judgement allows. Following the advice
+        // means typing in the flagged cells; a neighbour that is not flagged keeps its number.
+        if (judged < here.suggested) {
+          here.suggested = clamp(Math.floor(judged + 1e-9), SPARK_MIN_DEG, SPARK_MAX_DEG);
+          here.delta = Number((here.suggested - here.current).toFixed(1));
+          here.interpolationLimited = true;
+        }
       }
-      // ADVICE AND JUDGEMENT NEED DIFFERENT BASELINES, and sharing one was quietly
-      // wrong. `room` above is what this cell may carry once the row ABOVE has taken
-      // the advice — correct for a suggestion, because that is the table the player
-      // would end up with. It is not what the CURRENT table does: the ECU blends the
-      // numbers actually in the table, so judging this cell against a neighbour's
-      // suggested value condemns it for advance it never meets.
-      //
-      // Judged against the table as it stands, therefore. When the two agree the
-      // result is identical; where they differ, this is the one that answers "is the
-      // table in front of me dangerous".
-      // Judged only over what this pull entered, between rows it graded.
-      if (entered <= 0 || !above) continue;
-      const judged = interpolationRoomDeg({
-        ceilingAtFrac: (f) => ceilingAt(rpm, hereKpa + f * span) - KNOCK_SAFETY_DEG,
-        aboveDeg: above.current,
-        entered,
-      });
-      // A cell the interpolated path binds is DANGEROUS, not merely sub-optimal: the
-      // sweep really does detonate at that pressure. So the ceiling this cell is judged
-      // against comes down with the advice, and the existing classification below reports
-      // it in the same breath as any other cell past the knock limit. Reporting the
-      // suggestion without the warning would leave the player with a number to type and
-      // no reason for it.
-      here.knockCeiling = Math.min(here.knockCeiling, Number(judged.toFixed(1)));
-      // AND THE SUGGESTION MAY NOT CARRY MORE THAN THE JUDGEMENT ALLOWS. Following the
-      // advice means typing in the flagged cells; a neighbour that is not flagged keeps
-      // its number. Suggesting against the neighbour's SUGGESTED value alone handed a
-      // flagged cell a number past its own judged ceiling (70 kPa at 2,500 RPM on a turbo
-      // V6: ceiling 24.8, suggestion 27.5), so it stayed flagged however many times the
-      // player typed it, and once suggested MORE advance for a cell it had just called
-      // over-advanced. The lower of the two is safe whether or not the neighbour is
-      // changed too, and it only ever lowers a suggestion.
-      if (judged < here.suggested) {
-        here.suggested = clamp(Math.floor(judged * 2) / 2, SPARK_MIN_DEG, SPARK_MAX_DEG);
-        here.delta = Number((here.suggested - here.current).toFixed(1));
-        here.interpolationLimited = true;
-      }
-    }
+    });
+  };
+  /** The model's own listing (as `overAdvanced` below, without a pull). */
+  const modelListed = (c) => !c.bracketOnly && c.current - c.knockCeiling > ADVANCE_TOLERANCE_DEG && c.suggested < c.current;
+  // Each cell as graded before any cap between rows, so a second cap (on the pull's listing,
+  // below) starts from the same place rather than from numbers the first one already lowered.
+  const uncapped = spark.map((c) => ({ ...c }));
+  const restoreUncapped = () => spark.forEach((c, i) => {
+    for (const k of Object.keys(c)) if (!(k in uncapped[i])) delete c[k];
+    Object.assign(c, uncapped[i]);
   });
+  capRows(modelListed);
+  const modelSet = new Set(spark.filter(modelListed));
+
+  // AND BETWEEN ITS COLUMNS. The ECU blends the two speed columns either side too, and the
+  // knock limit is not a straight line in speed either: at low speed and high boost it bends
+  // under the line between two columns' limits (a 10.3:1 V6 at 22 psi on 91, read past its
+  // 200 kPa row: -4.6 deg at 1500 RPM, 1.8 at 2500, -3 at 1900, where the blend gave -2.6).
+  // With a pull, its own points between the columns judge it (judgeAgainstPull); without
+  // one, the blend of the two suggestions is held under the limit at three speeds across the
+  // gap, at the pressure each cell is graded at (past the top row, the boost the engine reaches
+  // there, which that row carries), the excess out of the cell carrying more. Only
+  // the full-load rows, where knock is, and not the idle columns.
+  if (!pull) {
+    T.load.forEach((_, ri) => {
+      for (let ci = 1; ci < T.rpm.length; ci += 1) {
+        const L = byCell.get(`${ri}|${ci - 1}`); const Rc = byCell.get(`${ri}|${ci}`);
+        if (!L || !Rc || (L.unbounded && Rc.unbounded)) continue;
+        if (L.rpm <= IDLE_COLUMN_MAX_RPM || L.map < OPEN_LOOP_KPA || Rc.map < OPEN_LOOP_KPA) continue;
+        // Advice only: a cell's own ceiling is graded at its own row, and a neighbour's current
+        // number says nothing about it (judged against a stock table's 30 degrees, every cell of a
+        // boosted row came out "past what spark can fix").
+        for (const f of INTERP_SAMPLE_FRACTIONS) {
+          const room = ceilingAt(L.rpm + f * (Rc.rpm - L.rpm), L.gradeKpa + f * (Rc.gradeKpa - L.gradeKpa)) - KNOCK_SAFETY_DEG;
+          if ((1 - f) * L.suggested + f * Rc.suggested <= room + 1e-9) continue;
+          // The excess out of the cell carrying more, as far as the table's least spark.
+          const hi = Rc.suggested >= L.suggested ? Rc : L; const w = hi === Rc ? f : 1 - f; const lo = hi === Rc ? L : Rc;
+          const cap = (room - (1 - w) * lo.suggested) / w;
+          hi.suggested = clamp(Math.floor(cap + 1e-9), SPARK_MIN_DEG, SPARK_MAX_DEG);
+          hi.delta = Number((hi.suggested - hi.current).toFixed(1));
+          hi.interpolationLimited = true;
+          if (cap < SPARK_MIN_DEG) {
+            const capLo = (room - w * SPARK_MIN_DEG) / (1 - w);
+            if (capLo < lo.suggested) { lo.suggested = clamp(Math.floor(capLo + 1e-9), SPARK_MIN_DEG, SPARK_MAX_DEG); lo.delta = Number((lo.suggested - lo.current).toFixed(1)); lo.interpolationLimited = true; }
+          }
+        }
+      }
+    });
+  }
 
   // Past the knock limit is a damage risk. Past MBT is only wasted effort. Reporting
   // them as one category would either cry wolf about a safe cruise cell or say nothing
@@ -648,31 +929,6 @@ export function calibrationAdvice({
   // ceiling and the table is over both: the cell is detonating, but the lower ceiling
   // is MBT. Classifying on ceiling order would file that cell as merely wasteful and
   // tell the player it is safe, which is the one thing this report must never do.
-  // THE LOG OVERRULES THE BREAKPOINTS. A table is judged at its breakpoints, but the engine
-  // runs between them: with few columns and a cam whose breathing bulges between two of them,
-  // both cells can read right while the pull runs lean or rich in the middle. Where the log
-  // says so, the cells either side of that speed, on the row nearest its pressure, are flagged
-  // with the correction the log itself implies.
-  if (pull) {
-    for (const p of pull.points) {
-      if (!(p.leanRisk || p.richRisk) || p.fuelLimited || !(p.afr > 0)) continue;
-      const near = fuelAdv.filter((c) => !c.bracketOnly && c.map >= OPEN_LOOP_KPA);
-      if (!near.length) continue;
-      const row = near.reduce((a, c) => (Math.abs(c.map - p.map) < Math.abs(a.map - p.map) ? c : a)).map;
-      const cols = near.filter((c) => c.map === row);
-      const below = cols.filter((c) => c.rpm <= p.rpm).reduce((a, c) => (!a || c.rpm > a.rpm ? c : a), null);
-      const above = cols.filter((c) => c.rpm >= p.rpm).reduce((a, c) => (!a || c.rpm < a.rpm ? c : a), null);
-      for (const c of [below, above]) {
-        if (!c) continue;
-        const asked = Number((c.current * (c.target / p.afr)).toFixed(1));
-        if (!c.outside || Math.abs(asked - c.current) > Math.abs(c.delta)) {
-          c.outside = true;
-          c.suggested = asked;
-          c.delta = Number((asked - c.current).toFixed(1));
-        }
-      }
-    }
-  }
   // Not in the idle columns: full throttle at idle speed is a tip-in, not a point any pull
   // holds (a dyno sweep starts at 1500 RPM), and a factory fuel strategy is written for the
   // idle there, not for power (GM's LQ4 asks 13.5:1 at 800 RPM, 100 kPa).
@@ -682,8 +938,86 @@ export function calibrationAdvice({
   // the fix is less boost here (a real ECU's low-speed boost or torque limit), or better
   // fuel. Marked so the report can say so instead of asking for retard it cannot give.
   for (const c of spark) c.sparkCannotFix = c.knockCeiling < SPARK_MIN_DEG;
+  // Above the reach, nothing more than the row under it (beyondReachCells): only with boost.
+  const boosted = turboOn || blowerPull;
+  const advisedIn = (list) => { const m = new Map(list.map((c) => [`${c.ri}|${c.ci}`, c.suggested])); return (ri, ci) => m.get(`${ri}|${ci}`) ?? null; };
+  // Capped only at advice the player is shown: a cell past its own knock limit, a mixture on
+  // the list.
+  const beyondSpark = boosted && !pull ? beyondReachCells(timing, T, reachFull, kpaOf, 'spark', advisedIn(spark.filter((c) => c.current - c.knockCeiling > ADVANCE_TOLERANCE_DEG))) : [];
+  const beyondAfr = boosted ? beyondReachCells(afr, A, reachFull, kpaOf, 'afr', advisedIn(wrongMix)) : [];
+  /** A list with the beyond-reach cells it does not already hold, the safer number kept. */
+  const withBeyond = (list, extra) => {
+    const out = [...list];
+    for (const c of extra) {
+      const have = out.find((x) => x.ri === c.ri && x.ci === c.ci);
+      if (!have) out.push(c);
+      else if (c.suggested < have.suggested) { have.suggested = c.suggested; have.delta = Number((c.suggested - have.current).toFixed(1)); }
+    }
+    return out;
+  };
   if (pull) {
-    return { spark, fuelAdv, wrongMix, ...judgeAgainstPull(spark, pull, (p) => cellsInForce(p.rpm, loadOf(T, p.rpm, p.map), T)) };
+    // Where the engine did not get what the table asks for: the table is not the fault there,
+    // so the mixture advice says so and points at the fuelling (the same test as the log).
+    // Where Correct VE from logs has done all it can (`veSettledFor`), the miss is marked
+    // settled: the pull log calls it as close as the breakpoints allow, and FUEL says the same.
+    const veDone = veSettledFor(pull.points, L.ve, derived.redline ?? Infinity, offSpray);
+    // The speed the pull reached, as simulateSweep reckons it: where the engine failed, or its
+    // redline (the last logged point can sit under a redline off the 100 RPM step).
+    const reached = pull.failure?.rpm ?? derived.redline ?? pull.points.at(-1)?.rpm ?? 0;
+    const floatFrom = floatMissFromRpm(derived, L.ve, reached);
+    /** @type {any[]} */
+    const missedMix = pull.points
+      .filter((p) => p.map >= OPEN_LOOP_KPA && offSpray(p) && missesTarget(p));
+    // A cause for each run of neighbouring speeds missed the same way, as the log groups
+    // them: one build can miss lean on its VE table low down and on its injectors up top.
+    const runs = groupRuns(pull.points, (p) => missedMix.includes(p) && p.afr > p.afrCommanded)
+      .concat(groupRuns(pull.points, (p) => missedMix.includes(p) && p.afr <= p.afrCommanded));
+    const causeOf = new Map();
+    for (const run of runs) {
+      const c = missedMixCause(run, { injectorCc, ecuInjectorCc });
+      // Where the air estimate is the cause, past `floatFrom` the valve float is the reason it is.
+      for (const p of run) causeOf.set(p, c === 've' && p.rpm >= floatFrom ? 'float' : c);
+    }
+    // `settled`: Correct VE from logs has done all it can there; the log says so and so does FUEL.
+    for (const p of missedMix.splice(0)) missedMix.push({ rpm: p.rpm, map: p.map, afr: p.afr, afrCommanded: p.afrCommanded, lean: p.afr > p.afrCommanded, cause: causeOf.get(p) ?? 've', ...(causeOf.get(p) === 'float' ? { floatRpm: Math.round(derived.floatRpm) } : {}), ...(causeOf.get(p) === 've' && veDone.settled(p) ? { settled: true } : {}) });
+    // What the pull met while the nitrous sprayed, which the base tables are never judged on:
+    // TUNE → NITROUS answers it (its retard and its fuel), and TUNE's pages say so.
+    const sprayPts = pull.points.filter((p) => !offSpray(p));
+    const spray = sprayPts.length ? {
+      knockDeg: Number(Math.max(0, ...sprayPts.map((p) => -(p.margin ?? 0))).toFixed(1)),
+      mixOffPct: Number(Math.max(0, ...sprayPts.filter((p) => p.afrCommanded > 0).map((p) => Math.abs(p.afr / p.afrCommanded - 1) * 100)).toFixed(0)),
+      rich: sprayPts.some((p) => p.afr < p.afrCommanded * (1 - MISSED_MIX_PCT / 100)),
+    } : null;
+    const inForce = pullSparkCells({ tables, derived, mods });
+    let judged = judgeAgainstPull(spark, pull, inForce, timing);
+    // The pull's listing is the one the player types from: where it differs from the model's (as
+    // the first cap saw it, before the pull rewrote any cell), the cap between rows is run again
+    // from the uncapped grading on the pull's listing, so no number is offered on a neighbour that
+    // stays put, nor held down by one the pull judged safe.
+    const listed = new Set(judged.overAdvanced.map((c) => `${c.ri}|${c.ci}`));
+    const key = (c) => `${c.ri}|${c.ci}`;
+    if (spark.some((c) => modelSet.has(c) !== listed.has(key(c)))) {
+      restoreUncapped();
+      capRows((c) => listed.has(key(c)));
+      for (const c of spark) c.sparkCannotFix = c.knockCeiling < SPARK_MIN_DEG;
+      judged = judgeAgainstPull(spark, pull, inForce, timing);
+    }
+    // Where the pull found no spark the table holds is safe, a direct-injected engine enriches as
+    // a port one does, as the pull log's knock entry asks: its target is judged the same way.
+    if (sharedAxes && derived.injection === 'direct') {
+      for (const c of spark) {
+        if (!c.sparkCannotFix || !c.knockingOnPull) continue;
+        const f = fuelAdv.find((x) => x.ri === c.ri && x.ci === c.ci);
+        if (!f || f.outside || !f.portOutside) continue;
+        f.outside = true; f.suggested = f.portSuggested; f.delta = Number((f.suggested - f.current).toFixed(1));
+        if (!f.bracketOnly && f.map >= OPEN_LOOP_KPA && f.rpm > IDLE_COLUMN_MAX_RPM && !wrongMix.includes(f)) wrongMix.push(f);
+      }
+    }
+    // The rows past the reach follow the judged numbers of the rows under them.
+    const ranCell = new Set(spark.filter((c) => c.pullMargin != null).map((c) => `${c.ri}|${c.ci}`));
+    const judgedSpark = boosted ? beyondReachCells(timing, T, reachFull, kpaOf, 'spark',
+      advisedIn(spark.filter((c) => judged.overAdvanced.includes(c) || c.atSuggestion)), (ri, ci) => ranCell.has(`${ri}|${ci}`)) : [];
+    return { spark, fuelAdv, wrongMix: withBeyond(wrongMix, beyondAfr), missedMix, spray, ...judged, overAdvanced: withBeyond(judged.overAdvanced, judgedSpark) };
   }
   // Nor is a cell called dangerous for knock in the idle column where no spark the table can
   // hold would protect it: full throttle at idle speed is the same tip-in as above, not a
@@ -691,19 +1025,283 @@ export function calibrationAdvice({
   const overAdvanced = spark.filter((c) => !c.bracketOnly && c.current - c.knockCeiling > ADVANCE_TOLERANCE_DEG
     && !(c.sparkCannotFix && c.rpm <= IDLE_COLUMN_MAX_RPM));
   const pastMbt = spark.filter((c) => !c.bracketOnly && c.current - c.knockCeiling <= ADVANCE_TOLERANCE_DEG
-    && c.current - c.mbt > ADVANCE_TOLERANCE_DEG);
+    && c.current - c.mbt > PAST_MBT_TOLERANCE_DEG);
   const underAdvanced = spark.filter((c) => !c.bracketOnly && c.delta > UNDER_ADVANCED_DEG);
-  return { spark, fuelAdv, overAdvanced, underAdvanced, pastMbt, wrongMix };
+  return { spark, fuelAdv, overAdvanced: withBeyond(overAdvanced, beyondSpark), underAdvanced, pastMbt, wrongMix: withBeyond(wrongMix, beyondAfr) };
 }
 
 /** A cell carrying less than this share of a point's timing is not "in force" there. */
-const IN_FORCE_WEIGHT = 0.15;
+export const IN_FORCE_WEIGHT = 0.15;
+
+/**
+ * From where a missed mixture follows the valve float rather than the fuelling, RPM; Infinity
+ * when the pull does not reach the float speed. Read the same way by the pull log and by
+ * FUEL's advisor.
+ *
+ * Where the valves float the filling falls off a cliff, far more steeply than the VE table can
+ * bend between two breakpoints: the cells either side of the float speed can be fitted to one
+ * side of it or the other, never both, and the one below them reaches up into it too. A custom
+ * V6 floating at 6,690 RPM ran 13.4:1 at 6,700 and 12.1:1 at 6,450 against 12.5:1, through
+ * every round of Correct VE from logs: the misses from that third breakpoint up are fixed by
+ * fixing the float (the log's Hardware entry gives the spring rate), not in the table.
+ *
+ * @param {{floatRpm?: number}} derived
+ * @param {import('./layouts.js').TableAxes|null|undefined} veAxes the VE table's breakpoints
+ * @param {number} reachedRpm the speed the pull reached
+ * @returns {number}
+ */
+export function floatMissFromRpm(derived, veAxes, reachedRpm) {
+  const floatRpm = derived?.floatRpm || Infinity;
+  const cols = veAxes?.rpm ?? [];
+  if (!(floatRpm < reachedRpm) || !cols.length) return Infinity;
+  let i = 0;
+  while (i + 1 < cols.length && cols[i + 1] <= floatRpm) i += 1;
+  return cols[Math.max(0, i - 1)];
+}
+
+/**
+ * Where Correct VE from logs has done all a VE table on these breakpoints can, read the same
+ * way by the pull log and by FUEL's advisor so the two never disagree.
+ *
+ * `gridBound(p)`: every VE cell in force at the point fits the pull within half the mixture
+ * tolerance, so correcting from the log changes nothing there. `unloggedAbove(p)`: the
+ * column just above the point when it is past the redline (a pull cannot log it) and carries
+ * a real share of the blend there; the log asks for it by hand. `settled(p)`: grid-bound, and
+ * no hand edit of that column helps either: there is none, or the misses read through it pull
+ * it both ways (lean below it on one side of a bend, rich on the other), and moving it only
+ * trades one for the other. A playtest's custom I4 was told to raise its 6,500 RPM column for
+ * the lean at 6,400 and lower it for the rich at 5,900, pull after pull. The same holds for a
+ * cell the pull crossed too briefly to fit (`thinConflicted`): told by one miss to go up and by
+ * the next to come down, a custom V6's 90 kPa cell at 2,350 RPM got both in one round.
+ *
+ * @param {object[]} points a pull's points
+ * @param {import('./layouts.js').TableAxes|null|undefined} veAxes the VE table's breakpoints
+ * @param {number} endRpm the speed the pull ends at (the redline)
+ * @param {(p: object) => boolean} [counts] which missed points count (off the nitrous spray)
+ */
+export function veSettledFor(points, veAxes, endRpm, counts = () => true) {
+  const axes = veAxes ?? GAME_LAYOUT.ve;
+  const fit = axes.loadUnit === 'kPa' ? veCorrections(veSamplesFromPull(points), axes) : null;
+  const loadOf = (p) => p.ecuLoad ?? p.sensedMap ?? p.map;
+  const gridBound = (p) => {
+    if (!fit) return false;
+    const cells = cellsInForce(p.rpm, loadOf(p), axes).filter((c) => c.w >= IN_FORCE_WEIGHT);
+    return cells.length > 0 && cells.every(({ ri, ci }) => {
+      const r = fit.ratio[ri]?.[ci];
+      return r != null && Math.abs(r - 1) * 100 < MIXTURE_TOLERANCE_PCT / 2;
+    });
+  };
+  /** @returns {number|null} */
+  const unloggedAbove = (p) => {
+    const cols = axes.rpm;
+    const above = cols.find((r) => r > p.rpm);
+    const at = [...cols].reverse().find((r) => r <= p.rpm);
+    const share = above != null && at != null ? (p.rpm - at) / (above - at) : 0;
+    return above != null && above > endRpm && share >= IN_FORCE_WEIGHT ? above : null;
+  };
+  const inForce = (p) => cellsInForce(p.rpm, loadOf(p), axes).filter((c) => c.w >= IN_FORCE_WEIGHT);
+  // Which ways the misses read through each column past the redline, and through each cell the
+  // pull crossed too briefly for the fit (no ratio): lean one side and rich the other means no
+  // single hand edit of it helps.
+  const ways = new Map();
+  const thinWays = new Map();
+  const add = (m, k, sign) => { if (!m.has(k)) m.set(k, new Set()); m.get(k).add(sign); };
+  for (const q of points) {
+    if (!(q.map >= OPEN_LOOP_KPA) || !counts(q) || !missesTarget(q)) continue;
+    const sign = Math.sign(q.afr - q.afrCommanded);
+    const col = unloggedAbove(q);
+    if (col != null) add(ways, col, sign);
+    if (fit) for (const c of inForce(q)) if (fit.ratio[c.ri]?.[c.ci] == null) add(thinWays, `${c.ri}|${c.ci}`, sign);
+  }
+  /** Cells in force at the point the fit has no ratio for, and misses pull both ways. */
+  const thinConflicted = (p) => (fit ? inForce(p).filter((c) => fit.ratio[c.ri]?.[c.ci] == null && (thinWays.get(`${c.ri}|${c.ci}`)?.size ?? 0) > 1) : []);
+  const settled = (p) => {
+    // A dangerous lean is never "as close as it goes": it is the fuelling to fix, whatever the grid.
+    if (!fit || p.leanRisk) return false;
+    const cells = inForce(p);
+    const conflicted = new Set(thinConflicted(p).map((c) => `${c.ri}|${c.ci}`));
+    // Every cell is either fitted within the band or one no edit can settle.
+    const done = cells.length > 0 && cells.every(({ ri, ci }) => {
+      const r = fit.ratio[ri]?.[ci];
+      return r != null ? Math.abs(r - 1) * 100 < MIXTURE_TOLERANCE_PCT / 2 : conflicted.has(`${ri}|${ci}`);
+    });
+    if (!done) return false;
+    const col = unloggedAbove(p);
+    return col == null || (ways.get(col)?.size ?? 0) > 1;
+  };
+  return { fit, gridBound, unloggedAbove, thinConflicted, settled };
+}
+/**
+ * The share of a point a cell must carry somewhere in a pull before the pull says how much
+ * timing it has room for: the pull ran the cell's own row there, not a blend leaning on the row
+ * beside it.
+ */
+export const ROOM_SHARE = 0.5;
+
+/**
+ * The spark cells a pull's point reads, with each one's share: by the same blend the ECU reads
+ * the table with, at the point's manifold pressure, and on an air-per-cylinder axis at the air
+ * the ECU's own VE table says the cylinder holds there. The pull log and TUNE both find a
+ * point's cells with this, so they always name the same ones.
+ * @param {{tables: {ve: number[][], timing: number[][], afr: number[][], layout: any}, derived: {displacementL: number, cyl: number}, mods: {intercooler?: boolean}}} input
+ * @returns {(p: {rpm: number, map: number}) => {ri: number, ci: number, w: number}[]}
+ */
+export function pullSparkCells({ tables, derived, mods }) {
+  return pullTableCells({ tables, derived, mods }, 'timing');
+}
+
+/**
+ * The cells of one table a pull's point reads, with each one's share and its row's manifold
+ * pressure at that speed: `pullSparkCells` for any of the three tables.
+ * @param {{tables: {ve: number[][], timing: number[][], afr: number[][], layout: any}, derived: {displacementL: number, cyl: number}, mods: {intercooler?: boolean}}} input
+ * @param {'ve'|'timing'|'afr'} name
+ * @returns {(p: {rpm: number, map: number}) => {ri: number, ci: number, w: number, rowKpa: number}[]}
+ */
+export function pullTableCells({ tables, derived, mods }, name) {
+  const axes = (tables.layout ?? GAME_LAYOUT)[name];
+  const sweptM3 = (derived.displacementL / derived.cyl) / 1000;
+  const ecuAirAt = (rpm, kpa) => trappedAirGrams({
+    veActual: readEcuTable(tables, 've', rpm, { mapKpa: kpa }), mapKpa: kpa,
+    chargeK: chargeTempK(Math.max(0, (kpa - BARO_KPA) / PSI_TO_KPA), mods.intercooler), sweptM3,
+  });
+  return (p) => cellsInForce(p.rpm, loadForKpa(axes, p.rpm, p.map, ecuAirAt), axes)
+    .map((c) => ({ ...c, rowKpa: kpaForLoad(axes, axes.rpm[c.ci], axes.load[c.ri], ecuAirAt) }));
+}
+
+/**
+ * Whether a FUEL cell's target is outside the band for its row's own manifold pressure, and the
+ * number TUNE marks under it: best power at that boost (manifold.js bestPowerAfr). It reads the
+ * cell and its row and nothing else, so the pull log names exactly the targets TUNE marks.
+ * @param {{value: number, kpa: number, direct: boolean}} input `direct`: a direct-injected
+ *   engine where its stoichiometric choice stands
+ * @returns {{outside: boolean, lean: boolean, bestAfr: number, suggested: number}}
+ */
+export function afrTargetVerdict({ value, kpa, direct }) {
+  const boostPsi = Math.max(0, (kpa - BARO_KPA) / PSI_TO_KPA);
+  const bestAfr = bestPowerAfr(boostPsi);
+  const band = mixtureBand({ kpa, bestAfr, boostPsi, direct });
+  const outside = value > band.lean || value < band.rich;
+  return { outside, lean: value > band.lean, bestAfr, suggested: outside ? Number(bestAfr.toFixed(1)) : value };
+}
+
+/**
+ * What one pull measured for each spark cell it ran: THE one reading of a pull that the pull
+ * log's knock entry and TUNE's spark marks both quote, so the two cannot give different
+ * numbers for the same cell.
+ *
+ * For every point off the spray, each cell in force there (a share of at least
+ * IN_FORCE_WEIGHT) is held to the point's knock limit in the table's own terms: the limit,
+ * plus whatever the ECU did between the cells' blend and the spark it fired (temperature
+ * corrections), using the lower of the limit the point met and the one it will meet once the
+ * fuelling hits the AFR table (point.js `thresholdAtTable`). A cell's limit is the least of
+ * those, so any blend of cells each at or under its own limit stays under every point's: the
+ * cells can all be set to their numbers at once, and the number does not depend on what the
+ * cell holds now.
+ *
+ * Where a point sits between two load rows, the limit is not the same number for
+ * both: the knock limit falls with pressure (COEFF.KNOCK_LIMIT_DEG_PER_PSI), so each row's cell
+ * is held to the limit carried to its own row's pressure, the higher-boost row lower and the
+ * row under it higher, and their blend at the point is still exactly the measured limit. A
+ * tuner takes knock met while the turbo spools out of the boost row, not out of the
+ * atmospheric row the engine also runs at full throttle without boost. Where that would put a
+ * cell under the table's least spark, it is held there and the rest comes out of the others.
+ *
+ * @param {object[]} points a `simulateSweep` result's points
+ * @param {number[][]} timing the spark table the pull ran
+ * @param {(p: object) => {ri: number, ci: number, w: number}[]} inForce the spark cells a point reads
+ * @returns {Map<string, {limit: number, margin: number, knockBy: number, mbt: number, sprayMargin: number|null, worst: object|null, worstShare: number, share: number}>}
+ *   keyed `ri|ci`: `limit` the knock limit in table degrees, `margin` the least margin a point
+ *   it was in force at had, `knockBy` how far past the limit the worst of them ran (0: clean),
+ *   `mbt` best-power timing in table degrees where the cell carries the most of a point, `sprayMargin` the least margin while spraying,
+ *   `worst` the point that set the limit and `worstShare` this cell's share of it, `share` the
+ *   most of any point's timing it carried
+ */
+export function pullCellLimits(points, timing, inForce) {
+  const out = new Map();
+  const cell = (key) => {
+    if (!out.has(key)) out.set(key, { limit: Infinity, margin: Infinity, knockBy: 0, mbt: Infinity, sprayMargin: null, worst: null, worstShare: 0, share: 0 });
+    return out.get(key);
+  };
+  for (const p of points) {
+    const cells = inForce(p).filter((c) => c.w >= IN_FORCE_WEIGHT && Number.isFinite(timing?.[c.ri]?.[c.ci]));
+    if (!cells.length || !Number.isFinite(p.threshold)) continue;
+    if (!offSpray(p)) {
+      for (const { ri, ci } of cells) { const c = cell(`${ri}|${ci}`); c.sprayMargin = Math.min(c.sprayMargin ?? Infinity, p.margin); }
+      continue;
+    }
+    const all = inForce(p).filter((c) => Number.isFinite(timing?.[c.ri]?.[c.ci]));
+    const wSum = all.reduce((a, c) => a + c.w, 0);
+    const blend = all.reduce((a, c) => a + c.w * timing[c.ri][c.ci], 0) / wSum;
+    const fired = p.commandedTiming ?? p.timing;
+    const toTable = Number.isFinite(fired) ? blend - fired : 0;
+    const limitHere = Math.min(p.threshold, p.thresholdAtTable ?? Infinity) + toTable;
+    const mbtHere = Number.isFinite(p.mbtIdeal) ? p.mbtIdeal + toTable : Infinity;
+    const limitOf = splitByRow(p, all, wSum, limitHere);
+    for (const { ri, ci, w } of cells) {
+      const c = cell(`${ri}|${ci}`);
+      // Best-power timing is the cell's own: read where it carries the most of the point. (The
+      // least over every point it touches held a 6500 RPM cell to 6100 RPM's MBT, and called a
+      // stock N54's factory timing past best power.) The knock limit is the least: it is the safety.
+      if (w > c.share) { c.share = w; c.mbt = mbtHere; }
+      c.margin = Math.min(c.margin, p.margin);
+      if (p.margin < 0) c.knockBy = Math.max(c.knockBy, -p.margin);
+      const lim = limitOf(ri, ci);
+      if (lim < c.limit) { c.limit = lim; c.worst = p; c.worstShare = w; }
+    }
+  }
+  return out;
+}
+
+/**
+ * Each cell's share of a knocking point's limit, by its row's pressure (`pullCellLimits`).
+ * @param {any} p the point
+ * @param {{ri: number, ci: number, w: number, rowKpa?: number}[]} all every cell the point reads
+ * @param {number} wSum their shares' sum
+ * @param {number} limitHere the point's knock limit, in table degrees
+ * @returns {(ri: number, ci: number) => number} the limit a cell is held to
+ */
+function splitByRow(p, all, wSum, limitHere) {
+  const same = () => limitHere;
+  // Every point read between rows whose pressures it sits between (not clamped past the
+  // table's last row, where the row's own pressure is not the point's), knocking or not: the
+  // numbers then come from the measurement alone, so typing one cell does not move another's.
+  if (all.some((c) => !Number.isFinite(c.rowKpa))) return same;
+  const rows = new Set(all.map((c) => c.rowKpa));
+  const mean = all.reduce((a, c) => a + c.w * /** @type {number} */ (c.rowKpa), 0) / wSum;
+  if (rows.size < 2 || Math.abs(mean - p.map) > 1) return same;
+  const perKpa = COEFF.KNOCK_LIMIT_DEG_PER_PSI / PSI_TO_KPA;
+  // The number each cell is asked for at the slope, in the terms sparkForLimit reads.
+  const want = all.map((c) => limitHere - KNOCK_SAFETY_DEG + perKpa * (p.map - /** @type {number} */ (c.rowKpa)));
+  // Held at the table's least spark where the slope asks for less; the cells over it give up
+  // the difference, evenly, so the blend still meets the limit.
+  const floor = SPARK_MIN_DEG;
+  let free = all.map((_, i) => want[i] > floor);
+  for (let k = 0; k < all.length; k += 1) {
+    const wFree = all.reduce((a, c, i) => a + (free[i] ? c.w : 0), 0);
+    if (wFree <= 0) return same;
+    const held = all.reduce((a, c, i) => a + (free[i] ? 0 : c.w * floor), 0);
+    const freeWant = all.reduce((a, c, i) => a + (free[i] ? c.w * want[i] : 0), 0);
+    const shift = ((limitHere - KNOCK_SAFETY_DEG) * wSum - held - freeWant) / wFree;
+    const next = all.map((_, i) => free[i] && want[i] + shift > floor);
+    if (next.every((v, i) => v === free[i])) {
+      const at = new Map(all.map((c, i) => [`${c.ri}|${c.ci}`, (free[i] ? want[i] + shift : floor) + KNOCK_SAFETY_DEG]));
+      return (ri, ci) => at.get(`${ri}|${ci}`) ?? limitHere;
+    }
+    free = next;
+  }
+  return same;
+}
+
+/**
+ * The spark number a pull asks for in a cell that knocked: KNOCK_SAFETY_DEG under its limit,
+ * in whole degrees rounded down (what the table's editor steps in, never past the limit).
+ * @param {number} limit the cell's knock limit in table degrees (`pullCellLimits`)
+ * @returns {number}
+ */
+export const sparkForLimit = (limit) => clamp(Math.floor(limit - KNOCK_SAFETY_DEG + 1e-9), SPARK_MIN_DEG, SPARK_MAX_DEG);
 
 /** Below this speed an engine is cranking or stalling, not running under load. */
 const CRANKING_MAX_RPM = 600;
-
-/** Columns at or below this speed are the idle columns: run under MBT on purpose. */
-const IDLE_COLUMN_MAX_RPM = 1000;
 
 /**
  * How much each spark-table cell contributes to the timing read at one operating point,
@@ -781,50 +1379,94 @@ export function cellsNotRunBy(cells, pull, axes = GAME_LAYOUT.timing) {
  * @param {{points: object[]}} pull a full-throttle `simulateSweep` result
  * @param {(p: object) => {ri: number, ci: number, w: number}[]} inForce the spark cells one
  *   point of the pull reads, on the spark table's own breakpoints
+ * @param {number[][]} timing the spark table the pull ran
  * @returns {{overAdvanced: object[], underAdvanced: object[], pastMbt: object[]}}
  */
-function judgeAgainstPull(spark, pull, inForce) {
-  const knockBy = new Map();
-  const marginBy = new Map();
-  for (const p of pull.points) {
-    for (const { ri, ci, w } of inForce(p)) {
-      if (w < IN_FORCE_WEIGHT) continue;
-      const key = `${ri}|${ci}`;
-      marginBy.set(key, Math.min(marginBy.get(key) ?? Infinity, p.margin));
-      if (p.margin < 0) knockBy.set(key, Math.max(knockBy.get(key) ?? 0, -p.margin));
-    }
-  }
-  const halfDown = (v) => Math.floor(v * 2) / 2;
+function judgeAgainstPull(spark, pull, inForce, timing) {
+  // Each cell the pull ran, read once (pullCellLimits): the pull log's knock entry quotes the
+  // same numbers. Set instead from "this cell's value plus the blend's margin", a point's whole
+  // knock was charged to each of the cells the ECU blends there: a player who lowered one cell
+  // found it still "past the limit" by what its neighbours carried (a turbo VQ35DE's 150 kPa
+  // cell at 1500 RPM went 4.5, -2.5, -4); and a clean cell was told to add the whole margin
+  // its neighbours were also told to add, so the next pull knocked and took it back.
+  const lim = pullCellLimits(pull.points, timing, inForce);
+  /** No more advance than the spray had room for, and never a cut because of it. */
+  const sprayCap = (c, L) => (L?.sprayMargin != null ? Math.max(Math.floor(c.current + L.sprayMargin - KNOCK_SAFETY_DEG + 1e-9), c.current) : Infinity);
   const overAdvanced = [], underAdvanced = [], pastMbt = [];
   for (const c of spark) {
-    const key = `${c.ri}|${c.ci}`;
+    const L = lim.get(`${c.ri}|${c.ci}`);
     const idle = c.rpm <= IDLE_COLUMN_MAX_RPM || c.map <= 30;
-    if (marginBy.has(key)) {
-      c.pullMargin = Number(marginBy.get(key).toFixed(1));
-      // The limit shown beside the verdict is the one the pull met, so the two never
-      // disagree: a clean cell cannot show a limit under the player's own number.
-      c.knockCeiling = Number((c.current + marginBy.get(key)).toFixed(1));
-      const knock = knockBy.get(key) ?? 0;
-      if (knock > 0) {
+    if (L && Number.isFinite(L.limit)) {
+      c.pullMargin = Number(L.margin.toFixed(1));
+      c.knockCeiling = Number((L.limit - KNOCK_SAFETY_DEG).toFixed(1));
+      // Best-power timing as the pull measured it where the pull ran this row; elsewhere the
+      // cell's own row grading stands (a stock N54's 100 kPa cell at 6500 RPM is only ever met
+      // blended into boost, where best power sits far earlier).
+      const ranRow = L.share >= ROOM_SHARE;
+      if (ranRow && Number.isFinite(L.mbt)) c.mbt = Number(L.mbt.toFixed(1));
+      if (L.knockBy > 0) {
+        // Knocked where it is in force: the number is the limit's, whatever the cell holds.
         c.knockingOnPull = true;
-        c.suggested = clamp(Math.min(c.suggested, halfDown(c.current - knock - KNOCK_SAFETY_DEG)), SPARK_MIN_DEG, SPARK_MAX_DEG);
+        // Read only below its own row (boost not yet built, or cut by a protection): the number
+        // is the limit there, and the next pull at the row's own pressure checks it.
+        if (!ranRow && L.worst) c.measuredAtKpa = L.worst.map;
+        // The evidence, for the cell's own explanation: where the pull met the limit that sets
+        // this number, and how much of that point's timing this cell carried.
+        if (L.worst) c.why = { rpm: L.worst.rpm, map: L.worst.map, knockBy: Number(L.knockBy.toFixed(1)), sharePct: Math.round(L.worstShare * 100) };
+        // The number is the limit's, whatever the cell holds: typed lower, the cell is done and
+        // keeps its number. (The row under a knock between rows can be held to more than it has:
+        // also done, never a mark that adds timing.)
+        c.suggested = sparkForLimit(L.limit);
         c.delta = Number((c.suggested - c.current).toFixed(1));
-        overAdvanced.push(c);
+        // No spark the table can hold is safe there: listed whatever it holds, with what can fix
+        // it (less boost, a richer charge, a cooler one, better fuel), as the pull log says.
+        if (L.limit - KNOCK_SAFETY_DEG < SPARK_MIN_DEG) c.sparkCannotFix = true;
+        // Already at its number: what is left there is the cells it blends with, which are
+        // listed with their own. This one is done.
+        if (c.sparkCannotFix || c.current - c.suggested > ADVANCE_TOLERANCE_DEG / 2) overAdvanced.push(c);
+        else c.atSuggestion = true;
         continue;
       }
-      // Clean on the pull: never advise more advance than the pull had room for.
-      c.suggested = clamp(Math.min(c.suggested, halfDown(c.current + marginBy.get(key) - KNOCK_SAFETY_DEG)), SPARK_MIN_DEG, SPARK_MAX_DEG);
+      // Clean on the pull: a power hint only, never a cut. As much advance as the pull measured
+      // room for, at best-power timing at most; inside the margin, the cell is left as it is.
+      // Only where the pull ran the cell's own row (ROOM_SHARE): a turbo VQ35DE whose boost the
+      // injectors' duty protection held to 2.8 psi read its 150 kPa cells a third of the way up
+      // from the 100 kPa row, and was offered 24 degrees where full boost had knocked at 16.
+      const room = ranRow ? Math.min(sparkForLimit(L.limit), Math.floor(c.mbt + 1e-9), sprayCap(c, L)) : c.current;
+      c.suggested = clamp(Math.max(c.current, room), SPARK_MIN_DEG, SPARK_MAX_DEG);
+      if (c.current - c.mbt > PAST_MBT_TOLERANCE_DEG) {
+        c.suggested = clamp(Math.min(c.current, Math.floor(Math.min(c.mbt, L.limit - KNOCK_SAFETY_DEG) + 1e-9)), SPARK_MIN_DEG, SPARK_MAX_DEG);
+        c.delta = Number((c.suggested - c.current).toFixed(1));
+        pastMbt.push(c);
+        continue;
+      }
       c.delta = Number((c.suggested - c.current).toFixed(1));
-      if (c.current - c.mbt > ADVANCE_TOLERANCE_DEG) pastMbt.push(c);
-      else if (!idle && c.delta > UNDER_ADVANCED_DEG) underAdvanced.push(c);
+      if (!idle && c.delta > UNDER_ADVANCED_DEG) underAdvanced.push(c);
       continue;
+    }
+    const sprayOnly = L?.sprayMargin != null ? L : null;
+    // A cell only the spray reads keeps its row grading, capped at what the spray had room for.
+    if (sprayOnly) {
+      c.suggested = clamp(Math.min(c.suggested, sprayCap(c, sprayOnly)), SPARK_MIN_DEG, SPARK_MAX_DEG);
+      c.delta = Number((c.suggested - c.current).toFixed(1));
     }
     if (c.bracketOnly) continue;
     // As without a pull: an idle-column cell no spark the table holds would protect is a
     // full-throttle tip-in at idle speed, shown with `sparkCannotFix`, not a danger verdict.
-    if (c.current - c.knockCeiling > ADVANCE_TOLERANCE_DEG) { if (!(c.sparkCannotFix && c.rpm <= IDLE_COLUMN_MAX_RPM)) overAdvanced.push(c); }
-    else if (c.current - c.mbt > ADVANCE_TOLERANCE_DEG) pastMbt.push(c);
-    else if (!idle && c.delta > UNDER_ADVANCED_DEG) underAdvanced.push(c);
+    // Nor a full-load cell in the idle column that no pull ran: the dyno sweeps from 1500 RPM, so
+    // the log can never say a word about it, and graded against its neighbours it was charged for
+    // the boost row's advance above it (a turbo VQ35DE's 100 kPa cell at 800 RPM marked down to
+    // -1 degrees under a 150 kPa cell left at 12). Full throttle at idle speed is a tip-in.
+    if (c.current - c.knockCeiling > ADVANCE_TOLERANCE_DEG) { if (c.rpm > IDLE_COLUMN_MAX_RPM || c.map < OPEN_LOOP_KPA) overAdvanced.push(c); }
+    else if (c.current - c.mbt > PAST_MBT_TOLERANCE_DEG) pastMbt.push(c);
+    else if (c.suggested > c.current) {
+      // Room to add timing is something only a log shows: a cell this pull did not run is not
+      // offered more than it holds. Estimated at its own row instead, a turbo LS1's 100 kPa cell
+      // at 4500 RPM, lowered to 16 where a pull still spooling read it at 131 kPa and knocked,
+      // was offered 21 once the turbo spooled sooner and the next pull passed it by.
+      c.suggested = c.current;
+      c.delta = 0;
+    }
   }
   return { overAdvanced, underAdvanced, pastMbt };
 }

@@ -15,7 +15,7 @@
 import { Fuel } from 'lucide-react';
 import React from 'react';
 
-import { DEFAULT_ECU_HW, INJECTOR_OPTS, LINEAR_SCALES, FUEL_CHOICES, PUMP_OPTS, REGULATOR_OPTS, portKitOf } from '../../../sim/index.js';
+import { DEFAULT_ECU_HW, INJECTOR_OPTS, LINEAR_SCALES, FUEL_CHOICES, PUMP_OPTS, REGULATOR_OPTS, injectorLabel, portKitOf, stockInjectorIdx } from '../../../sim/index.js';
 import { Toggle } from '../../primitives/Toggle.jsx';
 import { BuildSection } from '../../components/BuildSection.jsx';
 import { SetupNote } from '../../components/ecu/SetupNote.jsx';
@@ -49,7 +49,7 @@ export function FuelSystemScreen({ active, onToggle }) {
     <BuildSection
       active={active} onClick={() => onToggle('fuel')}
       icon={Fuel} label="Fuel System"
-      sub={`${flexTank ? `Flex E${Math.round(build.ethanolPct ?? 0)}` : FUEL_CHOICES[octaneIdx].label} · ${INJECTOR_OPTS[injIdx].label}`}
+      sub={`${flexTank ? `Flex E${Math.round(build.ethanolPct ?? 0)}` : FUEL_CHOICES[octaneIdx].label} · ${injectorLabel(injIdx, stockInjectorIdx(build))}`}
     >
       <div className={styles.label}>Fuel Octane</div>
       <Seg label="Fuel Octane" options={FUEL_CHOICES.map((o) => ({ label: o.label, id: o.label }))} value={FUEL_CHOICES[octaneIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'octaneIdx', value: FUEL_CHOICES.findIndex((o) => o.label === v) })} />

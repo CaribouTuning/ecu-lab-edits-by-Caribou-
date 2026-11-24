@@ -54,7 +54,13 @@ describe('layouts', () => {
       ...eng.liveCfg(), ve: f.ve, timing: f.timing, afr: f.afr, layout, loadKpa: 100,
       ecu: { cal: eng.cal, hw: eng.hw, cond: S.dynoConditions() },
     });
-    expect(Math.abs(on.peakHp - game.peakHp) / game.peakHp).toBeLessThan(0.01);
+    // Within 1%, except where the engine computer's own breakpoints hold detail the game's 8 × 6
+    // cannot: GM's LM7 power enrichment dips to lambda 0.75 at exactly 4800 RPM (factoryFuel.js,
+    // read from its stock calibrations), on GM's 400 RPM mixture grid a cell of its own and on the
+    // game's columns (4500, 5500) blended away. With GM's own full-load spark the LM7 now peaks
+    // there, and runs 1.6% under its game-grid twin, the cost of the richer mixture.
+    const tol = id === 'lm7' ? 0.02 : 0.01;
+    expect(Math.abs(on.peakHp - game.peakHp) / game.peakHp).toBeLessThan(tol);
     expect(on.events.filter((e) => e.type === 'knock')).toEqual([]);
   });
 

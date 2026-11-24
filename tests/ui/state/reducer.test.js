@@ -586,6 +586,8 @@ describe('APPLY_PRESET — exact write surface (catches drift in both directions
       'build.engineReady', 'build.assumed',
       // The induction the engine left the factory with, for RESET ALL TO STOCK.
       'build.factoryInduction', 'build.originPresetId',
+      // and the injector it left the factory with, marked "(stock)" on screen.
+      'build.factoryInjIdx',
       // The factory car's ECU-side parts, which its factory calibration is set up for.
       'build.fuelSystem', 'build.sensorHw', 'build.wastegate', 'build.coil',
       'build.plugGapMm', 'build.ethanolPct',
@@ -1730,7 +1732,7 @@ describe('snapshot field coverage', () => {
     const snap = snapshot(makeInitialState());
     expect(Object.keys(snap.build).sort()).toEqual([
       'assumed', 'blowerId', 'blowerRatio', 'boostCurve', 'coil', 'compressorIdx', 'ecuInjectorCc',
-      'engineConfig', 'engineReady', 'ethanolPct', 'exhaustDiaIdx', 'factoryInduction', 'fuelSystem', 'injIdx', 'mafScalar',
+      'engineConfig', 'engineReady', 'ethanolPct', 'exhaustDiaIdx', 'factoryInduction', 'factoryInjIdx', 'fuelSystem', 'injIdx', 'mafScalar',
       'mods', 'nitrous', 'octaneIdx', 'originPresetId', 'plugGapMm', 'portKit', 'presetId', 'sensorHw', 'turbineCount',
       'turbineIdx', 'turboOn', 'wastegate',
     ]);
