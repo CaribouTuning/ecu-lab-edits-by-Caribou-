@@ -1,0 +1,40 @@
+/* The Physics page's engine condition (EngineCondition.jsx): three parts side by side, each
+   drawn in the combustion cutaway's palette, its life as a bar in the app's health tones. */
+
+.wrap { display: flex; flex-direction: column; gap: 10px; }
+.parts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 760px) { .parts { grid-template-columns: 1fr; } }
+
+.part { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: var(--r-sm); background: var(--panel2); border: 1px solid var(--line); min-width: 0; }
+.part[data-tone='warn'] { border-color: var(--warn); }
+.part[data-tone='danger'], .part[data-tone='failed'] { border-color: var(--danger); }
+
+.head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.name { font-size: var(--fs-sm); font-weight: 600; color: var(--ink); }
+.pct { font-size: 15px; font-weight: 700; color: var(--ok); font-variant-numeric: tabular-nums; }
+.part[data-tone='warn'] .pct { color: var(--warn); }
+.part[data-tone='danger'] .pct, .part[data-tone='failed'] .pct { color: var(--danger); }
+
+.bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--ok); }
+.part[data-tone='warn'] .bar i { background: var(--warn); }
+.part[data-tone='danger'] .bar i { background: var(--danger); }
+
+.art { display: block; width: 100%; height: auto; max-height: 170px; background: var(--bg); border-radius: var(--r-sm); }
+.ring { stroke: var(--cut-metal-dark); stroke-width: 2.5; }
+.pit { fill: var(--cut-metal-dark); }
+.blowby { stroke: var(--cut-exhaust); stroke-linecap: round; stroke-dasharray: 3 4; opacity: 0.8; fill: none; }
+.shell { fill: var(--cut-metal-dark); stroke: var(--ink3); stroke-width: 1.2; }
+.score { stroke: var(--cut-metal-dark); stroke-width: 1.4; }
+
+.effect, .failed { margin: 0; font-size: var(--fs-xs); line-height: 1.5; color: var(--ink2); }
+.effect b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.failed { color: var(--danger); }
+.failed b { color: var(--danger); }
+
+.cost { display: flex; justify-content: space-between; gap: 8px; font-size: var(--fs-xs); color: var(--ink2); border-top: 1px solid var(--line); padding-top: 6px; }
+.cost b { color: var(--warn); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cost b[data-zero] { color: var(--ok); }
+.causes { margin: 0; padding-left: 16px; font-size: var(--fs-xs); color: var(--ink2); line-height: 1.45; }
+
+.repair { margin-left: 4px; padding: 3px 10px; border: 0; border-radius: 6px; background: var(--mac-control); color: var(--ink); font-size: var(--fs-xs); font-weight: 600; cursor: pointer; }

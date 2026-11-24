@@ -1,7 +1,7 @@
 /** The chrome both modes work in: a laptop on your desk, in your shop. */
 
 import { read3d, write3d } from './render3d.js';
-import { Bell, BookOpen, ChevronLeft, ChevronRight, ClipboardList, Gauge, Home, MessageCircle, Search, Settings, Store, Wrench, X } from 'lucide-react';
+import { Atom, Bell, BookOpen, ChevronLeft, ChevronRight, ClipboardList, Gauge, Home, MessageCircle, Search, Settings, Store, Wrench, X } from 'lucide-react';
 import { useUnitSystem, writeUnits } from '../units.js';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
@@ -14,7 +14,7 @@ import { FirstRun } from './FirstRun.jsx';
 import styles from './Desk.module.css';
 
 /**
- * The desktop's apps: Tune, Learn, and in CAREER the shop's Jobs and Pops's
+ * The desktop's apps: Tune, Learn, Physics, and in CAREER the shop's Jobs and Pops's
  * messages. An engine is not built on a laptop: Build is the engine stand's, in the shop
  * (SHOP_PAGES).
  */
@@ -25,6 +25,7 @@ export const DESK_APPS = [
   // CAREER: Pops's emails and texts.
   { id: 'messages', label: 'Messages', name: 'MESSAGES' },
   { id: 'learn', label: 'Learn', name: 'LEARN' },
+  { id: 'physics', label: 'Physics', name: 'PHYSICS' },
 ];
 /** The apps only CAREER has. */
 const CAREER_ONLY = ['jobs', 'messages'];
@@ -89,7 +90,7 @@ const PAGE_SCENES = { dyno: 'dyno', live: 'stand' };
  * The apps' icons, as a phone draws them: a rounded tile in its own colour, a white glyph on
  * it (Desk.module.css colours each tile by `data-app`). The same on the laptop and the phone.
  */
-const GLYPHS = { tune: Gauge, build: Wrench, learn: BookOpen, messages: MessageCircle, search: Search, shop: Store, jobs: ClipboardList };
+const GLYPHS = { tune: Gauge, build: Wrench, learn: BookOpen, physics: Atom, messages: MessageCircle, search: Search, shop: Store, jobs: ClipboardList };
 
 /**
  * @param {{id: string, badge?: number, small?: boolean}} props
@@ -170,7 +171,7 @@ function NextStrip({ next, place }) {
  * @param {object} props
  * @param {'desktop'|'app'|'bay'|'page'} props.mode
  * @param {string|null} props.app which app or page is open
- * @param {(id: string) => void} props.onOpen open an app (tune, learn, build) or a page (dyno, live)
+ * @param {(id: string) => void} props.onOpen open an app (tune, learn, build, physics) or a page (dyno, live)
  * @param {() => void} props.onDesktop back to the desktop
  * @param {() => void} props.onBay shut the laptop and look at the shop
  * @param {string[]} [props.apps] which apps the desktop offers, by id (default: SANDBOX's four)

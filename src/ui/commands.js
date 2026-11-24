@@ -31,6 +31,7 @@ export const TAB_KEYWORDS = {
   live: ['engine', 'sound', 'rev', 'stand'],
   dyno: ['pull', 'power'],
   learn: ['guide', 'articles', 'how to tune'],
+  physics: ['model', 'equations', 'how it works'],
 };
 
 /**
@@ -71,6 +72,13 @@ export const SECTION_LABELS = {
   'dyno/log': { label: 'Pull Log', keywords: ['events'] },
   'dyno/score': { label: 'Score', keywords: ['grade'] },
   'dyno/history': { label: 'History', keywords: ['runs', 'previous'] },
+  'physics/model': { label: 'Engine overview', keywords: ['torque', 've', 'build'] },
+  'physics/intake': { label: 'Intake manifold', keywords: ['plenum', 'runner', 'ram', 'wave', 'throttle'] },
+  'physics/header': { label: 'Exhaust header', keywords: ['primaries', 'collector', 'scavenging', 'blowdown'] },
+  'physics/exhaust': { label: 'Exhaust system', keywords: ['back-pressure', 'catalytic converter', 'muffler', 'pipe'] },
+  'physics/cylinder': { label: 'One cylinder', keywords: ['piston', 'four strokes', 'p-v', 'indicator diagram'] },
+  'physics/calc': { label: 'Calculations', keywords: ['equations', 'model', 'sums'] },
+  'physics/wear': { label: 'Engine wear', keywords: ['damage', 'bearings', 'rings', 'condition'] },
 };
 
 /** DYNO sections that render nothing until there is a pull to show. */
@@ -122,8 +130,8 @@ export function pageCommands(flags, go) {
     out.push({ id: 'page:shop', label: 'SHOP', kind: 'page', keywords: ['career', 'customers', 'garage', 'jobs'], run: () => go('shop', null) });
   }
   for (const [tab, sections] of Object.entries(ROUTES)) {
-    // LEARN is SANDBOX's laptop app; CAREER's nav does not have it.
-    if (flags.career && tab === 'learn') continue;
+    // LEARN and PHYSICS are SANDBOX's laptop apps; CAREER's nav does not have them.
+    if (flags.career && (tab === 'learn' || tab === 'physics')) continue;
     const name = TAB_NAMES[tab];
     out.push({ id: `page:${tab}`, label: name, kind: 'page', keywords: TAB_KEYWORDS[tab], run: () => go(tab, null) });
     if (sections.length < 2) continue;

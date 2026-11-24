@@ -66,7 +66,7 @@ describe('CAREER in the app', () => {
     // reading apps, and not Build: an engine is built on its stand in the shop.
     fireEvent.click(screen.getByRole('button', { name: 'Desktop' }));
     expect(screen.queryByRole('button', { name: 'BUILD' })).toBeNull();
-    for (const app of ['JOB BOARD', 'MESSAGES', 'LEARN']) expect(screen.getByRole('button', { name: app })).toBeTruthy();
+    for (const app of ['JOB BOARD', 'MESSAGES', 'LEARN', 'PHYSICS']) expect(screen.getByRole('button', { name: app })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'TUNE' }));
 
     // A new shop has not trained for spark: the page is there, and locked.

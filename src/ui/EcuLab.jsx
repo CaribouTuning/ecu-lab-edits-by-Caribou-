@@ -36,6 +36,7 @@ import { MessagesApp } from './desk/MessagesApp.jsx';
 import { advanceSaga, openChapter, unreadCount } from './career/story.js';
 import { Desk } from './desk/Desk.jsx';
 import { LearnApp } from './desk/LearnApp.jsx';
+import { PhysicsApp } from './desk/PhysicsApp.jsx';
 import { engineSpecOf } from './world/models/engine.js';
 import { CareerBar } from './career/CareerBar.jsx';
 import { nextStep, spotOf } from './flow.js';
@@ -93,7 +94,7 @@ import { ResultScreen } from './screens/dyno/ResultScreen.jsx';
 import { ScoreScreen } from './screens/dyno/ScoreScreen.jsx';
 
 /** The tabs that need an engine; the laptop's reading apps do not. */
-const ENGINE_TABS = ['build', 'tune', 'live', 'dyno'];
+const ENGINE_TABS = ['build', 'tune', 'live', 'dyno', 'physics'];
 
 /** Under the test runner the advisor runs in the render that wants it, as `useSettled` does. */
 const IMMEDIATE_ADVISOR = /** @type {any} */ (import.meta).env?.MODE === 'test';
@@ -206,7 +207,7 @@ function useSettled(value, jump = '') {
 /** The apps on CAREER's laptop and phone: Tune for the car on the bay, Jobs (the shop's
  *  customers and books), Pops's messages, and the two reading apps. The dyno, the build
  *  bench and the engine stand are out in the shop. */
-const CAREER_APPS = ['tune', 'jobs', 'messages', 'learn'];
+const CAREER_APPS = ['tune', 'jobs', 'messages', 'learn', 'physics'];
 
 /**
  * @param {{startWith?: 'career'|'sandbox'|'tutorial'|null, startShown?: boolean}} [props] a way in
@@ -432,7 +433,7 @@ export function EcuLabApp({ startWith = null, startShown = false } = {}) {
   // advice it feeds take about a second of a phone's main thread, and nothing on BUILD, LIVE
   // or the laptop's other apps shows them: computed on every BUILD slider step they froze the
   // page for seconds at a time.
-  const advisorShown = (tab === 'tune' || tab === 'dyno') && build.engineReady !== false;
+  const advisorShown = (tab === 'tune' || tab === 'dyno' || tab === 'physics') && build.engineReady !== false;
   // And only after the screen that wants it has painted: opening TUNE draws TUNE at once,
   // then works the advice out, rather than holding the tap for a second first.
   const [advisorPainted, setAdvisorPainted] = useState(false);
@@ -709,6 +710,15 @@ export function EcuLabApp({ startWith = null, startShown = false } = {}) {
     turbine, compressor, ecu, layout, exhaustDia: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia,
     ...(blower ? { blower, blowerRatio } : {}), ...(nitrous ? { nitrous } : {}),
   });
+
+  // The Physics app's part-throttle pulls: the same model and calibration as the dyno,
+  // at the load its throttle asks for. Stable while the setup is, so it can cache them.
+  const physicsSweepAt = useCallback((load) => simulateSweep(sweepArgs(load, ecuBundle)), [advisorPull]); // eslint-disable-line react-hooks/exhaustive-deps -- the advisor's pull is made of the same inputs, so it changes exactly when these would
+  // One point of that pull with its closed cycle traced, for the Physics app's cylinder: the
+  // pressure the model integrated at the speed and throttle the page shows.
+  const physicsCycleAt = useCallback((load, rpm) => simulateSweep({ ...sweepArgs(load, ecuBundle), onlyRpm: rpm, traceRpm: rpm }).points[0]?.cycleTrace ?? null, [advisorPull]); // eslint-disable-line react-hooks/exhaustive-deps -- as physicsSweepAt
+  // And the breathing diagrams' inputs: the engine as built, its bolt-ons and pipe, its cams.
+  const physicsBreathing = useMemo(() => ({ engineConfig, mods, hwForVe, camAt }), [engineConfig, mods, hwForVe, camAt]);
 
   // A pull asked for before this engine's breathing is solved waits for the simulator worker
   // to solve it (sim/warm.js), the button already showing the sweep, rather than solving it
@@ -1407,9 +1417,15 @@ export function EcuLabApp({ startWith = null, startShown = false } = {}) {
           }
           return empty;
         })()}
-        {/* ---------- LEARN: the reading app ---------- */}
+        {/* ---------- LEARN and PHYSICS: the reading apps (PHYSICS reads the car on the bay) ---------- */}
         {tab === 'learn' && (
           <LearnApp shelf={route.section} onShelf={(id) => goSection('learn', id)} />
+        )}
+        {tab === 'physics' && !engineMissing && (!inCareer || career.working) && (
+          <PhysicsApp points={advisorPull.points} derived={engineDerived} fuel={fuel} spec={engineSpecOf(build, engineDerived)}
+            ve={ve} veAxes={(layout ?? layoutById(tune.layout)).ve} sweepAt={physicsSweepAt} cycleAt={physicsCycleAt}
+            breathing={physicsBreathing} health={health} onRepair={repairEngine}
+            page={route.section ?? 'model'} onPage={(id) => goSection('physics', id)} />
         )}
 
         {/* ---------- LIVE: the engine running in real time ---------- */}

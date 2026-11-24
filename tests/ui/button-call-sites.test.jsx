@@ -120,6 +120,8 @@ async function sweep() {
   // The laptop's two reading apps.
   goTo('LEARN');
   collect();
+  goTo('PHYSICS');
+  collect();
   // The live engine is its own tab on this branch, not a section of HOME.
   goTo('LIVE');
   collect();

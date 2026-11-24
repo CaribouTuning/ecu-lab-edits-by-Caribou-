@@ -28,8 +28,10 @@ export const ROUTES = {
   // it, and a tab absent from here is not addressable at all.
   live: ['engine'],
   dyno: ['result', 'data', 'log', 'score', 'history'],
-  // The laptop's reading app: LEARN's shelves.
+  // The laptop's two reading apps: LEARN's four shelves, and PHYSICS's pages, one at a time
+  // as TUNE's tables are (desk/PhysicsApp.jsx PHYSICS_PAGES; 'model' is the engine and its curves).
   learn: ['start', 'air', 'fuel', 'spark', 'pull', 'job', 'boost', 'ecu', 'engine', 'model'],
+  physics: ['model', 'intake', 'header', 'exhaust', 'cylinder', 'calc', 'wear'],
 };
 
 /**
@@ -45,6 +47,7 @@ export const TAB_NAMES = {
   live: 'LIVE',
   dyno: 'DYNO',
   learn: 'LEARN',
+  physics: 'PHYSICS',
 };
 
 /**

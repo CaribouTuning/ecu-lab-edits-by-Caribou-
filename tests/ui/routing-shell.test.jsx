@@ -106,7 +106,7 @@ describe('clicking a tab', () => {
     // Those are the heads of the ROUTES lists, and `goTab` reads them from there — so
     // this asserts the defaults did not quietly change hands during the conversion.
     launch();
-    for (const [tab, label] of [['tune', 'TUNE'], ['dyno', 'DYNO']]) {
+    for (const [tab, label] of [['tune', 'TUNE'], ['dyno', 'DYNO'], ['physics', 'PHYSICS']]) {
       goTo(label);
       expect(window.location.hash).toBe(`#/${tab}/${ROUTES[tab][0]}`);
     }
