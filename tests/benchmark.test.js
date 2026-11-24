@@ -34,13 +34,20 @@ import * as S from '../src/sim/index.js';
  * @type {Record<string, [number, number]>}
  */
 const REAL = {
-  // Best-power enrichment. NA calibrations run lambda 0.85-0.88 at full load; boosted
-  // ones richer, for charge and turbine cooling (HEYWOOD on best-power mixture; the boosted band is common practice).
-  lambdaNa: [0.84, 0.90],
-  lambdaBoosted: [0.76, 0.87],
+  // Full-load mixture at peak power, as factories ship it (src/sim/factoryFuel.js has each
+  // engine's sources). NA: GM's stock Power Enrichment runs 0.77-0.83 at peak-power speed
+  // across 26 stock P01/P59 calibrations (the LM7 0.77, the LS1 0.82; ECU Lab Pro's
+  // gm-benchmark.json), stock VQ35s about 0.82-0.85 near the top; best power itself is
+  // 0.86-0.91 (HEYWOOD). Boosted: the N54 about 0.78-0.82 under load (JB4 logging guide);
+  // the direct-injection B58 and EA888 hold lambda 1 through most of a pull and are about
+  // 0.90-0.95 by redline (Bimmerpost B58 logs; Stratified Auto on the EA888).
+  lambdaNa: [0.74, 0.91],
+  lambdaBoosted: [0.76, 1.0],
   // Fuel per horsepower-hour at peak power (ENGINELABS, GARRETT). The lower edges are
-  // the best modern engines; the model sits there — see docs/accuracy.md.
-  bsfcNa: [0.37, 0.52],
+  // the best modern engines; the model sits there — see docs/accuracy.md. The NA upper
+  // edge follows the richest stock mixture above: fuel per horsepower goes roughly as
+  // 1/lambda, so GM's 0.77 costs about 12% more than best power's 0.86 (0.50 -> 0.56).
+  bsfcNa: [0.37, 0.56],
   bsfcBoosted: [0.38, 0.62],
   // Crank horsepower per lb/min of air (GARRETT: 10-11, wider for NA and rich tunes).
   hpPerLbMin: [9.0, 12.5],
@@ -55,7 +62,9 @@ const REAL = {
   // Exhaust at peak power, °C. Production NA headers 750-900; turbine inlet up to ~950
   // (TURBINE). Lower edges allow for the model's known WOT shortfall (docs/accuracy.md).
   egtNa: [700, 900],
-  egtBoosted: [740, 980],
+  // The boosted floor moved from 740 when the N54 took its stock enrichment (lambda about
+  // 0.79, src/sim/factoryFuel.js): richer runs cooler, and it reads 739 at peak power.
+  egtBoosted: [730, 980],
   // Peak cylinder pressure, bar (PCP — a practitioners' forum, the weakest source here).
   pmaxNa: [45, 90],
   pmaxBoosted: [60, 140],
@@ -71,20 +80,13 @@ const REAL = {
 /** @param {number} v @param {[number, number]} range */
 const within = (v, [lo, hi]) => ({ v, lo, hi, ok: v >= lo && v <= hi });
 
+/**
+ * A preset's pull as the app runs it (src/sim/rig.js): the hardware's own breathing as the
+ * truth, its own exhaust, the ECU in the loop. Passing the factory VE table as the truth
+ * read the table back as if it were the engine.
+ */
 function pullFor(preset) {
-  const patch = S.applyPreset(preset);
-  const fuel = S.tankFuel(patch);
-  const derived = S.deriveEngine(patch.engineConfig);
-  return S.simulateSweep({
-    loadKpa: 100, ve: patch.ve, veTruth: patch.ve, layout: patch.layout, timing: patch.timing, afr: patch.afr,
-    turboOn: patch.turboOn, boostCurve: patch.boostCurve,
-    octaneBonus: fuel.bonus,
-    octaneLabel: fuel.label,
-    fuel,
-    injectorCc: S.INJECTOR_OPTS[patch.injIdx].cc, ecuInjectorCc: patch.ecuInjectorCc,
-    injectorLabel: S.INJECTOR_OPTS[patch.injIdx].label, mods: patch.mods, mafScalar: patch.mafScalar,
-    derived, turbine: S.presetTurbine(preset), compressor: S.presetCompressor(preset),
-  });
+  return S.buildRig({ preset: preset.id }).pull(100);
 }
 
 const PULLS = S.ENGINE_PRESETS.map((preset) => {
@@ -158,19 +160,23 @@ describe('boost pays like real boost', () => {
   const derived = S.deriveEngine(cfg);
   const fuel = S.OCTANE_OPTS.find((o) => o.label === '93');
 
-  /** Best safe power at 5500 RPM and a given boost. */
-  function powerAt(psi, intercooler) {
+  /**
+   * Best safe power at 5500 RPM and a given boost, on a turbine sized for it: the Large,
+   * which passes this 3.5 L engine's exhaust at 20 psi with the drive pressure about 1.4x
+   * the boost. The rule of thumb below assumes a turbo that suits the engine.
+   */
+  function powerAt(psi, intercooler, turbineIdx = 2) {
     const turbo = psi > 0;
     const mods = { ...S.DEFAULT_MODS, intercooler, turboFitted: turbo };
     const ve = S.computeHardwareVE(cfg, mods, {
-      turboOn: turbo, turbine: turbo ? S.TURBINE_OPTS[1] : null, exhaustDia: 3.0, fuel, peakBoostPsi: psi,
+      turboOn: turbo, turbine: turbo ? S.TURBINE_OPTS[turbineIdx] : null, exhaustDia: 3.0, fuel, peakBoostPsi: psi,
     });
     const map = S.BARO_KPA + psi * S.PSI_TO_KPA;
     const at = (timingVal) => S.evaluatePoint({
       rpm: 5500, mapKpa: map, boostPsi: psi, veVal: S.interp2(ve, 5500, map), timingVal,
       afrCommanded: turbo ? 11.8 : 12.8, fuel, mods, mafScalar: 1, mafErrorBase: 1,
       injectorCc: 1000, ecuInjectorCc: 1000, derived, compressor: S.COMPRESSOR_OPTS[2],
-      turbine: turbo ? S.TURBINE_OPTS[1] : null,
+      turbine: turbo ? S.TURBINE_OPTS[turbineIdx] : null,
     });
     const probe = at(10);
     return at(Math.min(probe.threshold - 1, probe.mbtIdeal));
@@ -187,6 +193,15 @@ describe('boost pays like real boost', () => {
     expect(powerAt(10, true).hp / na).toBeLessThan(1.75);
     expect(powerAt(20, true).hp / na).toBeGreaterThan(1.7);
     expect(powerAt(20, true).hp / na).toBeLessThan(2.35);
+  });
+
+  it('pays less through a turbine too small for the flow, which holds the exhaust back', () => {
+    // The Medium on this engine at 20 psi: the same boost, less power, and the drive
+    // pressure well above the boost, as an undersized turbo runs.
+    const small = powerAt(20, true, 1);
+    const sized = powerAt(20, true, 2);
+    expect(small.hp).toBeLessThan(sized.hp);
+    expect(small.emp / small.map).toBeGreaterThan(sized.emp / sized.map + 0.15);
   });
 
   it('makes less at the same boost without an intercooler, and knocks sooner', () => {

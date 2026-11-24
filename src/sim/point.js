@@ -13,7 +13,7 @@
 import { DRIVETRAIN_EFF, INJ_DEADTIME_MS, KELVIN_OFFSET } from './constants.js';
 import { COEFF } from './coefficients.js';
 import {
-  cycleInputsFor, cylinderVolumeM3, knockLimitedSpark, mbtFromBurn, paToBar, runCycle, trappedAirGrams,
+  cycleInputsFor, cylinderVolumeM3, knockLimitedSpark, lateSparkQuench, mbtFromBurn, paToBar, runCycle, trappedAirGrams,
 } from './cycle.js';
 import { ECU_COEFF } from './ecu/ecuCoefficients.js';
 import { exhaustManifoldKpa, rubbingFmepPa, pumpingFmepPa } from './friction.js';
@@ -26,9 +26,12 @@ import { chargeTempK, exhaustTempK } from './thermo.js';
 
 /**
  * @typedef {object} PointInput
+ * @property {boolean} [traceCycle] return the closed cycle's pressure trace as `cycleTrace`
  * @property {number} rpm engine speed
  * @property {number} mapKpa manifold absolute pressure, kPa
  * @property {number} boostPsi gauge boost, psi
+ * @property {number|null} [exhaustDia] the exhaust pipe fitted, inches: what the exhaust
+ *   system after the ports costs in back-pressure (friction.js `exhaustManifoldKpa`)
  * @property {number} veVal the ECU's VE table value at this point, percent — what the
  *   ECU BELIEVES the cylinder filling is. Drives the fuel calculation.
  * @property {number} [veActualVal] TRUE cylinder filling at this point, percent — what
@@ -68,6 +71,9 @@ import { chargeTempK, exhaustTempK } from './thermo.js';
  *   limit exactly — and the result is identical to before the ECU layer existed.
  * @property {{intakeAdvDeg?: number, exhaustRetDeg?: number}|null} [cam] cam phaser positions
  *   to solve the cycle at when there is no `ecu` context; the ECU's own win when there is
+ * @property {{ringLeakFrac: number, cylLossFrac: number, deadFrac: number}|null} [wear] what the
+ *   engine's worn parts do (damage.js `wearEffects`): charge lost past the rings and a
+ *   burnt valve, and cylinders that no longer fire
  */
 
 /**
@@ -135,8 +141,9 @@ export function evaluatePoint(input) {
   const {
     rpm, mapKpa, boostPsi, veVal, veActualVal, timingVal, afrCommanded,
     fuel, mods, mafScalar, mafErrorBase,
-    injectorCc, ecuInjectorCc, derived, compressor, turbine = null,
-    empKpa: empOverride, wastegateRelief = 0, ecu: E = null, blower = null, nitrous = null, cam = null,
+    injectorCc, ecuInjectorCc, derived, compressor, turbine = null, traceCycle = false,
+    empKpa: empOverride, wastegateRelief = 0, ecu: E = null, blower = null, nitrous = null, cam = null, wear = null,
+    exhaustDia = null,
   } = input;
   // A port kit on a direct-injected engine carries this share of the fuel; the direct
   // injectors carry the rest. Zero without a kit, and zero off boost on factory staging.
@@ -274,6 +281,7 @@ export function evaluatePoint(input) {
   const empKpa = empOverride ?? exhaustManifoldKpa({
     turboOn: !!mods.turboFitted, exhaustFlowKgS, exhaustK: turbineInletK,
     turbine, wastegateRelief, ...(E?.env?.baroKpa ? { baroKpa: E.env.baroKpa } : {}),
+    pipeDiaIn: exhaustDia ?? 3.0, mods,
   });
 
   // --- THE CYCLE ITSELF. Everything from here is read off an integrated pressure
@@ -292,9 +300,14 @@ export function evaluatePoint(input) {
       ...(evapInCylinder != null ? { evapInCylinder } : {}),
     }
     : derived;
+  // A worn engine burns less than it breathes: part of every cylinder's charge, air and
+  // fuel alike, leaves past worn rings before it burns. The breather returns it to the
+  // intake, so the MAF and the wideband above see the mixture as it was metered.
+  const held = wear ? 1 - wear.ringLeakFrac : 1;
   const cyc = cycleInputsFor({
     rpm, mapKpa, empKpa, intakeK: cylChargeK,
-    airChargeG, burnedFuelG, fuelMassG: totalFuelG, lambda: lambdaActual, fuel,
+    airChargeG: airChargeG * held, burnedFuelG: burnedFuelG * held, fuelMassG: totalFuelG * held,
+    lambda: lambdaActual, fuel,
     ...(n2o ? { n2oG: n2o.n2oG, kitFuelG: n2o.fuelG } : {}),
     // Cam phasers move intake valve close, and with it effective compression: the ECU's
     // own phaser position when it is running, else the position the caller states (the
@@ -310,14 +323,20 @@ export function evaluatePoint(input) {
   const knockPull = E?.knock ? ecuKnockRetard(margin, E.knock) : (margin < 0 ? Math.min(COEFF.MAX_KNOCK_RETARD, -margin) : 0);
   const usedTiming = timingVal - knockPull;
 
-  const cycle = runCycle({ ...cyc, sparkBtdc: usedTiming });
+  const cycle = runCycle({ ...cyc, sparkBtdc: usedTiming, trace: traceCycle });
   const mbtIdeal = mbtFromBurn(cyc.burnDeg, cyc.flameDevDeg);
   // Events that did not burn: the ECU cutting them (limiter, protection, traction) and
   // the cylinder failing to light (a spark too weak for the pressure, or a mixture
   // outside what a flame will cross). Both cost the whole event's work.
   const ign = E ? ignitionState({ cyc, usedTiming, lambda: lambdaActual, E }) : null;
   const deadFrac = ign ? clamp((E.cutFrac ?? 0) + (1 - (E.cutFrac ?? 0)) * ign.misfireFrac, 0, 1) : 0;
-  const imepPa = cycle.imepGrossPa * (1 - deadFrac);
+  // A spark well after TDC leaves part of every firing charge unburned at EVO: it does no
+  // work, and it lights in the manifold (below).
+  const quench = lateSparkQuench(usedTiming);
+  // A burnt valve's cylinder: the work its leak costs, or all of it once it stops firing.
+  const wearDead = wear?.deadFrac ?? 0;
+  const cylLoss = wear?.cylLossFrac ?? 0;
+  const imepPa = cycle.imepGrossPa * (1 - quench) * (cylLoss > 0 ? (1 - deadFrac) * (1 - cylLoss) : 1 - deadFrac);
 
   // The engine must pay for its own rubbing friction, and for the gas-exchange loop.
   // Pumping is exhaust manifold pressure minus intake: a loss when throttled, and
@@ -327,6 +346,7 @@ export function evaluatePoint(input) {
   // A supercharger is driven off the crank, so the power it takes to compress the air is
   // a load on the engine like friction: FMEP = power ÷ (displacement × firing rate).
   const blowerPa = blower ? blower.driveW / ((derived.displacementL / 1000) * (rpm / 120)) : 0;
+  // Wiped bearings rub: friction like any other.
   const fmepPa = rubbingPa + pmepPa + blowerPa;
   const bmepPa = imepPa - fmepPa;
 
@@ -353,6 +373,11 @@ export function evaluatePoint(input) {
   // and the gas leaves hotter. `exhaustTempK` survives only where an answer is needed
   // BEFORE the cycle can run — the turbine backpressure the cycle itself depends on.
   let egtC = cycle.exhaustK - KELVIN_OFFSET;
+  // Charge still burning when the exhaust valve opens finishes in the manifold: its heat
+  // reaches the turbine and the cats, not the piston (the cycle stopped counting work at
+  // EVO). Nil near MBT; the whole point of an overrun burble, spark set far after TDC.
+  const lateBurn = (1 - deadFrac) * clamp((cycle.unburnedAtEvoFrac ?? 0) + quench, 0, 1);
+  if (lateBurn > 0.002) egtC += lateBurn * ECU_COEFF.AFTERBURN_RISE_C;
   if (ign && deadFrac > 0) {
     // A fuel-cut event pumps cool air through; a spark-cut or misfired one dumps a full
     // charge of fuel and air into a hot manifold, where it lights — the limiter's pops.
@@ -399,7 +424,11 @@ export function evaluatePoint(input) {
     lambdaExhaust: Number((E.cutType === 'fuel' && (E.cutFrac ?? 0) > 0
       ? lambdaActual / Math.max(0.05, 1 - E.cutFrac) : lambdaActual).toFixed(3)),
     knockUnheard: Number(Math.max(0, -(margin + knockPull)).toFixed(2)),
-    misfire: Number((ign.misfireFrac * 100).toFixed(1)),
+    // Share of each event's charge lighting in the exhaust: fuel the flame had not reached
+    // at EVO, and whole unlit charges (a spark cut, a misfire) dumped into a hot manifold.
+    // What a listener hears as pops, and what heats the turbine and the cats.
+    afterfire: Number(clamp(lateBurn + (ign ? (E.cutType === 'spark' ? (E.cutFrac ?? 0) : 0) + (1 - (E.cutFrac ?? 0)) * ign.misfireFrac : 0), 0, 1).toFixed(3)),
+    misfire: Number(((wearDead > 0 ? 1 - (1 - ign.misfireFrac) * (1 - wearDead) : ign.misfireFrac) * 100).toFixed(1)),
     cutPct: Number(((E.cutFrac ?? 0) * 100).toFixed(0)),
     sparkKvNeed: Number(ign.kvNeeded.toFixed(1)),
     sparkKvHave: Number(ign.kvAvailable.toFixed(1)),
@@ -416,6 +445,7 @@ export function evaluatePoint(input) {
     afr: Number(actualAfr.toFixed(2)), afrCommanded: Number(afrCommanded.toFixed(2)),
     lambda: Number(lambdaActual.toFixed(3)),
     timing: Number(usedTiming.toFixed(1)), commandedTiming: Number(timingVal.toFixed(1)),
+    ...(traceCycle && cycle.trace ? { cycleTrace: cycle.trace } : {}),
     duty: Math.round(dutyPct), pw: Number(pulseWidthMs.toFixed(2)),
     maf: Number(mafGps.toFixed(1)), map: Number(mapKpa.toFixed(0)),
     iat: Number(chargeC.toFixed(0)), airCharge: Number(airChargeG.toFixed(3)),

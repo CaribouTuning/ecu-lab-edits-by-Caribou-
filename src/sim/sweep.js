@@ -7,11 +7,16 @@
  * that only says something is wrong teaches nothing.
  */
 
+import { BARO_KPA } from './constants.js';
+import { throttleBoreM } from './throttle.js';
 import { COEFF } from './coefficients.js';
 import { clamp, curveAt, groupRuns, mergeNearbyRuns } from './math.js';
 import { solveInduction } from './turbo.js';
 import { chargeTempK, INDUCTION_REF_EXHAUST_K } from './thermo.js';
 import { busiestBank, evaluatePoint } from './point.js';
+import { KNOCK_SAFETY_DEG, UNDER_ADVANCED_DEG } from './advisors.js';
+import { bestPowerAfr } from './manifold.js';
+import { FAILURE_MODES, pointWear, sweepFailure, wearEffects } from './damage.js';
 import { trappedAirGrams } from './cycle.js';
 import { loadFor, needsAirmass, readEcuTable, truthReader } from './layouts.js';
 import { CURVE_RPM, LOAD, RPM, SPARK_MIN_DEG } from './tables.js';
@@ -19,6 +24,9 @@ import { ecuSweepEvents } from './ecu/ecuEvents.js';
 import { ECU_COEFF } from './ecu/ecuCoefficients.js';
 import { ecuDemandPoint, ecuSteadyPoint } from './ecu/strategy.js';
 import { N2O_AIR_EQUIV, stepBottle, wetKitFuelKgS } from './nitrous.js';
+
+/** Exhaust over intake pressure past which a turbo engine's turbine is logged as choking it. */
+const BACKPRESSURE_RATIO_LIMIT = 1.8;
 
 /** Lowest engine speed of a dyno pull, RPM. */
 export const SWEEP_START_RPM = 1500;
@@ -106,17 +114,19 @@ function tableRowsAt(mapKpa, layout = null, airmassG = 0) {
  * The ECU's hardware for a pull: the build's `EcuHardware`, completed with the pull's own
  * engine, induction and injectors.
  *
- * @param {object} input `simulateSweep`'s input, with its `ecu`
+ * @param {object} input `simulateSweep`'s input, with its `ecu`; `wear` is the engine's
+ *   wear effects (damage.js `wearEffects`) where the pull runs on a worn engine
  * @returns {object}
  */
 function pullEcuHardware({
   ecu, ve, veTruth, timing, afr, layout = null, turboOn, boostCurve, fuel, injectorCc, ecuInjectorCc, mods, mafScalar,
-  derived, turbine, compressor, blower = null, blowerRatio = 1, nitrous = null,
+  derived, turbine, compressor, blower = null, blowerRatio = 1, nitrous = null, exhaustDia = null, wear = null,
 }) {
   return {
     ...ecu.hw, mafErrorBase: mafErrorFactor(mods, turboOn), derived, mods, turboOn, boostCurve, turbine, compressor,
-    injectorCc, ecuInjectorCc, mafScalar, fuel, blower, blowerRatio, nitrous,
+    injectorCc, ecuInjectorCc, mafScalar, fuel, blower, blowerRatio, nitrous, exhaustDia,
     veTruthByPhase: ecu.hw.veTruthByPhase ?? [pullBreathing({ ve, veTruth, timing, afr, layout }).flowAt],
+    ...(wear ? { wear } : {}),
   };
 }
 
@@ -184,14 +194,23 @@ export function dutyPreviewRpm(derived) {
  * `input.ecu`, when given, is `{cal, hw, cond}` — the calibration, the
  * `EcuHardware` and the `EcuConditions` of `src/sim/ecu/strategy.js`.
  *
+ * `input.health`, when given, is the engine's condition at the start of the pull
+ * (damage.js): its worn parts act on every point, and if the pull spends a part's last
+ * life the engine fails at that point. The pull ends there, and the result's `failure`
+ * says where, which part and how. Without it the engine is new, and the result is
+ * exactly what it always was.
+ *
  * @param {object} input
- * @returns {{points: object[], events: object[], wear: object, peakHp: number, peakTq: number, loadKpa: number, needsMafRecal: boolean}}
+ * @returns {{points: object[], events: object[], wear: object, peakHp: number, peakTq: number, loadKpa: number, needsMafRecal: boolean,
+ *   failure?: {rpm: number, part: import('./damage.js').Part, title: string, cause: string}|null}}
  */
 export function simulateSweep({
   loadKpa, ve, veTruth, timing, afr, turboOn, boostCurve, octaneLabel,
   fuel, injectorCc, ecuInjectorCc, injectorLabel, mods, mafScalar, derived,
-  turbine, compressor, ecu = null, blower = null, blowerRatio = 1, nitrous = null, layout = null,
+  turbine, compressor, ecu = null, blower = null, blowerRatio = 1, nitrous = null, layout = null, health = null,
+  exhaustDia = null, traceRpm = null,
 }) {
+  const wearFx = health ? wearEffects(health, derived.cyl) : null;
   if (turboOn) assertBoostCurve(boostCurve);
   const mafErrorBase = mafErrorFactor(mods, turboOn);
   const needsMafRecal = mods.intake || turboOn;
@@ -203,7 +222,7 @@ export function simulateSweep({
   const hardCut = ecu ? (derived.redline ?? SWEEP_END_RPM) + ecu.cal.limiter.offsetRpm : Infinity;
   const ecuHw = ecu ? pullEcuHardware({
     ecu, ve, veTruth, timing, afr, layout, turboOn, boostCurve, fuel, injectorCc, ecuInjectorCc, mods, mafScalar,
-    derived, turbine, compressor, blower, blowerRatio, nitrous,
+    derived, turbine, compressor, blower, blowerRatio, nitrous, exhaustDia, wear: wearFx,
   }) : null;
   // A nitrous bottle through the pull: what each point sprays makes the liquid left boil
   // and cool, and the pressure falls with it — a heater is too slow to hold it mid-pass.
@@ -217,7 +236,7 @@ export function simulateSweep({
       const cond = bottle
         ? { ...ecu.cond, nitrous: { ...nc, armed: nc.armed && bottle.massKg > 0, bottleK: bottle.tempK } }
         : ecu.cond;
-      const pt = ecuSteadyPoint({ cal: ecu.cal, hw: ecuHw, cond, tables: { ve, timing, afr, layout }, rpm, loadKpa });
+      const pt = ecuSteadyPoint({ cal: ecu.cal, hw: ecuHw, cond, tables: { ve, timing, afr, layout }, rpm, loadKpa, traceCycle: rpm === traceRpm });
       points.push(pt);
       if (bottle && pt.nitrousLbMin > 0) {
         bottle = stepBottle(bottle, (pt.nitrousLbMin * 0.45359237 / 60) * dtPerPoint, dtPerPoint, {
@@ -236,6 +255,8 @@ export function simulateSweep({
       derived,
       intakeKAt: (boostPsi) => chargeTempK(boostPsi, mods.intercooler),
       lambda: 1, exhaustK: INDUCTION_REF_EXHAUST_K,
+      throttle: { boreM: throttleBoreM(derived), coldAirIntake: !!mods.intake },
+      exhaust: { pipeDiaIn: exhaustDia ?? 3.0, mods },
       ...(blower ? { blower, blowerRatio, intakeKAtEff: (b, eta) => chargeTempK(b, mods.intercooler, undefined, eta) } : {}),
     });
     // Tables are indexed by ACTUAL manifold pressure, so adding boost walks the
@@ -256,51 +277,46 @@ export function simulateSweep({
         mafScalar, mafErrorBase, injectorCc, ecuInjectorCc, derived, compressor,
         turbine: turboOn ? turbine : null, empKpa: man.empKpa,
         ...(man.blower ? { blower: man.blower } : {}),
+        ...(wearFx ? { wear: wearFx } : {}),
       }),
       ...(turboOn ? { boostTarget: Number(boostTarget.toFixed(1)) } : {}),
     });
   }
 
+  const perPoint = points.map(pointWear);
   let pistonWear = 0, valveWear = 0;
-  points.forEach((p) => {
-    // Only knock that happened wears the piston. When the retard came from valvetrain
-    // noise read as knock (the controller sits at the larger of the two, see
-    // knockRetard in point.js), the engine ran further from its limit, not into it: that
-    // costs power, which the pull log reports as false knock, but it hammers nothing.
-    // It was once charged as detonation, so a big cam with the factory knock threshold
-    // lost half its pistons to a noise.
-    // `knockFalse` is logged to a tenth of a degree and `knockPull` is not, so the
-    // comparison allows for that rounding.
-    const realKnockDeg = p.knockPull > (p.knockFalse ?? 0) + 0.05 ? p.knockPull : 0;
-    if (p.knock) pistonWear += realKnockDeg * COEFF.WEAR_KNOCK;
-    if (p.leanRisk) {
-      if (p.valveRisk) valveWear += COEFF.WEAR_VALVE_LEAN_BOOST;
-      else pistonWear += COEFF.WEAR_LEAN;
-    }
-    // Bore wash: unburnt fuel stripping the cylinder film is a ring/bore wear mode.
-    if (p.richRisk) pistonWear += (COEFF.RICH_DAMAGE_LAMBDA - p.lambda) * COEFF.WEAR_RICH_BORE_WASH;
-    // Mechanical overload: past a certain peak cylinder pressure the piston crown, the
-    // ring lands and the rod are simply out of strength. This is a SEPARATE failure
-    // mode from knock — a tune can be perfectly knock-free and still be pounding the
-    // bottom end apart, which is what happens when a high-octane fuel is used to make
-    // high static compression survivable under boost.
-    if (p.pressureRisk) {
-      pistonWear += (p.peakPressure - COEFF.PEAK_PRESSURE_LIMIT_BAR) * COEFF.WEAR_PISTON_PER_BAR;
-    }
-    // Knock nobody corrected: the ECU could not hear it, so it ran on, and it is charged
-    // at twice the rate of knock the controller caught and pulled.
-    if (p.knockUnheard > 0) pistonWear += p.knockUnheard * COEFF.WEAR_KNOCK * 2;
+  perPoint.forEach((w) => {
+    pistonWear += w.piston;
+    valveWear += w.valve;
   });
-  const avgBoost = points.reduce((s, p) => s + p.boostPsi, 0) / points.length;
-  const avgPeakPressure = points.reduce((s, p) => s + p.peakPressure, 0) / points.length;
+  const pullPeakPressure = points.reduce((s, p) => s + p.peakPressure, 0) / points.length;
   // Bearings are loaded by peak cylinder pressure on every firing stroke, so they are
   // charged for the pressure the whole pull averaged — not for boost, which was only
   // ever a proxy for it and one that ignored static compression entirely. Block
   // material still modulates it: an iron block holds its main bores rounder under load
   // than an aluminium one, which is `bearingWearMult`'s whole job.
-  const bearingWear = Math.max(0, avgPeakPressure - (derived.bearingFreeBar ?? COEFF.BEARING_PRESSURE_FREE_BAR))
+  const bearingWear = Math.max(0, pullPeakPressure - (derived.bearingFreeBar ?? COEFF.BEARING_PRESSURE_FREE_BAR))
     * COEFF.WEAR_BEARING_PER_BAR * derived.bearingWearMult;
-  const wear = { piston: pistonWear, bearing: bearingWear, valve: valveWear };
+  let wear = { piston: pistonWear, bearing: bearingWear, valve: valveWear };
+
+  // A part that runs out of life fails where it does: the pull ends at that point, and
+  // the failed part is spent to nothing. What the others wore is what the pull to there
+  // cost them, charged the same way the failure was found.
+  let failure = null;
+  if (health) {
+    const freeBar = derived.bearingFreeBar ?? COEFF.BEARING_PRESSURE_FREE_BAR;
+    const at = sweepFailure(points, wear, health, freeBar, perPoint);
+    if (at) {
+      wear = { ...at.spent };
+      wear[at.part] = Math.max(wear[at.part], health[at.part]);
+      points.length = at.index + 1;
+      failure = { rpm: points[at.index].rpm, part: at.part, ...FAILURE_MODES[at.part] };
+    }
+  }
+  // Everything below reads the pull as it ran: to the failure, if there was one.
+  const reachedRpm = failure ? failure.rpm : endRpm;
+  const avgBoost = points.reduce((s, p) => s + p.boostPsi, 0) / points.length;
+  const avgPeakPressure = points.reduce((s, p) => s + p.peakPressure, 0) / points.length;
 
   const events = [];
   const rangeLabel = (run) => (run[0].rpm === run[run.length - 1].rpm
@@ -426,6 +442,50 @@ export function simulateSweep({
     });
   });
 
+  // SPARK LEFT ON THE TABLE. The other half of knock: timing well short of what the engine
+  // could carry here, measured against the same target the advisor and the factory tables
+  // use (MBT, or the knock limit less the advisor's safety margin, whichever is lower). A
+  // tune can be spotless and still be lazy: a turbo V6 with its boost rows pulled to 4°
+  // ran knock-free, lost 34 hp of its 274, and this log said nothing while the score read
+  // 100. A tuner reads a low timing number under boost as power not made, so the log does.
+  //
+  // The power it cost comes from this model's own spark response: torque falls with the
+  // square of the distance from MBT (5°, 10° and 20° of retard cost 1.0, 3.3 and 12.9 %,
+  // scripts/validate-physics.js), so a point's loss is the difference between the two.
+  // Points the ECU retarded itself (knock control, a protection) and the idle columns are
+  // left out: there the low number is the controller's, not the table's.
+  const SPARK_LOSS_PER_DEG2 = 0.00033;
+  const sparkTarget = (p) => Math.min(p.mbtIdeal, p.threshold - KNOCK_SAFETY_DEG);
+  const sparkShort = (p) => sparkTarget(p) - (p.commandedTiming ?? p.timing);
+  // At full throttle only: that is where a tuner chases power, and where the factory tables
+  // are written to the target. At part throttle a stock table is conservative on purpose (a
+  // cruise cell trades a degree for margin), and the log must not call a stock car lazy.
+  const lazy = (p) => loadKpa >= 95 && p.rpm > 1000 && !(p.knockPull > 0) && !(p.protect?.length) && !p.misfire && sparkShort(p) > UNDER_ADVANCED_DEG;
+  groupRuns(points, lazy).forEach((run) => {
+    if (run.length < 3) return;
+    const lostHp = (p) => {
+      const now = Math.max(0, p.mbtIdeal - (p.commandedTiming ?? p.timing));
+      const best = Math.max(0, p.mbtIdeal - sparkTarget(p));
+      const lossNow = SPARK_LOSS_PER_DEG2 * now * now;
+      const lossBest = SPARK_LOSS_PER_DEG2 * best * best;
+      return Math.max(0, (p.hp / Math.max(0.05, 1 - lossNow)) * (lossNow - lossBest));
+    };
+    const worst = run.reduce((a, b) => (sparkShort(b) > sparkShort(a) ? b : a));
+    const cost = Math.max(...run.map(lostHp));
+    if (cost < 2) return;
+    const boosted = run.some((p) => p.boostPsi >= 1);
+    events.push({
+      type: 'timing', severity: 1,
+      // A clean tune that leaves power behind is not a dialled-in one, but it is not a
+      // danger either: charged like a mild mixture miss, by how much power it costs.
+      impact: Math.round(clamp(3 + cost * 0.6, 4, 20) * (0.4 + 0.6 * rangeFrac(run))),
+      rpmStart: run[0].rpm, rpmEnd: run[run.length - 1].rpm,
+      msg: `Spark held ${sparkShort(worst).toFixed(0)}° short of what the engine can take across ${rangeLabel(run)} — about ${Math.round(cost)} hp left on the table`,
+      cause: `Near ${worst.rpm} RPM the table commands ${(worst.commandedTiming ?? worst.timing).toFixed(1)}° where this engine${boosted ? ` at ${worst.boostPsi.toFixed(1)} psi` : ''} burns best at about ${worst.mbtIdeal.toFixed(1)}° and only knocks past about ${worst.threshold.toFixed(1)}°. Nothing is wrong and nothing is at risk: the burn simply lands late, so more of the fuel's heat leaves in the exhaust instead of pushing the piston${boosted ? ', and the turbine runs hotter for it' : ''}.`,
+      fix: `On TUNE → SPARK, add timing in ${tableRowsAt(worst.map, layout, worst.airCharge)} across ${rangeLabel(run)}, about ${Math.round(sparkTarget(worst) * 2) / 2}° near ${worst.rpm} RPM (the advisor lists each cell). Go a degree or two at a time and pull again: stop where the log shows knock retard or the power stops rising.`,
+    });
+  });
+
   // Mechanical overload, reported separately from knock because it is a separate
   // failure and — crucially — because the levers that fix it are different ones. Every
   // other cylinder-pressure event in this log can be answered with octane; this one
@@ -476,7 +536,7 @@ export function simulateSweep({
           ? `This is while the nitrous sprays: it brings oxygen worth about 1.6 times its weight in air, and ${nitrous?.kit === 'dry' ? 'a dry kit relies on the ECU to add the fuel for it through the injectors — too little arrived' : 'the wet kit\'s fuel jet did not bring enough to match it'}. Lean on nitrous is how pistons melt.`
           : peak.afrCommanded <= COEFF.LEAN_DAMAGE_AFR
           ? `The AFR table asked for ${peak.afrCommanded.toFixed(1)}:1 here, but the engine got ${peak.afr.toFixed(1)}:1. The target is fine; the fuelling is not delivering it.`
-          : `The AFR target itself (${peak.afrCommanded.toFixed(1)}:1) is set leaner than is safe for ${Math.round(loadKpa)} kPa in this range.${missedTarget(peak) ? ` And the engine got even leaner than that, ${peak.afr.toFixed(1)}:1.` : ''}`,
+          : `The AFR target itself (${peak.afrCommanded.toFixed(1)}:1) is set leaner than is safe for ${Math.round(peak.map)} kPa in the manifold.${missedTarget(peak) ? ` And the engine got even leaner than that, ${peak.afr.toFixed(1)}:1.` : ''}`,
       fix: peak.fuelLimited
         ? `Upgrade injectors on BUILD → FUEL SYSTEM (and set TUNE → INJECTORS to match), or lower VE/boost so demand fits within current capacity.`
         : spraying(peak)
@@ -539,6 +599,31 @@ export function simulateSweep({
     });
   });
 
+  // BACKPRESSURE: a turbine too small for the engine's exhaust. Everything that leaves the
+  // cylinders has to pass the turbine, and the pressure it takes to push it through climbs
+  // with the flow. Once the exhaust side sits well above the intake, every cylinder pumps
+  // against it and, through overlap, refills with its own exhaust: the engine breathes worse
+  // than it did with no turbo at all. Logged as itself, so a turbo that makes LESS power than
+  // the engine made without it says why. Judged at full throttle only: part throttle, the
+  // manifold sits below the charge pressure ahead of the throttle plate, so exhaust over
+  // manifold pressure reads the throttle's restriction, not the turbine's size.
+  if (turboOn && loadKpa >= 95) {
+    groupRuns(points, (p) => p.rpm >= 3000 && p.emp != null && p.map > 0
+      && p.emp / p.map >= BACKPRESSURE_RATIO_LIMIT).forEach((run) => {
+      if (run.length < 3) return;
+      const worst = run.reduce((a, b) => (b.emp / b.map > a.emp / a.map ? b : a));
+      const ratio = worst.emp / worst.map;
+      events.push({
+        type: 'backpressure', severity: 2,
+        impact: Math.round(clamp(6 + (ratio - BACKPRESSURE_RATIO_LIMIT) * 12, 6, 24) * (0.4 + 0.6 * rangeFrac(run))),
+        rpmStart: run[0].rpm, rpmEnd: run[run.length - 1].rpm,
+        msg: `The turbine is choking the engine across ${rangeLabel(run)}: ${Math.round(worst.emp)} kPa of exhaust pressure ahead of it against ${Math.round(worst.map)} kPa in the intake at ${worst.rpm} RPM`,
+        cause: `All of the engine's exhaust has to get through the turbine, and a turbine this size for this much engine needs ${ratio.toFixed(1)} times the intake's pressure to push it through. Each cylinder pumps against that on its exhaust stroke, and while both valves are open the exhaust pushes back into the cylinder, so it fills with less fresh air. Boost falls away and the engine can make less power than it did without the turbo.`,
+        fix: 'On BUILD → INDUCTION, fit a larger turbine housing or twin turbos, so the exhaust passes at a pressure near the intake\'s. A larger exhaust pipe helps a little. Asking for more boost from this turbine makes it worse.',
+      });
+    });
+  }
+
   // UNDERBOOST: the turbo cannot make what is asked of it. Below 4000 RPM a shortfall is
   // spool, which every turbo has and the boost curve should already allow for; above it,
   // with the exhaust flowing hard, a turbo that still falls short is too small (its
@@ -560,6 +645,28 @@ export function simulateSweep({
     });
   }
 
+  // Manifold pressure past the top of the tables. A real ECU does not extrapolate: past its
+  // last load breakpoint it reads that row, so boost on an NA calibration is fuelled and
+  // timed off the full-throttle naturally aspirated row. Nothing has been filled in for the
+  // boost; the tuner extends the axis and writes those rows. Load-in-kPa axes only: an
+  // air-per-cylinder axis is sized by the ECU's own air estimate, not by boost.
+  const kpaAxes = [layout?.ve, layout?.timing, layout?.afr].filter((a) => a && a.loadUnit === 'kPa');
+  const topKpa = layout ? (kpaAxes.length ? Math.min(...kpaAxes.map((a) => a.load[0])) : Infinity) : LOAD[0];
+  // Above atmospheric only: a naturally aspirated engine at full throttle reaches the
+  // barometer less what the intake and the throttle lose, which can sit a kPa over a table
+  // topped at 100. That is the full-throttle row, not boost nobody has tuned.
+  const pastKpa = Math.max(topKpa, (ecu?.cond?.env?.baroKpa ?? BARO_KPA)) + 0.5;
+  groupRuns(points, (p) => p.map > pastKpa).forEach((run) => {
+    const peak = run.reduce((a, b) => (b.map > a.map ? b : a));
+    events.push({
+      type: 'pastTable', severity: 3, impact: Math.round(clamp((peak.map - topKpa) / 4, 6, 30)),
+      rpmStart: run[0].rpm, rpmEnd: run[run.length - 1].rpm,
+      msg: `Boost past the top of the tables across ${rangeLabel(run)}: up to ${peak.map} kPa, and the tables stop at ${topKpa} kPa`,
+      cause: `An ECU does not guess past its last load breakpoint: above ${topKpa} kPa it reads the ${topKpa} kPa row, so every psi of boost here is fuelled and timed as if it were full throttle without it. That row was written for no boost: its timing is too far advanced for the denser, hotter charge and its fuel target too lean for it. Nobody has tuned these cells yet.`,
+      fix: `On TUNE → SPARK, press Extend the axes to this engine (above the table; it extends all three tables), then tune the new boost rows: on TUNE → FUEL, the best-power target for ${peak.boostPsi.toFixed(0)} psi is about ${bestPowerAfr(peak.boostPsi).toFixed(1)}:1 on gasoline; on TUNE → SPARK, start well below the ${topKpa} kPa row and add timing from the log. The new rows start as a copy of the ${topKpa} kPa row, marked Not tuned, which is exactly what the ECU reads there now.`,
+    });
+  });
+
   groupRuns(points, (p) => p.compressorOver).forEach((run) => {
     const peak = run.reduce((a, b) => (b.boostPsi > a.boostPsi ? b : a));
     const impact = Math.round(10 * (0.3 + 0.7 * rangeFrac(run)));
@@ -567,7 +674,7 @@ export function simulateSweep({
       type: 'compressor', severity: 2, impact,
       rpmStart: run[0].rpm, rpmEnd: run[run.length - 1].rpm,
       msg: `Compressor pushed past its efficient range across ${rangeLabel(run)} (target up to ${peak.boostPsi.toFixed(1)} psi)`,
-      cause: `This compressor's practical ceiling is lower than the boost you're asking for here — beyond it, the compressor is working outside its efficient map. On a real turbo that air leaves hotter, less dense and more knock-prone; this app prices the compressor's heat at one fixed efficiency, so here the warning is the main cost (see Learn article 39).`,
+      cause: `This compressor's practical ceiling is lower than the boost you're asking for here — beyond it, the compressor is working outside its efficient map. On a real turbo that air leaves hotter, less dense and more knock-prone; this app prices the compressor's heat at one fixed efficiency, so here the warning is the main cost (see Learn article 34).`,
       fix: `On BUILD → INDUCTION, keep the boost target at or under this compressor's ~${compressor?.boostCeiling ?? peak.boostPsi} psi ceiling in this range, or fit a larger compressor.`,
     });
   });
@@ -604,11 +711,11 @@ export function simulateSweep({
   // Valve float is a hard mechanical limit — the springs cannot close the valves fast
   // enough, so cylinder filling collapses. No calibration change touches this.
   const floatRpm = derived.floatRpm || 99999;
-  if (floatRpm < endRpm) {
+  if (floatRpm < reachedRpm) {
     const lost = points.filter((p) => p.rpm > floatRpm);
     events.push({
-      type: 'float', severity: 3, impact: Math.round(clamp((endRpm - floatRpm) / 45, 8, 34)),
-      rpmStart: Math.round(floatRpm), rpmEnd: endRpm,
+      type: 'float', severity: 3, impact: Math.round(clamp((reachedRpm - floatRpm) / 45, 8, 34)),
+      rpmStart: Math.round(floatRpm), rpmEnd: reachedRpm,
       msg: `Valve float above ${Math.round(floatRpm)} RPM — cylinder filling collapsing over the last ${lost.length * SWEEP_STEP_RPM} RPM of the pull`,
       cause: `The camshaft opens the valves but only the springs close them. Above ${Math.round(floatRpm)} RPM the valves stop following the lobe, so the cylinder cannot fill and power falls off a cliff instead of tapering. A ${derived.camDuration}° cam opens further and faster, which is exactly why it demands stiffer springs than stock.`,
       fix: `On BUILD → ENGINE, raise the valve spring rate until float sits above your ${endRpm} RPM redline, or fit a milder cam. Or keep the engine under it: set the rev limiter below ${Math.round(floatRpm)} RPM on TUNE → PROTECT. No table change fixes valve float.`,
@@ -616,19 +723,19 @@ export function simulateSweep({
   }
 
   // The bottom end past what it is built for: mean piston speed over its rating
-  // (bottomEnd.js). A guideline crossed, not a failure modelled: power is unaffected,
-  // which is exactly why it has to be said.
+  // (bottomEnd.js). A pull's few seconds up there cost no power, which is exactly why it
+  // has to be said; held there on LIVE, it wears the bearings out (damage.js liveWear).
   const bottomEnd = derived.bottomEnd;
-  if (bottomEnd && endRpm > bottomEnd.ratedRpm) {
-    const peakMs = 2 * (derived.stroke / 1000) * (endRpm / 60);
+  if (bottomEnd && reachedRpm > bottomEnd.ratedRpm) {
+    const peakMs = 2 * (derived.stroke / 1000) * (reachedRpm / 60);
     const factory = bottomEnd.id === 'factory';
     events.push({
-      type: 'bottomEnd', severity: 3, impact: Math.round(clamp((endRpm - bottomEnd.ratedRpm) / 60, 6, 30)),
-      rpmStart: bottomEnd.ratedRpm, rpmEnd: endRpm,
+      type: 'bottomEnd', severity: 3, impact: Math.round(clamp((reachedRpm - bottomEnd.ratedRpm) / 60, 6, 30)),
+      rpmStart: bottomEnd.ratedRpm, rpmEnd: reachedRpm,
       msg: `Pistons and rods past their rating above ${bottomEnd.ratedRpm.toLocaleString('en-US')} RPM (${peakMs.toFixed(1)} m/s mean piston speed, rated ${bottomEnd.limitMs.toFixed(1)})`,
       cause: factory
-        ? `This engine's factory pistons and rods are rated to its own ${bottomEnd.ratedRpm.toLocaleString('en-US')} RPM limiter, ${bottomEnd.limitMs.toFixed(1)} m/s on its ${derived.stroke} mm stroke. The inertia load on each rod grows with the square of engine speed, so ${endRpm.toLocaleString('en-US')} RPM loads them ${Math.round(100 * ((endRpm / bottomEnd.ratedRpm) ** 2 - 1))}% harder than the maker ever validated. The dyno shows the power; it does not show the rod bearing wearing out or the rod that lets go.`
-        : `${bottomEnd.label} are good for about ${bottomEnd.limitMs} m/s of mean piston speed, which this ${derived.stroke} mm stroke reaches at ${bottomEnd.ratedRpm.toLocaleString('en-US')} RPM. Rod inertia load grows with the square of engine speed: at ${endRpm.toLocaleString('en-US')} RPM it is ${Math.round(100 * ((endRpm / bottomEnd.ratedRpm) ** 2 - 1))}% past what these parts are built for. Production engines run about 16-21 m/s; 25 is NASCAR and Formula One. The simulator does not model the failure; it tells you the parts are past their band.`,
+        ? `This engine's factory pistons and rods are rated to its own ${bottomEnd.ratedRpm.toLocaleString('en-US')} RPM limiter, ${bottomEnd.limitMs.toFixed(1)} m/s on its ${derived.stroke} mm stroke. The inertia load on each rod grows with the square of engine speed, so ${reachedRpm.toLocaleString('en-US')} RPM loads them ${Math.round(100 * ((reachedRpm / bottomEnd.ratedRpm) ** 2 - 1))}% harder than the maker ever validated. A pull's few seconds up there show as power, not damage; held there on LIVE, the rod bearings wear out, and a worn-out bearing is how the rod lets go.`
+        : `${bottomEnd.label} are good for about ${bottomEnd.limitMs} m/s of mean piston speed, which this ${derived.stroke} mm stroke reaches at ${bottomEnd.ratedRpm.toLocaleString('en-US')} RPM. Rod inertia load grows with the square of engine speed: at ${reachedRpm.toLocaleString('en-US')} RPM it is ${Math.round(100 * ((reachedRpm / bottomEnd.ratedRpm) ** 2 - 1))}% past what these parts are built for. Production engines run about 16-21 m/s; 25 is NASCAR and Formula One. A pull's few seconds up there show as power, not damage; held there on LIVE, the rod bearings wear out until one spins.`,
       fix: `Keep the limiter at or below ${bottomEnd.ratedRpm.toLocaleString('en-US')} RPM on TUNE → PROTECT, or ${factory ? 'build the bottom end for the speed: forged pistons and rods' : 'fit stronger pistons and rods on BUILD → ENGINE'}, or a shorter stroke.`,
     });
   }
@@ -671,12 +778,20 @@ export function simulateSweep({
   if (ecu) {
     events.push(...ecuSweepEvents(points, { cal: ecu.cal, hw: ecuHw, hardCut, endRpm }));
   }
+  if (failure) {
+    events.push({
+      type: 'failure', severity: 3, impact: 100, rpm: failure.rpm,
+      msg: `Engine failure at ${failure.rpm} RPM: ${failure.title.toLowerCase()}`,
+      cause: failure.cause,
+      fix: 'The engine has to be rebuilt before it runs again. What killed it is in the health history: the pulls before this one wore that part down, and the same tune will wear the rebuilt one the same way.',
+    });
+  }
 
   events.sort((a, b) => (b.impact ?? b.severity) - (a.impact ?? a.severity));
 
   const peakHp = Math.max(...points.map((p) => p.hp));
   const peakTq = Math.max(...points.map((p) => p.torque));
-  return { points, events, wear, peakHp, peakTq, loadKpa, needsMafRecal };
+  return { points, events, wear, peakHp, peakTq, loadKpa, needsMafRecal, ...(health ? { failure } : {}) };
 }
 
 /**

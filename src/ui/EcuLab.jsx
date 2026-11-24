@@ -25,9 +25,8 @@ import {
   INJECTOR_OPTS,
   TURBINE_OPTS, acousticDrive, blowerCurve, blowerOf, blowerSpeedRpm, calibrationAdvice, clamp,
   computeEngineerScore, computePullScore, computeTuningScore,
-  applyPreset, cellsNotRunBy, stockCalibrationFor, deriveEngine, dutyPreviewRpm, exhaustGeometry, idealExhaustDiameter, injectorDutyPreview,
-  isLocatable, layoutById, presetById,
-  simulateSweep, turbineWithCount,
+  applyPreset, cellsNotRunBy, stockCalibrationFor, deriveEngine, dutyPreviewRpm, evoAtdcDeg, exhaustGeometry, idealExhaustDiameter, injectorDutyPreview, isLocatable, layoutById, presetById,
+  simulateSweep, turbineWithCount, failedPart, FAILURE_MODES,
   veRecommendations, defaultEcuCalibration, dynoConditions, ecuHardwareOf, tankFuel,
   veTruthByPhaseFor, applyVeCorrections, intakeCamAt, portStagingOf, scheduledVeAt, veCorrections, veSamplesFromLive, veSamplesFromPull,
 } from '../sim/index.js';
@@ -59,6 +58,7 @@ import { redoLabel, undoLabel } from './state/history.js';
 import { diffMeasuredInputs, pullSignature, measuredInputs } from './state/pullSignature.js';
 import { ghostLabel, ghostRun, makeRunRecord } from './state/runLog.js';
 import { Button } from './primitives/Button.jsx';
+import { Note } from './primitives/Note.jsx';
 import { Eyebrow } from './primitives/Eyebrow.jsx';
 import { Panel } from './primitives/Panel.jsx';
 import { StatTile } from './primitives/StatTile.jsx';
@@ -236,6 +236,8 @@ export function EcuLabApp() {
   const inCareer = mode === 'career' && career != null;
   // SANDBOX opens with no engine: the engine screens ask for one (EngineStart) until it is chosen.
   const engineMissing = !inCareer && build.engineReady === false;
+  // A failed engine (src/sim/damage.js): it neither pulls nor starts until it is rebuilt.
+  const blown = failedPart(health);
   // An engine-building job opens BUILD: the customer pays for parts. Every other job's
   // car is the customer's as it came in, and BUILD is for looking.
   const jobOnBay = inCareer && career.working ? jobById(career.working) : null;
@@ -377,14 +379,19 @@ export function EcuLabApp() {
   // (or the reverse) is a table read off the wrong breakpoints.
   const advisorTables = useMemo(() => ({ ve, timing, afr, layout }), [ve, timing, afr, layout]);
   const deferredTables = useDeferredValue(advisorTables);
+  // Judged on the engine as worn, to the whole percent: health moves every LIVE step,
+  // and a pull a step is not worth re-solving for a hundredth of a percent of wear.
+  const hp = Math.round(health.piston), hb = Math.round(health.bearing), hv = Math.round(health.valve);
+  const advisorHealth = useMemo(() => ({ piston: hp, bearing: hb, valve: hv }), [hp, hb, hv]);
   const advisorPull = useMemo(() => simulateSweep({
     loadKpa: 100, ve: deferredTables.ve, veTruth, timing: deferredTables.timing, afr: deferredTables.afr,
     turboOn, boostCurve, octaneBonus, octaneLabel: fuel.label, fuel, injectorCc, ecuInjectorCc,
     injectorLabel: INJECTOR_OPTS[injIdx].label, mods, mafScalar, derived: engineDerived,
-    turbine, compressor, ecu: ecuBundle, layout: deferredTables.layout,
+    turbine, compressor, ecu: ecuBundle, layout: deferredTables.layout, exhaustDia: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia,
     ...(blower ? { blower, blowerRatio } : {}), ...(nitrous ? { nitrous } : {}),
+    health: advisorHealth,
   }), [deferredTables, veTruth, turboOn, boostCurve, octaneBonus, fuel, injectorCc, ecuInjectorCc,
-       injIdx, mods, mafScalar, engineDerived, turbine, compressor, ecuBundle, blower, blowerRatio, nitrous]);
+       injIdx, mods, mafScalar, engineDerived, turbine, compressor, ecuBundle, exhaustDiaIdx, blower, blowerRatio, nitrous, advisorHealth]);
   // Judged on the tables' own breakpoints, at the cam phase the VVT calibration holds.
   const camAt = useMemo(() => intakeCamAt(engineConfig, vvtCal), [engineConfig, vvtCal]);
   // A port kit's staging, from the calibration the advisor's pull runs, so the advisor
@@ -398,10 +405,10 @@ export function EcuLabApp() {
   const calAdvice = useMemo(() => calibrationAdvice({
     ve: deferredTables.ve, veTruth, timing: deferredTables.timing, afr: deferredTables.afr, layout: deferredTables.layout,
     derived: engineDerived, octaneBonus, fuel, mods, turboOn, boostCurve,
-    compressor, turbine, camAt,
-    injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, pull: advisorPull, portKit: portStaging,
+    compressor, turbine, camAt, exhaustDia: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia,
+    injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, pull: advisorPull, health: advisorHealth, portKit: portStaging,
   }), [deferredTables, veTruth, engineDerived, octaneBonus, fuel, mods, turboOn, boostCurve,
-       compressor, turbine, camAt, injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, advisorPull, portStaging]);
+       compressor, turbine, camAt, exhaustDiaIdx, injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, advisorPull, advisorHealth, portStaging]);
 
   const veAdvice = useMemo(
     () => veRecommendations(ve, engineConfig, mods, veTruth, (layout ?? layoutById(null)).ve),
@@ -414,10 +421,10 @@ export function EcuLabApp() {
   const dutyRpm = dutyPreviewRpm(engineDerived);
   const dutyPreview = useMemo(() => injectorDutyPreview({
     rpm: dutyRpm, loadKpa: 100, ve, veTruth, timing, afr, layout, turboOn, boostCurve, fuel, injectorCc, ecuInjectorCc,
-    mods, mafScalar, derived: engineDerived, turbine, compressor, ecu: ecuBundle,
+    mods, mafScalar, derived: engineDerived, turbine, compressor, ecu: ecuBundle, exhaustDia: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia,
     ...(blower ? { blower, blowerRatio } : {}), ...(nitrous ? { nitrous } : {}),
   }), [dutyRpm, ve, veTruth, timing, afr, layout, turboOn, boostCurve, fuel, injectorCc, ecuInjectorCc, mods, mafScalar,
-       engineDerived, turbine, compressor, ecuBundle, blower, blowerRatio, nitrous]);
+       engineDerived, turbine, compressor, ecuBundle, exhaustDiaIdx, blower, blowerRatio, nitrous]);
   // `dutyPreview` is computed here, not in InjectorsScreen, because the score breakdown
   // and dyno payload below read it too.
 
@@ -516,9 +523,10 @@ export function EcuLabApp() {
     // hardware). Either half swapped for the other yields a perfectly plausible table
     // that is wrong.
     //
-    // The spark and fuel tables are generated for this engine, fuel and boost
-    // (`stockCalibrationFor`), as a factory's are: the Nissan V6 tables this used to write
-    // knock on every other engine in the catalogue.
+    // The spark and fuel tables are generated for this engine and fuel on the induction it
+    // left the factory with (`stockCalibrationFor`), as a factory's are: the Nissan V6 tables
+    // this used to write knock on every other engine in the catalogue. Boost added since has
+    // no stock calibration: its cells stay past the table for the player to tune.
     // All three on breakpoints sized to this engine as it stands (its redline, its boost),
     // with the cam-phaser schedule they were written for.
     const stock = stockCalibrationFor(build);
@@ -585,13 +593,13 @@ export function EcuLabApp() {
   const sweepArgs = (load, ecu) => ({
     loadKpa: load, ve, veTruth, timing, afr, turboOn, boostCurve, octaneBonus, octaneLabel: fuel.label,
     fuel, injectorCc, ecuInjectorCc, injectorLabel: INJECTOR_OPTS[injIdx].label, mods, mafScalar, derived: engineDerived,
-    turbine, compressor, ecu, layout,
+    turbine, compressor, ecu, layout, exhaustDia: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia,
     ...(blower ? { blower, blowerRatio } : {}), ...(nitrous ? { nitrous } : {}),
   });
 
   const doRun = () => {
     // No engine chosen: there is nothing to pull, and the placeholder figures behind the gate are nobody's.
-    if (engineMissing) return;
+    if (engineMissing || blown) return;
     const a = ensureAudio();
     if (a && a.ctx.state === 'suspended') a.ctx.resume();
     // The reveal animation's own state: `running` gates the RUN button's label and the
@@ -600,7 +608,9 @@ export function EcuLabApp() {
     // owns), so they stay plain field writes.
     dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'running', value: true });
     dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'revealCount', value: 0 });
-    const r = simulateSweep(sweepArgs(loadKpa, ecuBundle));
+    // On the engine as it is: worn parts act on the pull, and one that runs out of life
+    // fails it part way (result.failure).
+    const r = simulateSweep({ ...sweepArgs(loadKpa, ecuBundle), health });
     // Cells TUNE says are past the knock limit that THIS pull did not run: its log cannot
     // show them, so they cost the score here instead of leaving it at "Dialed In". Judged
     // against this pull, at whatever load it ran, not TUNE's own full-throttle one: a cell
@@ -688,7 +698,7 @@ export function EcuLabApp() {
   liveCfgRef.current = {
     ve, veTruth, timing, afr, derived: engineDerived, fuel, injectorCc, ecuInjectorCc, mods, mafScalar, mafErrorBase,
     turboOn, boostCurve, octaneBonus, turbine,
-    compressor, exhaustDiaError, layout,
+    compressor, exhaustDiaError, layout, exhaustDia: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia,
     ...(blower ? { blower, blowerRatio } : {}), ...(nitrous ? { nitrous } : {}),
     // The live engine runs its own ECU controllers against the same calibration, with
     // whatever accessories are switched on.
@@ -738,7 +748,7 @@ export function EcuLabApp() {
   // gas temperature — and `audio/engineAudio.js` renders them.
   // These two functions only start and stop the engine.
   const startEngine = () => {
-    if (engineMissing) return;
+    if (engineMissing || blown) return;
     const a = ensureAudio();
     if (a && a.ctx.state === 'suspended') a.ctx.resume();
     dispatch({ type: ACTIONS.LIVE_PATCH, patch: { cranking: true } });
@@ -1024,6 +1034,7 @@ export function EcuLabApp() {
         configuration: engineConfig.configuration,
         pipeDiaIn: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia, gasTempK: drive.gasTempK,
         headers: Boolean(mods.headers), turboFitted: Boolean(turboOn),
+        evoAtdc: evoAtdcDeg(engineDerived.exhaustCamDuration, engineDerived.camDuration),
       }),
       rpm,
       configuration: engineConfig.configuration,
@@ -1308,6 +1319,7 @@ export function EcuLabApp() {
 
         {tab === 'live' && !engineMissing && (!inCareer || career.working) && (
           <div style={{ padding: 16 }}>
+            {blown && <EngineFailed part={blown} onRepair={repairEngine} />}
             <LiveScreen
               tachFullScaleRpm={tachFullScaleRpm}
               onStart={startEngine} onStop={stopEngine}
@@ -1519,8 +1531,9 @@ export function EcuLabApp() {
                 The label names the PHASE, because the pull is now a sequence rather
                 than a single sweep and the button is the only thing on screen that
                 says which part of it you are listening to. */}
+            {blown && <EngineFailed part={blown} onRepair={repairEngine} />}
             <div style={{ marginBottom: 16 }}>
-              <Button size="lg" onClick={doRun} disabled={running}>
+              <Button size="lg" onClick={doRun} disabled={running || !!blown}>
                 <Play size={16} aria-hidden="true" />
                 {!running ? (roadTest ? 'RUN A ROAD TEST' : 'RUN DYNO PULL')
                   : dynoPhase === 'settle' ? 'IDLING…'
@@ -1671,5 +1684,23 @@ export default function EcuLab({ blankStart = false }) {
     <StoreProvider blank={blankStart}>
       <EcuLabApp />
     </StoreProvider>
+  );
+}
+
+/**
+ * What a failed engine says where it would be run: what broke, and the way back.
+ * @param {{part: import('../sim/damage.js').Part, onRepair: () => void}} props
+ */
+function EngineFailed({ part, onRepair }) {
+  const mode = FAILURE_MODES[part];
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <Note tone="danger">
+        <strong>Engine failed: {mode.title.toLowerCase()}.</strong> {mode.cause}
+        <div style={{ marginTop: 8 }}>
+          <Button size="sm" onClick={onRepair}>Rebuild the engine</Button>
+        </div>
+      </Note>
+    </div>
   );
 }

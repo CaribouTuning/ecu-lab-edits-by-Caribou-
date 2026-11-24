@@ -164,6 +164,13 @@ export function defaultEcuCalibration({ derived = {}, gate = { type: 'electronic
       cylTrim: Array.from({ length: cyl }, () => 0),
       crankingDeg: 8,
       decelRetard: 0,
+      // The overrun burble ("pops and bangs"): off, as every factory calibration ships it.
+      burbleEnabled: false,
+      burbleSparkDeg: -15,
+      burbleMinRpm: 1800,
+      burbleMaxRpm: 5500,
+      burbleSeconds: 3,
+      burbleAirPct: 3,
       dwell: curve(VOLT_AXIS, (v) => Math.min(5.5, 3.0 * Math.pow(14 / v, 1.2))),
       knockEnabled: true,
       knockMaxRetard: COEFF.MAX_KNOCK_RETARD,
@@ -209,19 +216,21 @@ export function defaultEcuCalibration({ derived = {}, gate = { type: 'electronic
     },
     idle: {
       target: curve(ECT_AXIS, () => 800),
-      baseAir: curve(ECT_AXIS, (t) => Math.max(10, 13 - t * 0.06)),
-      startHoldS: 0.8,
-      gainUp: 0.003,
-      gainDown: 0.001,
-      damp: 0.04,
+      // Idle air is throttle opening (throttle.js): a plate's open area grows quickly off its
+      // rest, so a warm engine idles on about 3%, a cold one on a little more.
+      baseAir: curve(ECT_AXIS, (t) => Math.max(2.7, 3.8 - t * 0.0135)),
+      startHoldS: 0.4,
+      gainUp: 0.00135,
+      gainDown: 0.00045,
+      damp: 0.018,
       bleed: COEFF.IDLE_BLEED_RATE,
       sparkGain: COEFF.IDLE_SPARK_GAIN,
       sparkLimit: COEFF.IDLE_SPARK_LIMIT,
       acRpmAdd: 50,
-      acAirAdd: 2.5,
-      elecAirAdd: 1.2,
+      acAirAdd: 1.1,
+      elecAirAdd: 0.55,
       antiStallRpm: 200,
-      antiStallAir: 2,
+      antiStallAir: 0.9,
       tpsIdlePct: 3,
     },
     limiter: {
@@ -324,6 +333,7 @@ export function defaultEcuCalibration({ derived = {}, gate = { type: 'electronic
  * @property {{id: string, label: string}[]} [options]
  * @property {string} help what it physically does — never a promise of power
  * @property {boolean} [pro] an advanced setting, collapsed until asked for
+ * @property {'wet'|'dry'} [nitrousKit] offered only for this kind of nitrous kit
  * @property {string} [needs] hardware that must be fitted for the setting to apply, e.g. 'portKit'
  */
 
@@ -423,6 +433,18 @@ export const ECU_META = [
     help: 'Fixed spark while the starter turns the engine. Too much advance at cranking speed fights the starter.' },
   { path: 'ignition.decelRetard', section: 'spark', group: 'Special cases', label: 'Overrun retard', kind: 'number', unit: '°', min: 0, max: 20, step: 1, pro: true,
     help: 'Timing taken out on a closed throttle with fuel still on, for a softer transition into engine braking.' },
+  { path: 'ignition.burbleEnabled', section: 'spark', group: 'Overrun burble', label: 'Burble (pops on overrun)', kind: 'bool', options: onOff,
+    help: 'On a closed throttle the ECU keeps fuelling instead of cutting fuel, cracks the throttle for air, and fires the spark long after top dead centre. The flame is still crossing the chamber when the exhaust valve opens, so the charge finishes burning in the manifold: the pops. It costs EGT, turbine and catalyst heat; no factory calibration ships it.' },
+  { path: 'ignition.burbleSparkDeg', section: 'spark', group: 'Overrun burble', label: 'Burble timing', kind: 'number', unit: '° BTDC', min: -35, max: 10, step: 1,
+    help: 'The spark on the overrun, negative after top dead centre. About -10 is a soft crackle; -20 to -30 sends most of the charge into the manifold still burning, the loud bangs, and the hottest exhaust.' },
+  { path: 'ignition.burbleMinRpm', section: 'spark', group: 'Overrun burble', label: 'Burble above', kind: 'number', unit: 'RPM', min: 1000, max: 5000, step: 100, pro: true,
+    help: 'No burble below this: the engine is handed back to the idle control.' },
+  { path: 'ignition.burbleMaxRpm', section: 'spark', group: 'Overrun burble', label: 'Burble below', kind: 'number', unit: 'RPM', min: 2000, max: 9000, step: 100, pro: true,
+    help: 'No burble above this: a lift at high RPM fuel-cuts first, and burbles as it falls through the window.' },
+  { path: 'ignition.burbleSeconds', section: 'spark', group: 'Overrun burble', label: 'Burble lasts', kind: 'number', unit: 's', min: 0.5, max: 10, step: 0.5, decimals: 1,
+    help: 'How long after the throttle closes the burble runs, then the normal overrun fuel cut takes over. Longer is more pops and more heat in the exhaust.' },
+  { path: 'ignition.burbleAirPct', section: 'spark', group: 'Overrun burble', label: 'Burble throttle', kind: 'number', unit: '%', min: 0, max: 10, step: 0.5, decimals: 1, pro: true,
+    help: 'The throttle the ECU holds open on the overrun so there is air to burn. More air, bigger pops, less engine braking.' },
   { path: 'ignition.dwell', section: 'spark', group: 'Coil', label: 'Dwell', kind: 'curve', unit: 'ms', xLabel: 'Battery V', min: 0.5, max: 8, step: 0.1, decimals: 1,
     help: 'How long the coil charges before each spark. The coil stores ½LI², and the voltage it can reach grows with that energy. Boost and advance raise the voltage the gap needs; too little dwell and the spark blows out.' },
   { path: 'ignition.knockEnabled', section: 'spark', group: 'Knock control', label: 'Knock control', kind: 'bool', options: onOff,
@@ -546,10 +568,10 @@ export const ECU_META = [
     help: 'Nitrous stays off on a cold engine: cold fuel does not atomise, the mixture runs uneven between cylinders, and the rings and pistons are not up to size.' },
   { path: 'nitrous.retardDeg', section: 'nitrous', group: 'Spark', label: 'Retard while spraying', kind: 'number', unit: '°', min: 0, max: 20, step: 0.5, decimals: 1,
     help: 'Degrees pulled from the whole spark table while nitrous flows. The extra oxygen burns faster and hotter and the cylinder pressure rises, so the knock limit drops. The rule of thumb is about 2° per 50 hp of shot; the pull log shows whether this engine needs more.' },
-  { path: 'nitrous.dryFuelPct', section: 'nitrous', group: 'Fuel', label: 'Dry kit fuel', kind: 'number', unit: '%', min: 0, max: 200, step: 5,
+  { path: 'nitrous.dryFuelPct', section: 'nitrous', group: 'Fuel', label: 'Dry kit fuel', kind: 'number', unit: '%', min: 0, max: 200, step: 5, nitrousKit: 'dry',
     help: 'A dry kit sprays only nitrous; the ECU must add the fuel through the injectors. 100% adds what the kit is made for: the fuel for its rated shot, a little rich. Less runs the nitrous lean, which melts pistons. It has no effect on a wet kit, which brings its own fuel.' },
   { path: 'nitrous.fuelTrimPct', section: 'nitrous', group: 'Fuel', label: 'Fuel correction while spraying', kind: 'number', unit: '%', min: -100, max: 100, step: 1,
-    help: 'Injector fuel added or taken out while the nitrous flows, as a share of the fuel the shot needs, so it follows the dose and the rev range. On a wet kit this is usually a reduction: the kit brings its own fuel, and the nitrous vapour takes up room the air would have had, which a speed-density ECU cannot see, so it keeps fuelling for air that is not there. The pull log suggests a number when the mixture goes rich or lean on the spray.' },
+    help: 'Injector fuel added or taken out while the nitrous flows, as a share of the fuel the shot needs, so it follows the dose and the rev range. On a wet kit this is usually a reduction: the kit is jetted rich on purpose (about λ 0.80 on its own), and the nitrous vapour takes up room the air would have had, which a speed-density ECU cannot see, so it keeps fuelling for air that is not there. Together they run a 50 shot about 6% richer than your AFR table asks for. This is the setting that brings the spray back to your target: the AFR table moves the spray and the no-spray mixture together, so leaning it to fix the spray leaves the engine lean when the nitrous stops. Take out too much and the lean cut shuts the nitrous off. The pull log suggests a number when the mixture goes rich or lean on the spray.' },
   { path: 'nitrous.startPct', section: 'nitrous', group: 'Progressive', label: 'Start at', kind: 'number', unit: '%', min: 10, max: 100, step: 5,
     help: 'How much of the shot is sprayed the moment the window opens. A progressive controller pulses the solenoids to ramp the shot in rather than hit the tyres and the crank with all of it at once. 100% is on/off.' },
   { path: 'nitrous.rampS', section: 'nitrous', group: 'Progressive', label: 'Ramp to full over', kind: 'number', unit: 's', min: 0, max: 5, step: 0.1, decimals: 1,

@@ -22,11 +22,12 @@ import {
 } from './hardware.js';
 import { BARO_KPA, INJ_DEADTIME_MS, PSI_TO_KPA, RHO_AIR } from './constants.js';
 import { COEFF } from './coefficients.js';
-import { engineLayout, layoutById, readEcuTable, readTable } from './layouts.js';
+import { GAME_LAYOUT, engineLayout, fitsGameGrid, layoutById, readEcuTable, readTable } from './layouts.js';
 import { chargeIndexOf } from './knock.js';
 import { cycleInputsFor, knockLimitedSpark, mbtFromBurn, trappedAirGrams } from './cycle.js';
 import { exhaustManifoldKpa } from './friction.js';
-import { bestPowerAfr, peakMapKpaOf, reachableKpa } from './manifold.js';
+import { factoryLambda, fuelStrategyFor } from './factoryFuel.js';
+import { peakMapKpaOf, reachableKpa } from './manifold.js';
 import { mafErrorFactor } from './sweep.js';
 import { chargeTempK, exhaustTempK } from './thermo.js';
 import { defaultEcuCalibration, portShareAt } from './ecu/calibration.js';
@@ -37,7 +38,7 @@ import { clamp, curveAt } from './math.js';
 import { portKitBlend, stagedPortShare } from './point.js';
 import { inductionAtMap } from './turbo.js';
 import {
-  CURVE_RPM, effectiveMafFactor, interpolationRoomDeg, OPEN_LOOP_KPA, RPM, SPARK_MAX_DEG,
+  CURVE_RPM, effectiveMafFactor, interpolationRoomDeg, RPM, SPARK_MAX_DEG,
   SPARK_MIN_DEG,
 } from './tables.js';
 
@@ -58,6 +59,7 @@ export const FACTORY_KNOCK_MARGIN_DEG = 2;
 /**
  * @typedef {object} Preset
  * @property {string} id
+ * @property {string|null} [fuelPlanId] the factory engine whose fuel strategy this one runs, when it is not itself one (stockCalibrationFor)
  * @property {string} name
  * @property {string} manufacturer
  * @property {string} years
@@ -100,25 +102,13 @@ export const ENGINE_PRESETS = [
       // DOHC, four valves, direct-acting buckets with shims (Nissan parts list: intake valve
       // shim buckets; Tomei: 'conventional direct-acting valve train').
       valvetrain: 'dohc', valvesPerCyl: 4, follower: 'flat',
-      // Bore, stroke, compression and redline above are published; `camDuration` and
-      // `springRate` are not (Nissan states only that the Rev-Up revised the cams and
-      // raised the limit), so they are where this preset is fitted, as `vq35hr` is.
-      //
-      // `camDuration` 214 is fitted with the inlet Mach index (#15), the geometry-based
-      // friction model (friction.js), the breathing curve read at speed scaled to its peak
-      // (airflow.js), the corrected rod length and the rich-flame chemistry (thermo.js,
-      // heatReleasedShare) in place. It is the longest duration whose power still falls
-      // away before the 7000 limiter (peak about 6600 against a published 6400): every
-      // longer cam lands nearer the rating but runs flat into the limiter, which the real
-      // engine does not do. So this preset reads about 9% under its rating, a known gap
-      // recorded in tests/presets.test.js (KNOWN_GAPS): the model's top-end rolloff, not
-      // its cam, is what holds it there.
-      //
+      // Cams: Nissan quotes the Rev-Up's (and the HR's) valve timing as 248 / 248 degrees with
+      // 10.5 mm lift (maxima.org, 'VQ OEM and Aftermarket Cam data'), where the earlier DE's
+      // 238 / 240 is the same cam as 208 / 208 at 0.050 inch (my350z.com, 'VQ35 Camshaft Spec
+      // Thread'). Nissan's figure is taken at the same reference, so 248 is 218 at 0.050 inch:
+      // an inference from those two sources, not a figure Nissan states at 0.050 inch.
       // `springRate` 60 does not change power; it sets where the valvetrain gives up.
-      // `valveFloatRpm` lands ~8530, about 1530 RPM clear of the 7000 redline, mid-pack
-      // against the rest of the set. No pull should ever show a `float` event here; if
-      // one appears that is a bug, not "the character".
-      camDuration: 214, springRate: 60,
+      camDuration: 218, exhaustCamDuration: 218, springRate: 60,
       redline: 7000,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
@@ -142,30 +132,10 @@ export const ENGINE_PRESETS = [
       compression: 10.6,                 // 10.6:1
       blockMaterial: 'Aluminum', headMaterial: 'Aluminum', injection: 'port', // sequential multi-port
       valvetrain: 'dohc', valvesPerCyl: 4, follower: 'flat', // as the DE: direct-acting buckets
-      // Bore, stroke, compression and redline above are published figures and do not
-      // move. `camDuration` and `springRate` are not published, so they are where this
-      // preset is fitted.
-      //
-      // `camDuration` 226 is fitted with the inlet Mach index (#15), the geometry-based
-      // friction model (friction.js), the breathing curve read at speed scaled to its peak
-      // (airflow.js) and the corrected rod length in place: there it landed power on the
-      // rating (peak 7000 against a published 6800), clear of the overlap advisory.
-      //
-      // The spring rate carries it easily: valve float sits near 8880 RPM, well clear of
-      // the 7500 redline, and the cam stays short of the overlap that trips the cam
-      // advisory (see the note on 228 below).
-      //
-      // The Mach index is what makes VE fall at speed, so the simulated flat top (within
-      // 1 hp of peak) runs 6400-7100, bracketing the published 6800 instead of climbing
-      // into the 7500 limiter. The real engine's rolloff is cam profile, VVEL variable
-      // lift and intake-tract tuning; the Mach term stands in for all three at once
-      // rather than reproducing any of them.
-      //
-      // The rich-flame chemistry (thermo.js, heatReleasedShare) took about 4% of heat per
-      // kg of air out of full throttle, so power reads about -5% on 226. 228 reads -3.9%,
-      // but then the stock spark table knocks at 5100 RPM once an intake and headers are
-      // fitted, which a factory margin does not allow.
-      camDuration: 226, springRate: 68,
+      // Cams: 248 / 248 degrees, 10.5 mm lift, as the Rev-Up's (maxima.org, 'VQ OEM and
+      // Aftermarket Cam data'), so 218 / 218 at 0.050 inch the same way (see vq35de-revup).
+      // The spring rate carries the 7500 redline with margin to spare.
+      camDuration: 218, exhaustCamDuration: 218, springRate: 68,
       redline: 7500,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
@@ -195,10 +165,12 @@ export const ENGINE_PRESETS = [
       // DOHC, four valves; roller finger followers on hydraulic lash adjusters, as BMW's
       // later B58 (an inference for the N54, not a sourced figure).
       valvetrain: 'dohc', valvesPerCyl: 4, follower: 'roller',
-      // REFITTED for the geometry-based friction model (friction.js), which charges this
-      // engine more friction at speed than the old straight line did: duration moved to
-      // where power lands on the published rating again (friction.js).
-      camDuration: 214, springRate: 58,
+      // Cams: the OEM figures Cat Cams lists against its N54 set are 239 degrees intake and 263
+      // exhaust at 0.1 mm valve lift, 9.6 / 9.7 mm maximum lift (5150autosport.com, 'Cat Cams
+      // camshaft set BMW N54'). Converted through the lift curve breathing.js models (ramps, then the flank), 0.1 mm
+      // sits on the opening ramp, 8.7 degrees off the seat at each end, which makes them 184
+      // and 206 degrees at 0.050 inch.
+      camDuration: 184, exhaustCamDuration: 206, springRate: 58,
       redline: 7000,
     },
     induction: {
@@ -238,22 +210,12 @@ export const ENGINE_PRESETS = [
       blockMaterial: 'Aluminum', headMaterial: 'Aluminum', injection: 'direct', // solenoid direct injection, no port injectors
       // DOHC, four valves, roller finger followers ('roller drag lever', BMW part 11337640533).
       valvetrain: 'dohc', valvesPerCyl: 4, follower: 'roller',
-      // Bore, stroke, compression and redline are published and do not move.
-      // `camDuration` and `springRate` are not published in terms comparable to this
-      // model, so they are free to be fitted — see the VQ35HR comment above for the
-      // same arrangement and why it is not a fudge factor. In the event neither had to
-      // move: this engine's peak torque is set almost entirely by manifold pressure.
-      // Measured with `python3 scripts/analyze_presets.py --id b58-m0` (peak torque
-      // 297 wlb-ft at camDuration 214): swapping duration 212->214->216 moves it only
-      // 298->297->296, about 1 wlb-ft per 2°, while +1 psi of boost at the 3500 node,
-      // the 4500 node, or added across the whole curve each move it 297->306/308/308
-      // — 9-11 wlb-ft per psi. So the boost curve
-      // below is what was actually fitted. 214° sits just below the N54's 216° and
-      // carries 2.20° of overlap, well inside the advisory.
-      // `springRate` 60 puts `valveFloatRpm` at ~8474, 1474 RPM clear of the 7000
-      // limiter — the same order of margin the other presets carry (1242-1682). No
-      // pull on a healthy engine should ever log a `float` event.
-      camDuration: 214, springRate: 60,
+      // Cams: no factory figure for this engine's lobes was found, only aftermarket ones, so
+      // both durations are FITTED, on the gas-exchange model through the app's own pull, to the
+      // published power and torque; the exhaust lobe is given the intake's for want of a source.
+      // `springRate` 60 keeps valve float well clear of the 7000 limiter.
+      // At 204 (BREATH_VALVE_CD 0.61): power +3.3%, torque +5.2% of the ratings.
+      camDuration: 204, exhaustCamDuration: 204, springRate: 60,
       redline: 7000,
     },
     induction: {
@@ -310,13 +272,14 @@ export const ENGINE_PRESETS = [
       compression: 11.0,
       blockMaterial: 'Aluminum', headMaterial: 'Aluminum', injection: 'direct', // solenoid direct injection, no port injectors
       valvetrain: 'dohc', valvesPerCyl: 4, follower: 'roller',
-      // Same short block, so bore, stroke and compression are the M0's. The revised
-      // engine's sharper calibration is carried by a slightly longer duration and the
-      // spring rate to match: `valveFloatRpm` ~8534, 1534 RPM clear of the limiter.
-      // REFITTED for the geometry-based friction model (friction.js), which charges this
-      // engine more friction at speed than the old straight line did: duration moved to
-      // where power lands on the published rating again (friction.js).
-      camDuration: 210, springRate: 62,
+      // Same short block and head as the M0.
+      // Cams: no factory figure for this engine's lobes was found, only aftermarket ones, so
+      // both durations are FITTED, on the gas-exchange model through the app's own pull, to the
+      // published power and torque; the exhaust lobe is given the intake's for want of a source.
+      // At 190: power -3.3%, torque +2.0%, the flat top 6300-6700 against a published 5800.
+      // Longer cams land power nearer (198: +0.1%) but hold it to 6800: the fitted boost
+      // taper below carries 10.75 psi to the limiter, which is what keeps the peak late.
+      camDuration: 190, exhaustCamDuration: 190, springRate: 62,
       redline: 7000,
     },
     induction: {
@@ -385,12 +348,12 @@ export const ENGINE_PRESETS = [
       // four-valve heads use, not a sourced figure for the EA888.3).
       valvetrain: 'dohc', valvesPerCyl: 4, follower: 'roller',
       // Direct injection only: the North American EA888.3 has no port injectors (the
-      // European one is dual-injected). Duration is fitted, not published: 200 puts both
-      // this and the Golf R, which share it, on their rated power and torque.
-      // REFITTED for the geometry-based friction model (friction.js), which charges this
-      // engine more friction at speed than the old straight line did: duration moved to
-      // where power lands on the published rating again (friction.js).
-      camDuration: 210, springRate: 54,
+      // European one is dual-injected).
+      // Cams: no factory figure for this engine's lobes was found, only aftermarket ones, so
+      // both durations are FITTED, on the gas-exchange model through the app's own pull, to the
+      // published power and torque; the exhaust lobe is given the intake's for want of a source.
+      // At 210: power +1.1%, torque -7.4% (204-216 all land within a point of it).
+      camDuration: 210, exhaustCamDuration: 210, springRate: 54,
       redline: 6500,
     },
     induction: {
@@ -425,16 +388,12 @@ export const ENGINE_PRESETS = [
       compression: 9.6,
       blockMaterial: 'Cast Iron', headMaterial: 'Aluminum', injection: 'direct',
       valvetrain: 'dohc', valvesPerCyl: 4, follower: 'roller',
-      // Direct injection only: the North American EA888.3 has no port injectors (the
-      // European one is dual-injected). Duration is fitted, not published: 200 puts both
-      // this and the Golf R, which share it, on their rated power and torque.
-      // REFITTED for the geometry-based friction model (friction.js), which charges this
-      // engine more friction at speed than the old straight line did: duration moved to
-      // where power lands on the published rating again (friction.js).
-      // REFITTED for the rich-flame chemistry (thermo.js, heatReleasedShare): a rich mixture
-      // now releases only what its CO and H2 leave it, about 4% less heat per kg of air at
-      // full-throttle lambda, so duration came up until power is on the rating again.
-      camDuration: 212, springRate: 54,
+      // Direct injection only, as the GTI.
+      // Cams: no factory figure for this engine's lobes was found, only aftermarket ones, so
+      // both durations are FITTED, on the gas-exchange model through the app's own pull, to the
+      // published power and torque; the exhaust lobe is given the intake's for want of a source.
+      // At 198: power +2.5%, torque +0.8%.
+      camDuration: 198, exhaustCamDuration: 198, springRate: 54,
       redline: 6800,
     },
     induction: {
@@ -465,7 +424,7 @@ export const ENGINE_PRESETS = [
   //
   // Intake valve sizes are cylinder-head casting figures from enthusiast references
   // (2.00 in on the 241/243/317 castings, 1.89 in on the 706/862 truck castings), not
-  // GM documents; they set the valve area the inlet Mach index reads.
+  // GM documents; they set the valve area the gas-exchange model flows through.
   {
     id: 'ls1',
     name: 'GM LS1 (C5 Corvette)',
@@ -487,12 +446,14 @@ export const ENGINE_PRESETS = [
       blockMaterial: 'Aluminum', headMaterial: 'Aluminum', injection: 'port',
       valvetrain: 'ohv', valvesPerCyl: 2, follower: 'roller', intakeValveMm: 50.8,
       frictionLevel: 'older',
-      // Fitted: power -0.2% of the rating, torque -0.5% (predicted), power flat-top
-      // 5500-5800 against a published 5600.
-      // REFITTED for the rich-flame chemistry (thermo.js, heatReleasedShare): a rich mixture
-      // now releases only what its CO and H2 leave it, about 4% less heat per kg of air at
-      // full-throttle lambda, so duration came up until power is on the rating again.
-      camDuration: 210, springRate: 60,
+      // Cams: GM 12561721, which Chevrolet Performance lists as the stock cam of the 2001-2004
+      // LS1 as well as the LQ4 and LQ9: 196 / 201 degrees at 0.050 inch, 116 degree lobe
+      // separation (Chevrolet Performance camshaft listing). Owners' forum figures for the
+      // same years differ (199 / 210 on corvetteforum.com); GM's own listing is taken.
+      // Head: the 241 casting, peak intake flow 243 cfm at 28 inches of water (the same
+      // bench table as the LS6's 243 casting below: corvetteforum.com, '241 Heads vs. 243 Heads').
+      intakePortCfm: 243,
+      camDuration: 196, exhaustCamDuration: 201, springRate: 60,
       redline: 6000,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
@@ -522,10 +483,14 @@ export const ENGINE_PRESETS = [
       blockMaterial: 'Aluminum', headMaterial: 'Aluminum', injection: 'port',
       valvetrain: 'ohv', valvesPerCyl: 2, follower: 'roller', intakeValveMm: 50.8,
       frictionLevel: 'older',
-      // Fitted: power -1.5%, torque -4.1% (predicted), flat-top 5800-6400 against a
-      // published 6000. 228 rather than the 230 that lands power closer: 230 starts to
-      // trip the overlap advisory, which a factory cam does not.
-      camDuration: 228, springRate: 60,
+      // Cams: GM 12565308, the 2002-2004 LS6 cam, 204 / 218 degrees at 0.050 inch, 0.550 /
+      // 0.547 in lift, 117.5 degree lobe separation (GM's listing; the exhaust lift as corrected
+      // by GM's engineers on ls1tech.com, 'LS6 camshaft specs').
+      // Head: the 243 casting, peak intake flow 278 cfm at 28 inches of water, against the
+      // LS1's 241 at 243 on the same bench (corvetteforum.com, '241 Heads vs. 243 Heads'):
+      // most of why the LS6 makes 14% more than the LS1 on nearly the same short block.
+      intakePortCfm: 278,
+      camDuration: 204, exhaustCamDuration: 218, springRate: 60,
       redline: 6500,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
@@ -556,13 +521,10 @@ export const ENGINE_PRESETS = [
       blockMaterial: 'Cast Iron', headMaterial: 'Aluminum', injection: 'port',
       valvetrain: 'ohv', valvesPerCyl: 2, follower: 'roller', intakeValveMm: 50.8,
       frictionLevel: 'older',
-      // Fitted: power +1.0%, torque +0.2% (predicted), flat-top 5100-5500. 188 lands
-      // nearer (-0.1%), but 190 is the shortest duration the duration terms are checked
-      // down to (Pro's envelope), and a truck cam is at that end of the range.
-      // REFITTED for the rich-flame chemistry (thermo.js, heatReleasedShare): a rich mixture
-      // now releases only what its CO and H2 leave it, about 4% less heat per kg of air at
-      // full-throttle lambda, so duration came up until power is on the rating again.
-      camDuration: 198, springRate: 60,
+      // Cams: GM 12561721, the stock cam for the LQ4 and LQ9, 196 / 201 degrees at 0.050 inch,
+      // 0.467 / 0.479 in lift, 116 degree lobe separation (Chevrolet Performance camshaft
+      // listing; michiganmotorsports.com stock-replacement LQ4 cam).
+      camDuration: 196, exhaustCamDuration: 201, springRate: 60,
       redline: 5600,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
@@ -591,12 +553,9 @@ export const ENGINE_PRESETS = [
       blockMaterial: 'Cast Iron', headMaterial: 'Aluminum', injection: 'port',
       valvetrain: 'ohv', valvesPerCyl: 2, follower: 'roller', intakeValveMm: 48.0,
       frictionLevel: 'older',
-      // Fitted: power +1.7%, torque -0.3% (predicted), flat-top 5200-5600. 186 lands
-      // nearer (-0.3%); 190 for the same reason as the LQ4.
-      // REFITTED for the rich-flame chemistry (thermo.js, heatReleasedShare): a rich mixture
-      // now releases only what its CO and H2 leave it, about 4% less heat per kg of air at
-      // full-throttle lambda, so duration came up until power is on the rating again.
-      camDuration: 198, springRate: 60,
+      // Cams: the 1999-2006 LM7 truck cam, 191 / 190 degrees at 0.050 inch, 0.457 / 0.466 in
+      // lift, 114 degree lobe separation (OnAllCylinders, 'LM7 5.3L Vortec 5300 Engine Specs').
+      camDuration: 191, exhaustCamDuration: 190, springRate: 60,
       redline: 5800,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
@@ -623,14 +582,9 @@ export const ENGINE_PRESETS = [
       blockMaterial: 'Cast Iron', headMaterial: 'Aluminum', injection: 'port',
       valvetrain: 'ohv', valvesPerCyl: 2, follower: 'roller', intakeValveMm: 48.0,
       frictionLevel: 'older',
-      // Fitted: power +0.3%, torque +2.9% (predicted), flat-top 5500-5800 against a
-      // published 5200.
-      // REFITTED for the rich-flame chemistry (thermo.js, heatReleasedShare): a rich mixture
-      // now releases only what its CO and H2 leave it, about 4% less heat per kg of air at
-      // full-throttle lambda, so duration came up until power is on the rating again.
-      // Back to 200 with dissociation (thermo.js, dissociatedEnergyJPerKg): at 202 the
-      // power peak reached the 6000 limiter; 200 lands -2.6% and peaks before it.
-      camDuration: 200, springRate: 60,
+      // Cams: the 4.8 shares the LM7's truck cam, 191 / 190 degrees at 0.050 inch, 0.457 /
+      // 0.466 in lift (cartipsdaily.com, '4.8 LS Engine Specs').
+      camDuration: 191, exhaustCamDuration: 190, springRate: 60,
       redline: 6000,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
@@ -660,13 +614,13 @@ export const ENGINE_PRESETS = [
       valvetrain: 'ohv', valvesPerCyl: 2, follower: 'roller', intakeValveMm: 54.4,
       // A 2011-on design, so the published friction level; nothing measured for it.
       frictionLevel: 'modern',
-      // Fitted: power -0.9%, torque +1.9% (predicted), within 1 hp of peak from 5800,
-      // peaking at 5900 against a published 6000. 212 lands power nearer (-0.2%) but stays flat to the 6400 limiter,
-      // which the real engine does not; 210 is the longest cam whose power falls before it.
-      // REFITTED for the rich-flame chemistry (thermo.js, heatReleasedShare): a rich mixture
-      // now releases only what its CO and H2 leave it, about 4% less heat per kg of air at
-      // full-throttle lambda, so duration came up until power is on the rating again.
-      camDuration: 220, springRate: 60,
+      // Cams: the non-MDS 6.4 cam, 215 / 221 degrees at 0.050 inch, 0.574 / 0.541 in lift,
+      // 121 degree lobe separation (8020automotive.com, '6.4 HEMI Camshaft Upgrade Guide';
+      // the same figures on lxforums.com, '6.4L Stock Cam Specifications').
+      // Head flow: the Apache head is quoted at about 340-350 cfm, but with no lift or test
+      // depression stated, so it is not comparable to a 28-inch figure and is not used; the
+      // port is the throat with the universal discharge coefficient, as an unmeasured head's.
+      camDuration: 215, exhaustCamDuration: 221, springRate: 60,
       redline: 6400,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
@@ -740,20 +694,46 @@ function hardwareFor(preset) {
 }
 
 /**
- * The breakpoints a preset's tables are generated on when none are asked for: sized to
- * the engine (`engineLayout`), from cranking to just past its rev limit and from overrun
- * to just past the most manifold pressure it makes.
+ * The breakpoints a preset's tables are generated on when none are asked for: the game's
+ * own 8 × 6 grid (`GAME_LAYOUT`, 800-7,500 RPM by 20-200 kPa), which is quick to read and
+ * tune on any screen, wherever the engine fits inside it. An engine that revs past its last
+ * column or makes more manifold pressure than its top row gets breakpoints sized to it
+ * (`engineLayout`), since on the game grid the ECU would read the edge for the whole of its
+ * top end. The engine-sized grid is always there on TUNE's layout switch for a tuner who
+ * wants the finer table.
  *
  * @param {Preset} preset
- * @param {{rpmCount?: number, loadCount?: number}} [depth] the target computer's table size
+ * @param {{rpmCount?: number, loadCount?: number}} [depth] the target computer's table size:
+ *   given, the breakpoints are always sized to the engine at that depth
  * @returns {import('./layouts.js').Layout}
  */
 export function presetLayout(preset, depth = {}) {
-  return engineLayout({
-    redline: preset.engine.redline ?? 7000,
-    peakMapKpa: peakMapKpaOf({ turboOn: preset.induction.turboOn, boostCurve: preset.induction.boost }),
-    ...depth,
-  });
+  const redline = preset.engine.redline ?? 7000;
+  const peakMapKpa = peakMapKpaOf({ turboOn: preset.induction.turboOn, boostCurve: preset.induction.boost });
+  if (!depth.rpmCount && !depth.loadCount && fitsGameGrid({ redline, peakMapKpa })) return GAME_LAYOUT;
+  return engineLayout({ redline, peakMapKpa, ...depth });
+}
+
+/**
+ * The engine a preset puts on the bench, which its factory calibration is written for too.
+ *
+ * The intake runners are tuned where the maker says the engine makes its peak torque
+ * (breathing.js): published for every naturally aspirated engine here. A turbo engine's
+ * torque peak is where its boost arrives, not where its runners resonate, so it keeps the
+ * default tuning. `manifoldCam` is the cam the intake manifold was tuned with: a cam swap
+ * later keeps the manifold, and the runners stay the length the factory chose (airflow.js
+ * `breathingGeometry`). An engine that already carries either (one on the bench, handed back
+ * for RESET ALL TO STOCK) keeps its own.
+ *
+ * @param {Preset} preset
+ */
+export function benchEngineOf(preset) {
+  const e = preset.engine;
+  return {
+    ...e,
+    ...(e.runnerTuneRpm == null && !preset.induction.turboOn && preset.factory?.crankTqRpm ? { runnerTuneRpm: preset.factory.crankTqRpm } : {}),
+    manifoldCam: e.manifoldCam ?? { camDuration: e.camDuration, exhaustCamDuration: e.exhaustCamDuration ?? e.camDuration },
+  };
 }
 
 /**
@@ -785,6 +765,8 @@ export function presetLayout(preset, depth = {}) {
  *   tables go with; `boost` the boost target curve the factory runs them at
  */
 export function factoryCalibration(preset, layout = null, opts = {}) {
+  // Written for the engine the preset puts on the bench, runners and all.
+  preset = { ...preset, engine: /** @type {any} */ (benchEngineOf(preset)) };
   const L = layout ? layoutById(layout) : presetLayout(preset);
   const derived = deriveEngine(preset.engine);
   const fuel = presetFuel(preset);
@@ -830,7 +812,11 @@ export function factoryCalibration(preset, layout = null, opts = {}) {
   const boostPsiAt = (rpm, kpa) => inductionAt(rpm, kpa)?.boostPsi ?? boostAt(kpa);
   const sweptM3 = (derived.displacementL / derived.cyl) / 1000;
   const chargeKAt = (rpm, kpa) => chargeTempK(boostPsiAt(rpm, kpa), preset.mods.intercooler);
-  const fuelAfrAt = (rpm, kpa) => (kpa < OPEN_LOOP_KPA ? 14.7 : bestPowerAfr(boostPsiAt(rpm, kpa)));
+  // The engine's own factory fuel strategy (factoryFuel.js, with its sources): lambda 1 where
+  // the ECU runs closed loop, enrichment ramping in with load to a full-load target that
+  // varies with speed. The fuel table below is written from it, and a port kit staged on it.
+  const fuelPlan = fuelStrategyFor(preset.fuelPlanId ?? preset.id, !!preset.induction.turboOn);
+  const fuelAfrAt = (rpm, kpa) => 14.7 * factoryLambda(fuelPlan, rpm, kpa, !!preset.induction.turboOn, BARO_KPA);
   // A port kit's share of the fuel at a cell, staged as the ECU stages it: the share this
   // calibration's table asks for, unless the pulse that makes for the fuel the cell wants
   // is under the kit's minimum opening. Then, and without a kit, null.
@@ -865,10 +851,11 @@ export function factoryCalibration(preset, layout = null, opts = {}) {
   const loadOf = (axes, rpm, kpa) => (axes.loadUnit === 'kPa' ? kpa : airAt(rpm, kpa) * (axes.loadUnit === 'mg/cyl' ? 1000 : 1));
   const grid = (axes, f) => axes.load.map((v) => axes.rpm.map((rpm) => f(rpm, kpaOf(axes, rpm, v))));
 
-  // VE: the engine's breathing at each cell. FUEL: stoichiometric where a real ECU runs
-  // closed loop, best-power enrichment above.
+  // VE: the engine's breathing at each cell. FUEL: the engine's own factory strategy
+  // (factoryFuel.js, with its sources): lambda 1 where the ECU runs closed loop, enrichment
+  // ramping in with load to a full-load target that varies with speed.
   const ve = grid(L.ve, (rpm, kpa) => Number(veAt(rpm, kpa).toFixed(1)));
-  const afr = grid(L.afr, (rpm, kpa) => (kpa < OPEN_LOOP_KPA ? 14.7 : Number(fuelAfrAt(rpm, kpa).toFixed(2))));
+  const afr = grid(L.afr, (rpm, kpa) => Number(fuelAfrAt(rpm, kpa).toFixed(2)));
 
   // SPARK: MBT where there is margin for it, knock-limited minus the factory safety
   // margin where there is not. That is what a production calibration is. Knock is
@@ -892,9 +879,12 @@ export function factoryCalibration(preset, layout = null, opts = {}) {
     const chargeK = chargeTempK(boostPsi, preset.mods.intercooler);
     const airChargeG = trappedAirGrams({ veActual, mapKpa: kpa, chargeK, sweptM3 });
     const exhaustFlowKgS = (airChargeG / 1000) * (1 + 1 / (fuel.stoich * lambda)) * derived.cyl * (rpm / 2) / 60;
+    // On the engine's own pipe and bolt-ons: the backpressure the pull and the advisor
+    // price, so the three agree on the knock limit a cell is written to.
     const empKpa = induction ? induction.empKpa : exhaustManifoldKpa({
       turboOn: preset.induction.turboOn, exhaustFlowKgS, turbine,
       exhaustK: exhaustTempK({ chargeIndex: chargeIndexOf(veActual, kpa), lambda }),
+      pipeDiaIn: EXHAUST_DIA_OPTS[preset.parts.exhaustDiaIdx]?.dia ?? 3.0, mods: preset.mods,
     });
     // The generator asks the physics the same question the running ECU asks — how much
     // spark will this cylinder take — by solving the same cycle. Burnable mass releases
@@ -994,7 +984,7 @@ export function applyPreset(preset, layout = null) {
     mafScalar,
     // A catalogue engine's own reciprocating assembly, rated to its own factory limiter:
     // raise the redline past that and BUILD and the pull log say the parts are past it.
-    engineConfig: { ...preset.engine, bottomEndRatedRpm: preset.bottomEndRatedRpm ?? preset.engine.redline },
+    engineConfig: { ...benchEngineOf(preset), bottomEndRatedRpm: preset.bottomEndRatedRpm ?? preset.engine.redline },
     mods: { ...preset.mods },
     turboOn: preset.induction.turboOn,
     // The published boost, limited where the spark table cannot protect it (factoryCalibration).
@@ -1002,6 +992,12 @@ export function applyPreset(preset, layout = null) {
     turbineIdx: preset.induction.turbineIdx,
     turbineCount: preset.induction.turbineCount ?? 1,
     compressorIdx: preset.induction.compressorIdx,
+    // The induction it leaves the factory with, kept apart from what is fitted now: RESET
+    // ALL TO STOCK calibrates for this (stockCalibrationFor), never for boost added since.
+    factoryInduction: {
+      turboOn: preset.induction.turboOn, turbineIdx: preset.induction.turbineIdx,
+      turbineCount: preset.induction.turbineCount ?? 1, compressorIdx: preset.induction.compressorIdx, boostCurve: boost,
+    },
     injIdx: preset.parts.injectorIdx,
     ecuInjectorCc: INJECTOR_OPTS[preset.parts.injectorIdx].cc,
     ...presetTank(preset),
@@ -1047,8 +1043,29 @@ export const CUSTOM_ENGINE_LIMITS = Object.freeze({
     min: 4000, max: 11000, step: 100, unit: 'rpm',
     why: 'Past 11,000 rpm is racing-engine territory the simulator has no published engine to check against.',
   },
-  camDuration: { min: 180, max: 300, step: 2, unit: '°' },
+  camDuration: { min: 180, max: 300, step: 1, unit: '°' },
+  exhaustCamDuration: { min: 180, max: 300, step: 1, unit: '°' },
+  // The head and cam card's own figures, each optional (absent, the model's usual one). Lift
+  // at the valve: production cams lift about 9-12 mm, race cams past 15.
+  intakeLiftMm: { min: 6, max: 18, step: 0.1, unit: 'mm' },
+  exhaustLiftMm: { min: 6, max: 18, step: 0.1, unit: 'mm' },
+  exhaustValveMm: { min: 20, max: 50, step: 0.1, unit: 'mm' },
+  // Port flow on a flow bench at 28 inches of water: a stock port 150-250 cfm, a race head's
+  // past 350; exhaust ports flow about three quarters of the intake's.
+  intakePortCfm: { min: 120, max: 420, step: 1, unit: 'cfm' },
+  exhaustPortCfm: { min: 90, max: 330, step: 1, unit: 'cfm' },
+  // Lobe separation: aftermarket cams are ground 104-118 degrees, OEM ones wider. Installed
+  // intake centreline: about four degrees before the separation is the usual install.
+  lsaDeg: { min: 100, max: 124, step: 0.5, unit: '°' },
+  iclDeg: { min: 96, max: 130, step: 0.5, unit: '°' },
+  runnerMm: { min: 100, max: 900, step: 5, unit: 'mm' },
+  // Long-tube header primaries: 24-36 inches is the usual run, 1.5-2 inch tube.
+  headerPrimaryMm: { min: 300, max: 1200, step: 5, unit: 'mm' },
+  headerPrimaryIdMm: { min: 28, max: 55, step: 0.1, unit: 'mm' },
 });
+
+/** How much longer than the intake lobe a builder's exhaust lobe is taken to be when not given, degrees. */
+const EXHAUST_LOBE_LONGER_DEG = 8;
 
 /** How far past the limiter a builder's valve springs hold the valves on the cam, RPM. */
 const SPRING_MARGIN_RPM = 500;
@@ -1073,7 +1090,7 @@ const INJECTOR_SIZING_MAX_DUTY = 0.85;
  * Checks the figures a player entered for an engine of their own.
  *
  * @param {{configuration?: string, bore?: number|string, stroke?: number|string, compression?: number|string,
- *   redline?: number|string, camDuration?: number|string|null, injection?: string, valvetrain?: string,
+ *   redline?: number|string, camDuration?: number|string|null, exhaustCamDuration?: number|string|null, injection?: string, valvetrain?: string,
  *   valvesPerCyl?: number|string, blockMaterial?: string, headMaterial?: string, bottomEnd?: string}} spec
  * @returns {{ok: true, engine: import('./engine.js').EngineConfig, estimated: string[], assumed: string[]}
  *   | {ok: false, errors: Record<string, string>}} `estimated` names every figure that was
@@ -1109,6 +1126,19 @@ export function validateCustomEngine(spec) {
     if (!Number.isFinite(v) || v < lim.min || v > lim.max) errors.camDuration = `Between ${lim.min} and ${lim.max} ${lim.unit}, or leave blank.`;
     else camDuration = v;
   }
+  // The exhaust lobe, where the builder does not give it: factory cams run it longer than
+  // the intake, by -1 to +22 degrees across the published cams in ENGINE_PRESETS (about +8
+  // on average), since the exhaust valve is smaller and the blowdown wants an early opening.
+  let exhaustCamDuration = Math.min(CUSTOM_ENGINE_LIMITS.exhaustCamDuration.max, camDuration + EXHAUST_LOBE_LONGER_DEG);
+  if (spec.exhaustCamDuration === '' || spec.exhaustCamDuration == null) {
+    estimated.push(`exhaust cam duration (${exhaustCamDuration}° assumed, ${EXHAUST_LOBE_LONGER_DEG}° longer than the intake as factory cams run)`);
+    assumed.push('exhaustCamDuration');
+  } else {
+    const v = Number(spec.exhaustCamDuration);
+    const lim = CUSTOM_ENGINE_LIMITS.exhaustCamDuration;
+    if (!Number.isFinite(v) || v < lim.min || v > lim.max) errors.exhaustCamDuration = `Between ${lim.min} and ${lim.max} ${lim.unit}, or leave blank.`;
+    else exhaustCamDuration = v;
+  }
   if (Object.keys(errors).length) return { ok: false, errors };
   const bottomEnd = BOTTOM_END_OPTS.some((o) => o.id === spec.bottomEnd) ? spec.bottomEnd : DEFAULT_BOTTOM_END;
   const valvetrain = /** @type {'ohv'|'sohc'|'dohc'} */ (VALVETRAIN_OPTS.some((o) => o.id === spec.valvetrain) ? spec.valvetrain : 'dohc');
@@ -1135,7 +1165,9 @@ export function validateCustomEngine(spec) {
       // to keep the valves on the cam SPRING_MARGIN_RPM past the limiter, never softer than
       // the stock rate. A 9000-RPM engine on stock springs floats its valves at 8000, which
       // no one who chose that redline would build.
-      camDuration, springRate: springRateFor(/** @type {number} */ (redline), camDuration), redline: /** @type {number} */ (redline),
+      camDuration, exhaustCamDuration,
+      springRate: springRateFor(/** @type {number} */ (redline), Math.max(camDuration, exhaustCamDuration)),
+      redline: /** @type {number} */ (redline),
       valvetrain, valvesPerCyl, bottomEnd,
     },
   };
@@ -1209,7 +1241,8 @@ export function stockModsOf(build) {
 
 /**
  * The factory-style calibration for the hardware on the bench, with its bolt-ons taken off
- * (`stockModsOf`): what RESET ALL TO STOCK writes. Generated from the physics for THIS engine, fuel and
+ * (`stockModsOf`) and on the induction it left the factory with: what RESET ALL TO STOCK
+ * writes. Generated from the physics for THIS engine, fuel and
  * boost, exactly as a catalogue preset's own is, so it is knock-safe on a turbo or a big V8
  * as much as on the Nissan V6 the generic tables were drawn for. A port injection kit on a
  * direct-injected engine is part of the hardware on the bench, so the tables are written
@@ -1217,7 +1250,8 @@ export function stockModsOf(build) {
  *
  * @param {{engineConfig: object, turboOn: boolean, boostCurve: number[], turbineIdx: number,
  *   turbineCount?: number, compressorIdx: number, injIdx: number, exhaustDiaIdx: number,
- *   octaneIdx: number, ethanolPct?: number, mods?: object, blowerId?: string|null,
+ *   octaneIdx: number, ethanolPct?: number, mods?: object, blowerId?: string|null, presetId?: string|null,
+ *   factoryInduction?: {turboOn: boolean, turbineIdx: number, turbineCount?: number, compressorIdx: number, boostCurve: number[]}|null,
  *   portKit?: {injIdx: number, ecuInjectorCc: number}|null}} build the BUILD
  *   slice (or the fields of it named)
  * @param {import('./layouts.js').Layout|string|null} [layout] the breakpoints to write on: the
@@ -1225,9 +1259,46 @@ export function stockModsOf(build) {
  * @returns {ReturnType<typeof factoryCalibration>}
  */
 export function stockCalibrationFor(build, layout = null) {
+  // The induction the engine left the factory with (`build.factoryInduction`, recorded when
+  // the engine is chosen; none means naturally aspirated, as every engine of the player's
+  // own starts). A turbo, supercharger or nitrous added since has no factory calibration:
+  // writing one calculated for it would be tuning the boost for the player. Its cells are
+  // left past the table for them to extend and tune (the pull log says so).
+  const f = build.factoryInduction ?? null;
+  const induction = f
+    ? { turboOn: !!f.turboOn, turbineIdx: f.turbineIdx, turbineCount: f.turbineCount ?? 1, compressorIdx: f.compressorIdx, boost: f.boostCurve }
+    : { turboOn: false, turbineIdx: build.turbineIdx, turbineCount: 1, compressorIdx: build.compressorIdx, boost: build.boostCurve.map(() => 0) };
   /** @type {Preset} */
   const hardware = {
     id: 'stock', name: 'Stock', manufacturer: '', years: '', blurb: '',
+    factory: {},
+    engine: /** @type {any} */ (build.engineConfig),
+    induction,
+    parts: { injectorIdx: build.injIdx, exhaustDiaIdx: build.exhaustDiaIdx, octaneIdx: build.octaneIdx },
+    mods: stockModsOf({ ...build, turboOn: induction.turboOn, blowerId: null }),
+    fuel: tankFuel(/** @type {any} */ (build)),
+    // The factory engine it started as, for that engine's own fuel strategy (factoryFuel.js).
+    fuelPlanId: build.presetId ?? null,
+  };
+  return factoryCalibration(hardware, layout, { portKit: portKitOf(build) });
+}
+
+/**
+ * A base start-up map for the engine as it is built now: the parts fitted, the boost asked
+ * for, the bolt-ons on. What a tuner loads before the first pull on a modified engine, so it
+ * starts and runs and can be tuned from: generated from the physics with the same knock
+ * margin as a factory calibration, conservative rather than tuned. Never applied by itself;
+ * the player chooses it (BUILD and TUNE offer it once the engine differs from its factory
+ * build), and it replaces the tables they have.
+ *
+ * @param {Parameters<typeof stockCalibrationFor>[0] & {originPresetId?: string|null}} build
+ * @param {import('./layouts.js').Layout|string|null} [layout]
+ * @returns {ReturnType<typeof factoryCalibration>}
+ */
+export function baseMapFor(build, layout = null) {
+  /** @type {Preset} */
+  const hardware = {
+    id: 'base', name: 'Base map', manufacturer: '', years: '', blurb: '',
     factory: {},
     engine: /** @type {any} */ (build.engineConfig),
     induction: {
@@ -1235,8 +1306,9 @@ export function stockCalibrationFor(build, layout = null) {
       compressorIdx: build.compressorIdx, boost: build.boostCurve,
     },
     parts: { injectorIdx: build.injIdx, exhaustDiaIdx: build.exhaustDiaIdx, octaneIdx: build.octaneIdx },
-    mods: stockModsOf(build),
+    mods: { intake: !!build.mods?.intake, exhaust: !!build.mods?.exhaust, headers: !!build.mods?.headers, intercooler: !!build.mods?.intercooler },
     fuel: tankFuel(/** @type {any} */ (build)),
+    fuelPlanId: build.originPresetId ?? build.presetId ?? null,
   };
   return factoryCalibration(hardware, layout, { portKit: portKitOf(build) });
 }

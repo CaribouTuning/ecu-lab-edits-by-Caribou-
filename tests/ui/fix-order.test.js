@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
-import { FIX_STEPS, fixStep, inFixOrder } from '../../src/ui/components/fixOrder.js';
+import { FIX_STEPS, fixStep, groupByCause, inFixOrder } from '../../src/ui/components/fixOrder.js';
 import { fixLinks } from '../../src/ui/components/fixLinks.js';
 import { makeEngine } from '../ecuHarness.js';
 import { seedRandomPerTest } from '../seededRandom.js';
@@ -65,5 +65,31 @@ describe('every fix line sends the player somewhere', () => {
       }
     }
     expect(seen).toBeGreaterThan(10);
+  });
+});
+
+describe('the pull log grouped by cause', () => {
+  const ev = (type, rpmStart, rpmEnd, impact = 5) => ({ type, rpmStart, rpmEnd, impact, msg: type });
+
+  it('puts the symptoms of one cause under it, so their advice is not read as separate fixes', () => {
+    // A turbo on an NA calibration: boost past the tables, the lean boost cells it leaves,
+    // the knock they cause and the boost cut that knock trips, all over the same RPM.
+    const groups = groupByCause([ev('knockprot', 3000, 6000, 9), ev('knock', 3000, 7000, 43), ev('lean', 3000, 5000, 4), ev('pastTable', 2500, 7000, 20)]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].root.type).toBe('pastTable');
+    expect(groups[0].effects.map((e) => e.type)).toEqual(['lean', 'knock', 'knockprot']);
+  });
+
+  it('keeps causes in separate parts of the pull apart', () => {
+    const groups = groupByCause([ev('lean', 6000, 7000), ev('knock', 2000, 3000)]);
+    expect(groups.map((g) => g.root.type)).toEqual(['lean', 'knock']);
+    expect(groups.every((g) => g.effects.length === 0)).toBe(true);
+  });
+
+  it('shows every entry exactly once', () => {
+    const events = [ev('injscale'), ev('lean', 1000, 7000), ev('leanprot', 4000, 5000), ev('iatprot', 6000, 7000), ev('float', 6500, 7000)];
+    const seen = groupByCause(events).flatMap((g) => [g.root, ...g.effects]);
+    expect(seen).toHaveLength(events.length);
+    expect(new Set(seen).size).toBe(events.length);
   });
 });

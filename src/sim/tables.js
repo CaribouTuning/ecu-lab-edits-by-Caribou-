@@ -128,7 +128,8 @@ export const DEFAULT_BOOST = RPM.map(() => 0);
  *
  * The geometry, compression and materials below are that engine's published figures, and
  * the `vq35de-revup` preset carries the same ones. The three values that differ are the
- * three this default does NOT take from Nissan: `camDuration` and `springRate` are round
+ * three this default does NOT take from Nissan: the cam (`camDuration`, `exhaustCamDuration`,
+ * the exhaust lobe longer by the margin factory cams run) and `springRate` are round
  * generic starting points for a custom build, where the preset fits them to the published
  * power, and `redline` is a deliberately generic 7500 ceiling, where the preset carries
  * the production 7000 limit. Retuning any of the three here is a custom-build decision and
@@ -148,6 +149,10 @@ export const DEFAULT_ENGINE_CONFIG = Object.freeze({
   headMaterial: 'Aluminum',
   injection: 'port',
   camDuration: 210,
+  exhaustCamDuration: 218,
+  // The cam its intake runners were tuned with (airflow.js `breathingGeometry`): a cam
+  // changed later in BUILD keeps the manifold.
+  manifoldCam: Object.freeze({ camDuration: 210, exhaustCamDuration: 218 }),
   springRate: 50,
   redline: 7500,
 });

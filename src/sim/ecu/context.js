@@ -2,7 +2,7 @@
  * Assembling the ECU's world from the app's state: which parts are fitted, what the day
  * is like, what condition the engine is in.
  *
- * Kept apart from the physics so the dyno, the live engine, the drag strip and the tests
+ * Kept apart from the physics so the dyno, the live engine and the tests
  * all build the same picture the same way.
  */
 

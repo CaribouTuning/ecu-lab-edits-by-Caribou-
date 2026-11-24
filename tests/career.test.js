@@ -75,6 +75,17 @@ describe('grading', () => {
     const v = evaluateJob(job, FIXES['intake-maf'](customerCar(job.car)));
     expect(v.pay).toBeGreaterThanOrEqual(job.pay);
   });
+
+  it('a car whose engine failed in the shop is unsafe, pays nothing and costs a rebuild', () => {
+    const job = jobById('intake-maf');
+    const fixed = FIXES['intake-maf'](customerCar(job.car));
+    const blown = { ...fixed, session: { ...fixed.session, health: { piston: 100, bearing: 0, valve: 100 } } };
+    const v = evaluateJob(job, blown);
+    expect(v.verdict).toBe('unsafe');
+    expect(v.pay).toBe(0);
+    expect(v.health).toBe(0);
+    expect(v.repair).toBeGreaterThan(evaluateJob(job, fixed).repair);
+  });
 });
 
 describe('the shop', () => {

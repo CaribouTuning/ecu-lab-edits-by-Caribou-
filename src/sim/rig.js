@@ -38,9 +38,11 @@ import { DEFAULT_AFR, DEFAULT_BOOST, DEFAULT_ENGINE_CONFIG, DEFAULT_MODS, DEFAUL
  * @param {Record<string, string>} [opts.faults]
  * @param {boolean} [opts.nitrousArmed] a nitrous kit's arming switch on the dyno (default on)
  * @param {number} [opts.bottleK] the bottle's temperature at the start of the pull
+ * @param {any} [opts.layout] the breakpoints the preset's calibration is written on (the
+ *   game grid where the engine fits it, by default)
  */
-export function buildRig({ preset, build: patch = {}, cal: calPatch = {}, env, faults, nitrousArmed = true, bottleK } = {}) {
-  const p = preset ? applyPreset(presetById(preset)) : null;
+export function buildRig({ preset, build: patch = {}, cal: calPatch = {}, env, faults, nitrousArmed = true, bottleK, layout = null } = {}) {
+  const p = preset ? applyPreset(presetById(preset), layout) : null;
   const build = {
     engineConfig: p?.engineConfig ?? DEFAULT_ENGINE_CONFIG,
     mods: p?.mods ?? DEFAULT_MODS,
@@ -58,6 +60,12 @@ export function buildRig({ preset, build: patch = {}, cal: calPatch = {}, env, f
     // its tables were written for, which matters once a rich flame's heat depends on how
     // rich it is (thermo.js, heatReleasedShare).
     mafScalar: p?.mafScalar ?? 1,
+    // Which factory engine this is, as APPLY_PRESET records it: RESET ALL TO STOCK runs
+    // that engine's own fuel strategy (factoryFuel.js).
+    presetId: p?.presetId ?? null,
+    // And the induction it left the factory with: what RESET ALL TO STOCK calibrates for.
+    factoryInduction: p?.factoryInduction ?? null,
+    originPresetId: p?.presetId ?? null,
     ethanolPct: p?.ethanolPct ?? 0,
     ...patch,
   };
@@ -89,7 +97,10 @@ export function buildRig({ preset, build: patch = {}, cal: calPatch = {}, env, f
     loadKpa, ...tables, veTruth, turboOn: build.turboOn, boostCurve: build.boostCurve,
     octaneLabel: fuel.label, fuel, injectorCc: INJECTOR_OPTS[build.injIdx].cc,
     ecuInjectorCc: build.ecuInjectorCc, injectorLabel: INJECTOR_OPTS[build.injIdx].label,
-    mods: build.mods, mafScalar: build.mafScalar, derived, turbine, compressor,
+    mods: build.mods, mafScalar: build.mafScalar ?? p?.mafScalar ?? 1, derived, turbine, compressor,
+    // The engine's own exhaust: its backpressure is part of how it breathes and what the
+    // advisor and the factory calibration price.
+    exhaustDia: EXHAUST_DIA_OPTS[build.exhaustDiaIdx].dia,
     ...(blower ? { blower, blowerRatio: build.blowerRatio ?? blower.defaultRatio } : {}),
     ...(build.nitrous ? { nitrous: build.nitrous } : {}),
   });
@@ -106,6 +117,8 @@ export function buildRig({ preset, build: patch = {}, cal: calPatch = {}, env, f
       ...sweepArgs(loadKpa),
       ...(legacy ? {} : { ecu: gear ? { ...ecu(), cond: { ...ecu().cond, gear } } : ecu() }),
     }),
+    /** A dyno pull's arguments with the ECU in the loop, for a caller adding its own. */
+    pullArgs: (loadKpa = 100) => ({ ...sweepArgs(loadKpa), ecu: ecu() }),
     /** TUNE → INJECTORS' duty at an RPM of a full-throttle pull, as EcuLab asks for it. */
     dutyPreview: (rpm = dutyPreviewRpm(derived)) => injectorDutyPreview({ ...sweepArgs(100), ecu: ecu(), rpm }),
     /** The live engine config, as EcuLab builds it. */

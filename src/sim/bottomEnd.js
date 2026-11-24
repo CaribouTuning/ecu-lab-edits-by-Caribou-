@@ -15,7 +15,9 @@
  * These are PRACTICE BANDS, not failure points: an engine past its band does not explode
  * at the next RPM, it wears its rod bearings, rings and pins out of all proportion, and the
  * risk of a thrown rod climbs with the square of the speed (the inertia load does). The
- * simulator flags the band, in BUILD and in the pull log; it does not model the failure.
+ * simulator flags the band, in BUILD and in the pull log. A dyno pull's few seconds past it
+ * cost nothing; held there on LIVE, the excess inertia load wears the bearings out
+ * (damage.js `liveWear`, DAMAGE_OVERSPEED_PER_S).
  */
 
 import { COEFF } from './coefficients.js';

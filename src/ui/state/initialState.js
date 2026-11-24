@@ -30,6 +30,11 @@ import {
  * @property {{intake: boolean, exhaust: boolean, headers: boolean, intercooler: boolean}} mods bolt-ons fitted
  * @property {boolean} turboOn
  * @property {number[]} boostCurve psi, indexed by RPM
+ * @property {string|null} [originPresetId] the factory engine this build started as, kept
+ *   through part changes (presetId is not); null for an engine of the player's own
+ * @property {{turboOn: boolean, turbineIdx: number, turbineCount?: number, compressorIdx: number, boostCurve: number[]}|null} [factoryInduction]
+ *   the induction the engine left the factory with (null: naturally aspirated); what RESET
+ *   ALL TO STOCK calibrates for
  * @property {string|null} [blowerId] the supercharger fitted (a BLOWER_OPTS id), or none
  * @property {number} [blowerRatio] crank pulley ÷ blower pulley
  * @property {{kit: 'wet'|'dry', shotHp: number, heater: boolean, bottleLb: number}|null} [nitrous]
@@ -75,6 +80,9 @@ import {
  * @property {number[][]} afr target air/fuel ratio table, indexed [LOAD][RPM]
  * @property {boolean} tablesDirty true once VE/spark/fuel has been hand-edited since
  *   the last preset load or reset-to-stock
+ * @property {Untuned|null} [untuned] the cells the axes were extended into, by table, as
+ *   `row:col` keys: they carry the old edge's values (what the ECU read there before) and
+ *   are shown as not tuned until the player writes them
  * @property {import('../components/selection.js').Selection|null} selection
  *   the currently selected calibration-grid cell, row, column or range, or null
  * @property {object} ecu the engine management calibration beyond the three base tables
@@ -101,7 +109,8 @@ import {
 
 /**
  * A stored calibration in a map slot.
- * @typedef {{ve: number[][], timing: number[][], afr: number[][], ecu: object, layout?: import('../../sim/layouts.js').Layout|string|null}} MapSlot
+ * @typedef {{ve: number[][], timing: number[][], afr: number[][], ecu: object, layout?: import('../../sim/layouts.js').Layout|string|null, untuned?: Untuned|null}} MapSlot
+ * @typedef {{ve: string[], timing: string[], afr: string[]}} Untuned
  */
 
 /**
@@ -260,6 +269,12 @@ export function makeInitialState({ blank = false } = {}) {
       mods: DEFAULT_MODS,
       turboOn: false,
       boostCurve: [...DEFAULT_BOOST],
+      // The induction the engine left the factory with; none (naturally aspirated) until a
+      // factory engine is chosen (APPLY_PRESET).
+      factoryInduction: null,
+      // The factory engine this build started as (APPLY_PRESET), kept through part changes;
+      // null for an engine of the player's own.
+      originPresetId: null,
       // A supercharger (a BLOWER_OPTS id) and its pulley ratio, and a nitrous kit. None
       // fitted to start; a turbo and a supercharger are never fitted together.
       blowerId: null,
@@ -296,6 +311,7 @@ export function makeInitialState({ blank = false } = {}) {
       maps: [null, null, null, null],
       activeMap: 0,
       tablesDirty: false,
+      untuned: null,
       selection: null,
       rangeMode: false,
       diffView: false,

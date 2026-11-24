@@ -69,9 +69,15 @@ export const loadText = (unit, v) => (unit === 'g/cyl' ? v.toFixed(2) : String(v
  *   CHANGES view to draw
  * @param {boolean} [props.diffView] draw each cell's change from `baseline`
  * @param {number} [props.diffScale] the change at which the tint stops brightening
+ * @param {string[]|null} [props.untuned] cells (`row:col`) the axes were extended into and
+ *   nobody has tuned yet: drawn plain and dashed, so the work left shows
+ * @param {string[]|null} [props.unreached] cells (`row:col`) above the boost the engine
+ *   makes at that column's speed (state/reach.js): greyed, still editable
  * @returns {React.ReactElement}
  */
-export function TuningGrid({ data, min, max, decimals, selection, setSelection, rangeMode = false, setData, baseline, diffView = false, diffScale = 1, axes = GAME_LAYOUT.ve }) {
+export function TuningGrid({ data, min, max, decimals, selection, setSelection, rangeMode = false, setData, baseline, diffView = false, diffScale = 1, axes = GAME_LAYOUT.ve, untuned = null, unreached = null }) {
+  const notTuned = React.useMemo(() => new Set(untuned ?? []), [untuned]);
+  const notReached = React.useMemo(() => new Set(unreached ?? []), [unreached]);
   const clampR = (r) => Math.min(Math.max(r, 0), axes.load.length - 1);
   const clampC = (c) => Math.min(Math.max(c, 0), axes.rpm.length - 1);
   // An engine computer's own grid has three or four times the cells: smaller ones, so
@@ -215,17 +221,25 @@ export function TuningGrid({ data, min, max, decimals, selection, setSelection, 
             {data[ri].map((val, ci) => (
               <button
                 key={ci}
-                aria-label={`${axes.rpm[ci]} RPM, ${loadText(axes.loadUnit, load)} ${axes.loadUnit}`}
+                aria-label={`${axes.rpm[ci]} RPM, ${loadText(axes.loadUnit, load)} ${axes.loadUnit}${notTuned.has(`${ri}:${ci}`) ? ', not tuned' : ''}${notReached.has(`${ri}:${ci}`) ? ', not reached yet' : ''}`}
+                data-untuned={notTuned.has(`${ri}:${ci}`) ? 'true' : undefined}
+                data-unreached={notReached.has(`${ri}:${ci}`) ? 'true' : undefined}
                 aria-pressed={isSelected(ri, ci)}
                 onPointerDown={(e) => onCellPointerDown(e, ri, ci)}
                 onPointerEnter={(e) => onCellPointerEnter(e, ri, ci)}
                 onClick={(e) => onCellClick(e, ri, ci)}
                 style={{
                   width: cw, height: ch, flexShrink: 0,
-                  border: isAnchor(ri, ci) ? `2px solid ${T.acc}` : isSelected(ri, ci) ? `2px solid ${T.ink}` : `1px solid ${shadowAlpha(0.35)}`,
-                  background: !diff ? heat(val, min, max) : diff[ri][ci] === 0 ? T.panel2 : diffTint(diff[ri][ci], diffScale),
-                  color: diff && diff[ri][ci] === 0 ? T.ink2 : T.ink,
+                  border: isAnchor(ri, ci) ? `2px solid ${T.acc}` : isSelected(ri, ci) ? `2px solid ${T.ink}`
+                    : notTuned.has(`${ri}:${ci}`) ? `1px dashed ${T.ink2}` : `1px solid ${shadowAlpha(0.35)}`,
+                  // Not tuned: no heat colour, so it does not pass for a value someone chose.
+                  background: notTuned.has(`${ri}:${ci}`) && !diff ? T.panel2
+                    : !diff ? heat(val, min, max) : diff[ri][ci] === 0 ? T.panel2 : diffTint(diff[ri][ci], diffScale),
+                  color: (diff && diff[ri][ci] === 0) || notTuned.has(`${ri}:${ci}`) ? T.ink2 : T.ink,
                   fontFamily: T.mono, fontSize: dense ? 11 : 12, fontWeight: 700,
+                  // Past the boost the engine makes here: faded back, so the rows it runs
+                  // stand out. Still a cell: a tuner may write it ahead of the boost.
+                  opacity: notReached.has(`${ri}:${ci}`) && !isSelected(ri, ci) ? 0.35 : 1,
                   // A mouse drag across cells must not start a text selection.
                   userSelect: 'none',
                 }}
@@ -235,6 +249,16 @@ export function TuningGrid({ data, min, max, decimals, selection, setSelection, 
         ))}
       </div>
     </div>
+    {notReached.size > 0 && (
+      <p data-testid="unreached-note" style={{ margin: '8px 0 0', fontSize: 12, lineHeight: 1.5, color: T.ink2 }}>
+        Faded cells are above the boost this engine makes at that speed (on its last full-throttle pull, or its boost target before the first). They brighten once the engine reaches them.
+      </p>
+    )}
+    {notTuned.size > 0 && (
+      <p data-testid="untuned-note" style={{ margin: '8px 0 0', fontSize: 12, lineHeight: 1.5, color: T.ink2 }}>
+        Dashed cells are not tuned yet: they hold the edge row&apos;s values, which is what the ECU read there before the axes were extended. Each one is yours once you change it.
+      </p>
+    )}
     </div>
   );
 }

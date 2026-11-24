@@ -33,6 +33,7 @@ import styles from './EngineScreen.module.css';
 /** How BUILD names a figure the app assumed for a player's own engine, with the value it used. */
 const ASSUMED_LABEL = {
   camDuration: (c) => `intake cam duration ${c.camDuration}°`,
+  exhaustCamDuration: (c) => `exhaust cam duration ${c.exhaustCamDuration ?? c.camDuration}°`,
   valvetrain: (c) => `valvetrain ${String(c.valvetrain ?? 'dohc').toUpperCase()}`,
   valvesPerCyl: (c) => `${c.valvesPerCyl ?? 4} valves per cylinder`,
   blockMaterial: (c) => `${c.blockMaterial.toLowerCase()} block`,
@@ -131,7 +132,7 @@ export function EngineScreen({ active, onToggle, engineDerived, activePreset, ve
     <BuildSection
       active={active} onClick={() => onToggle('engine')}
       icon={Settings} label="Engine Architecture"
-      sub={`${engineDerived.displacementL.toFixed(1)}L ${engineConfig.configuration} · ${engineConfig.compression.toFixed(1)}:1 · ${engineConfig.camDuration}° cam`}
+      sub={`${engineDerived.displacementL.toFixed(1)}L ${engineConfig.configuration} · ${engineConfig.compression.toFixed(1)}:1 · ${engineConfig.camDuration}°/${engineConfig.exhaustCamDuration ?? engineConfig.camDuration}° cam`}
     >
       <div className={styles.label}>Start From a Real Engine</div>
       <Select
@@ -288,15 +289,23 @@ export function EngineScreen({ active, onToggle, engineDerived, activePreset, ve
       </ExpandableInfo>
 
       <div className={styles.labelSpaced}>
-        Camshaft Duration: {engineConfig.camDuration}° <span className={styles.overlapNote}>· overlap {Math.round(engineDerived.overlapDeg)}°</span>
+        Intake cam duration: {engineConfig.camDuration}° <span className={styles.overlapNote}>· overlap {Math.round(engineDerived.overlapDeg)}°</span>
       </div>
-      <input type="range" min={CUSTOM_ENGINE_LIMITS.camDuration.min} max={CUSTOM_ENGINE_LIMITS.camDuration.max} step={CUSTOM_ENGINE_LIMITS.camDuration.step} value={engineConfig.camDuration} onChange={(e) => setCfg({ camDuration: Number(e.target.value) })} className={styles.slider} />
+      <input type="range" aria-label="Intake cam duration" min={CUSTOM_ENGINE_LIMITS.camDuration.min} max={CUSTOM_ENGINE_LIMITS.camDuration.max} step={CUSTOM_ENGINE_LIMITS.camDuration.step} value={engineConfig.camDuration} onChange={(e) => setCfg({ camDuration: Number(e.target.value) })} className={styles.slider} />
       <div className={styles.rangeCaption}>
         <span>mild · low-end torque</span><span>wild · top-end power</span>
       </div>
+      <div className={styles.labelSpaced}>
+        Exhaust cam duration: {engineConfig.exhaustCamDuration ?? engineConfig.camDuration}°
+      </div>
+      <input type="range" aria-label="Exhaust cam duration" min={CUSTOM_ENGINE_LIMITS.exhaustCamDuration.min} max={CUSTOM_ENGINE_LIMITS.exhaustCamDuration.max} step={CUSTOM_ENGINE_LIMITS.exhaustCamDuration.step} value={engineConfig.exhaustCamDuration ?? engineConfig.camDuration} onChange={(e) => setCfg({ exhaustCamDuration: Number(e.target.value) })} className={styles.slider} />
+      <div className={styles.rangeCaption}>
+        <span>late opening · more expansion</span><span>early blowdown · top-end</span>
+      </div>
       <ExpandableInfo title="What camshaft duration actually does">
         Duration is how long, in crank degrees, a valve stays open. Hold the intake valve open longer and at <b className={styles.em}>low RPM</b> some charge gets pushed back out during compression — you lose bottom end. But at <b className={styles.em}>high RPM</b> there is barely time to fill the cylinder at all, and that extra open time is exactly what keeps it breathing.
-        <br /><br />So a bigger cam does not add power everywhere — it <i>moves</i> the power. Watch the VE table and the dyno curve: the peak slides up the RPM range and the low-RPM cells drop. This sandbox models it by sampling the breathing curve at a cam-shifted engine speed, which is the honest way to represent it.
+        <br /><br />So a bigger cam does not add power everywhere — it <i>moves</i> the power. Watch the VE table and the dyno curve: the peak slides up the RPM range and the low-RPM cells drop. The simulator gets this from the gas exchange itself: it opens and closes each valve on its lobe, crank degree by crank degree, and the filling falls out.
+        <br /><br />The two lobes are separate, as on a real cam: factory exhaust lobes usually run a few degrees longer than the intake. A longer exhaust lobe opens the valve earlier, giving up a little expansion work to empty the cylinder better at high RPM.
         <br /><br /><b className={styles.em}>Overlap</b> is the window where both valves are open together. It grows with duration, and it is why cammed engines idle lumpy, pull weak manifold vacuum, and sound the way they do.
       </ExpandableInfo>
 

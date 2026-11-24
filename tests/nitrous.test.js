@@ -105,7 +105,9 @@ describe('what it does to the engine', () => {
     const gains = [50, 100, 150].map((shot) => (at(pull(kit(shot)), 4500).hp - base) / S.DRIVETRAIN_EFF / shot);
     for (const g of gains) {
       expect(g).toBeGreaterThan(0.85);
-      expect(g).toBeLessThan(1.05);
+      // 1.05 plus the counting of molar expansion (thermo.js, molarExpansion): the rich
+      // spray's products gain the most moles of any mixture, and the 150 shot reads 1.051.
+      expect(g).toBeLessThan(1.06);
     }
     expect(Math.max(...gains) - Math.min(...gains)).toBeLessThan(0.1);
   });
@@ -219,8 +221,10 @@ describe('fuel while spraying', () => {
   });
 
   it('closed loop stands down while spraying rather than trimming the nitrous toward the base target', () => {
-    const eng = makeEngine({ build: { ...FUELLED, nitrous: kit(100) }, cal: { 'nitrous.minTpsPct': 50 } });
-    const { rows } = runLive(eng, { seconds: 12, pedal: (t) => (t > 3 ? 55 : 0), coolantC: 90, aux: { nitrous: true }, holdRpm: 4000 });
+    // A 22% opening holds this engine at part load at 4000 RPM (a throttle's area grows fast
+    // with its angle: 55% is already near full load), with the window armed from 20%.
+    const eng = makeEngine({ build: { ...FUELLED, nitrous: kit(100) }, cal: { 'nitrous.minTpsPct': 20 } });
+    const { rows } = runLive(eng, { seconds: 12, pedal: (t) => (t > 3 ? 22 : 0), coolantC: 90, aux: { nitrous: true }, holdRpm: 4000 });
     const spraying = rows.filter((r) => r.nitrous > 0);
     expect(spraying.length).toBeGreaterThan(50);
     // Part throttle, inside the closed-loop region: the trims would otherwise act here, and
@@ -231,6 +235,24 @@ describe('fuel while spraying', () => {
       expect(r.ltft).toBe(0);
       expect(r.lambda).toBeLessThan(0.85);
     }
+  });
+
+  it('on LIVE the lean cut judges the spray, not the mixture from before it opened', () => {
+    // A base tune at λ 0.97 at full throttle, past the λ 0.95 cut: before the shot's fuel
+    // arrives the wideband reads that. Judged on the first step, the cut shut the nitrous
+    // off the moment it opened, whatever the spray itself ran at.
+    const eng = makeEngine({ build: { ...FUELLED, nitrous: kit(50) } });
+    eng.tables.afr = eng.tables.afr.map((row) => row.map((v) => v + 1.5));
+    const { rows } = runLive(eng, { seconds: 10, pedal: (t) => (t > 3 ? 100 : 0), coolantC: 90, aux: { nitrous: true }, holdRpm: 5000 });
+    const spraying = rows.slice(-40).filter((r) => r.nitrous > 0);
+    expect(spraying.length).toBe(40);
+    for (const r of spraying) expect(r.lambda).toBeLessThan(0.95);
+    expect(rows.some((r) => r.protect.includes('nitrous lean'))).toBe(false);
+  });
+
+  it('a dry kit\'s fuel is offered only for a dry kit: on a wet kit it does nothing', () => {
+    expect(S.ECU_META.find((m) => m.path === 'nitrous.dryFuelPct').nitrousKit).toBe('dry');
+    expect(S.ECU_META.find((m) => m.path === 'nitrous.fuelTrimPct').nitrousKit).toBeUndefined();
   });
 
   it('the pump feeds the kit too: a weak one sags the rail and a wet kit\'s fuel falls with it', () => {
@@ -244,7 +266,9 @@ describe('fuel while spraying', () => {
   });
 
   it('a naturally aspirated engine\'s exhaust-heat protection talks about its valves and cat, not a turbine', () => {
-    const ev = rich().events.find((e) => e.type === 'egtprot');
+    // The protection set to act at the 700 °C floor, so it acts on this spray: what is
+    // checked is what it says.
+    const ev = stock(kit(150), { cal: { 'protect.egtLimitC': 700 } }).events.find((e) => e.type === 'egtprot');
     expect(ev).toBeDefined();
     expect(ev.cause).not.toMatch(/turbine/);
   });

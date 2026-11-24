@@ -1,5 +1,5 @@
 /**
- * The numbers docs/accuracy.md and Learn article 39 tell people about the model.
+ * The numbers docs/accuracy.md and Learn article 34 tell people about the model.
  *
  * Those pages describe the model with measured figures — the presets' table, and the
  * size of each known approximation. A page like that goes stale silently: the physics
@@ -23,19 +23,9 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DOC = readFileSync(join(ROOT, 'docs/accuracy.md'), 'utf8');
 const LEARN = readFileSync(join(ROOT, 'src/ui/screens/dash/LearnScreen.jsx'), 'utf8');
 
+/** A preset's pull as the app runs it: the hardware's own breathing, the ECU in the loop. */
 function pullFor(preset) {
-  const patch = S.applyPreset(preset);
-  const fuel = S.tankFuel(patch);
-  const derived = S.deriveEngine(patch.engineConfig);
-  return S.simulateSweep({
-    loadKpa: 100, ve: patch.ve, veTruth: patch.ve, layout: patch.layout, timing: patch.timing, afr: patch.afr,
-    turboOn: patch.turboOn, boostCurve: patch.boostCurve,
-    octaneBonus: fuel.bonus, octaneLabel: fuel.label,
-    fuel, injectorCc: S.INJECTOR_OPTS[patch.injIdx].cc,
-    ecuInjectorCc: patch.ecuInjectorCc, injectorLabel: S.INJECTOR_OPTS[patch.injIdx].label,
-    mods: patch.mods, mafScalar: patch.mafScalar, derived, turbine: S.presetTurbine(preset),
-    compressor: S.presetCompressor(preset),
-  });
+  return makeEngine({ preset: preset.id }).pull(100);
 }
 
 const PRESETS = S.ENGINE_PRESETS.map((preset) => {
@@ -78,16 +68,16 @@ describe('docs/accuracy.md: the presets table is what the model does', () => {
 });
 
 describe('the known approximations are the size the pages say', () => {
-  it('fuel per horsepower: presets 0.44-0.50 lb/hp·h, 9.3-10.7 hp per lb/min of air', () => {
+  it('fuel per horsepower: presets 0.39-0.51 lb/hp·h, 9.8-11.4 hp per lb/min of air', () => {
     const [lo, hi] = span(PRESETS.map((r) => r.peak.bsfc));
-    expect(lo).toBeGreaterThanOrEqual(0.435);
-    expect(hi).toBeLessThan(0.505);
+    expect(lo).toBeGreaterThanOrEqual(0.385);
+    expect(hi).toBeLessThan(0.515);
     const [alo, ahi] = span(PRESETS.map((r) => (r.peak.hp / S.DRIVETRAIN_EFF) / ((r.peak.maf * 60) / 453.6)));
-    expect(alo).toBeGreaterThanOrEqual(9.25);
-    expect(ahi).toBeLessThan(10.75);
+    expect(alo).toBeGreaterThanOrEqual(9.75);
+    expect(ahi).toBeLessThan(11.45);
   });
 
-  it('turbo spool: 5-26% under the rated torque at 1500-2000 RPM, where the real engine makes it', () => {
+  it('turbo spool: from 1% over to 21% under the rated torque at 1500-2000 RPM, where the real engine makes it', () => {
     // Each maker publishes a flat torque plateau from a stated RPM; below 2000 RPM that is
     // the real engine's torque wherever the plateau has begun.
     const plateauFrom = { n54: 1400, 'b58-m0': 1380, 'b58-m1': 1800, 'ea888-gti': 1500, 'ea888-r': 1800 };
@@ -101,29 +91,30 @@ describe('the known approximations are the size the pages say', () => {
       }
     }
     const [lo, hi] = span(deficits);
-    expect(lo).toBeGreaterThanOrEqual(0.045);
-    expect(hi).toBeLessThanOrEqual(0.27);
+    expect(lo).toBeGreaterThanOrEqual(-0.015);
+    expect(hi).toBeLessThanOrEqual(0.215);
   });
 
-  it('peak torque: the turbo presets within 0-5% of their rating, the GTI about 10% under', () => {
+  it('peak torque: the turbo presets within 0-5.5% of their rating, the N54 about 10% over and the GTI about 7% under', () => {
     for (const { preset, pull, boosted } of PRESETS) {
       if (!boosted) continue;
       const over = crank(pull.peakTq) / preset.factory.crankTq - 1;
-      if (preset.id === 'ea888-gti') expect(over).toBeCloseTo(-0.10, 1);
+      if (preset.id === 'ea888-gti') expect(over).toBeCloseTo(-0.07, 1);
+      else if (preset.id === 'n54') expect(over).toBeCloseTo(0.10, 1);
       else {
-        expect(Math.abs(over)).toBeLessThanOrEqual(0.05);
+        expect(Math.abs(over)).toBeLessThanOrEqual(0.055);
       }
     }
   });
 
-  it('exhaust temperature at peak power: about 750-770 °C NA, 755-785 °C boosted', () => {
+  it('exhaust temperature at peak power: about 725-760 °C NA, 760-825 °C boosted', () => {
     for (const { peak, boosted } of PRESETS) {
       if (boosted) {
-        expect(peak.egt).toBeGreaterThanOrEqual(755);
-        expect(peak.egt).toBeLessThanOrEqual(785);
+        expect(peak.egt).toBeGreaterThanOrEqual(758);
+        expect(peak.egt).toBeLessThanOrEqual(827);
       } else {
-        expect(peak.egt).toBeGreaterThanOrEqual(745);
-        expect(peak.egt).toBeLessThanOrEqual(770);
+        expect(peak.egt).toBeGreaterThanOrEqual(720);
+        expect(peak.egt).toBeLessThanOrEqual(762);
       }
     }
   });
@@ -164,13 +155,13 @@ describe('the known approximations are the size the pages say', () => {
     }
   });
 
-  it('best power: very rich costs power, about 11% from lambda 0.88 to 0.70', () => {
+  it('best power: very rich costs power, about 7% from lambda 0.88 to 0.70', () => {
     const [best, rich] = [13.0, 10.3].map((afr) => egtAt(ENGINES[0], afr).hp);
-    expect(1 - rich / best).toBeGreaterThan(0.08);
-    expect(1 - rich / best).toBeLessThan(0.14);
+    expect(1 - rich / best).toBeGreaterThan(0.05);
+    expect(1 - rich / best).toBeLessThan(0.09);
   });
 
-  it('best torque: the cycle peaks a median of about 3°, 95% within 11° and at most about 15° after the textbook MBT', () => {
+  it('best torque: the cycle peaks a median of about 3°, 95% within 12° and at most about 15° after the textbook MBT', () => {
     const offsets = [];
     for (let seed = 1; seed <= 200; seed++) {
       const build = randomBuild(seed);
@@ -200,19 +191,19 @@ describe('the known approximations are the size the pages say', () => {
     const median = offsets[Math.floor(offsets.length / 2)];
     expect(median).toBeGreaterThanOrEqual(1);
     expect(median).toBeLessThanOrEqual(3);
-    expect(offsets[Math.floor(0.95 * (offsets.length - 1))]).toBeLessThanOrEqual(11);
+    expect(offsets[Math.floor(0.95 * (offsets.length - 1))]).toBeLessThanOrEqual(12);
     expect(offsets[offsets.length - 1]).toBeLessThanOrEqual(15);
   });
 
-  it('peak cylinder pressure: about 54-67 bar on the NA presets, 72-86 bar on the turbo presets', () => {
+  it('peak cylinder pressure: about 52-65 bar on the NA presets, 69-82 bar on the turbo presets', () => {
     for (const { peak, peakTq, boosted } of PRESETS) {
       const pmax = Math.max(peak.peakPressure, peakTq.peakPressure);
       if (boosted) {
-        expect(pmax).toBeGreaterThanOrEqual(71.5);
-        expect(pmax).toBeLessThanOrEqual(86.5);
+        expect(pmax).toBeGreaterThanOrEqual(68.5);
+        expect(pmax).toBeLessThanOrEqual(82.5);
       } else {
-        expect(pmax).toBeGreaterThanOrEqual(53.5);
-        expect(pmax).toBeLessThanOrEqual(67.5);
+        expect(pmax).toBeGreaterThanOrEqual(51.5);
+        expect(pmax).toBeLessThanOrEqual(65.5);
       }
     }
     expect(S.COEFF.PEAK_PRESSURE_LIMIT_BAR).toBe(105);
@@ -228,38 +219,43 @@ describe('the known approximations are the size the pages say', () => {
     expect(S.DRIVETRAIN_EFF).toBe(0.85);
   });
 
-  it('boost: 20 psi with an intercooler is about 1.75-1.8× the NA engine; a generic turbo build burns 0.56-0.71 lb/hp·h', () => {
+  it('boost: 20 psi with an intercooler is about 1.8× the NA engine on a turbine sized for it, about 1.65× on one too small; a generic turbo build burns 0.54-0.68 lb/hp·h', () => {
     const cfg = { ...S.DEFAULT_ENGINE_CONFIG, compression: 9.0 };
     const derived = S.deriveEngine(cfg);
     const fuel = S.OCTANE_OPTS.find((o) => o.label === '93');
-    const powerAt = (psi, intercooler) => {
+    const powerAt = (psi, intercooler, turbineIdx = 1) => {
       const turbo = psi > 0;
       const mods = { ...S.DEFAULT_MODS, intercooler, turboFitted: turbo };
-      const ve = S.computeHardwareVE(cfg, mods, { turboOn: turbo, turbine: turbo ? S.TURBINE_OPTS[1] : null, exhaustDia: 3.0, fuel, peakBoostPsi: psi });
+      const ve = S.computeHardwareVE(cfg, mods, { turboOn: turbo, turbine: turbo ? S.TURBINE_OPTS[turbineIdx] : null, exhaustDia: 3.0, fuel, peakBoostPsi: psi });
       const map = S.BARO_KPA + psi * S.PSI_TO_KPA;
       const at = (timingVal) => S.evaluatePoint({
         rpm: 5500, mapKpa: map, boostPsi: psi, veVal: S.interp2(ve, 5500, map), timingVal,
         afrCommanded: turbo ? 11.8 : 12.8, fuel, mods, mafScalar: 1, mafErrorBase: 1,
         injectorCc: 1000, ecuInjectorCc: 1000, derived, compressor: S.COMPRESSOR_OPTS[2],
-        turbine: turbo ? S.TURBINE_OPTS[1] : null,
+        turbine: turbo ? S.TURBINE_OPTS[turbineIdx] : null,
       });
       const probe = at(10);
       return at(Math.min(probe.threshold - 1, probe.mbtIdeal));
     };
     const na = powerAt(0, true).hp;
-    const ratio = powerAt(20, true).hp / na;
-    expect(ratio).toBeGreaterThanOrEqual(1.74);
-    expect(ratio).toBeLessThan(1.8);
+    // The Large passes this 3.5 L engine's exhaust at 20 psi; the Medium holds the drive
+    // pressure at about 1.7x the boost and takes power back through it.
+    const sized = powerAt(20, true, 2).hp / na;
+    expect(sized).toBeGreaterThanOrEqual(1.77);
+    expect(sized).toBeLessThan(1.83);
+    const small = powerAt(20, true, 1).hp / na;
+    expect(small).toBeGreaterThanOrEqual(1.61);
+    expect(small).toBeLessThan(1.68);
     const [lo, hi] = span([powerAt(10, true), powerAt(20, true), powerAt(10, false), powerAt(20, false)].map((p) => p.bsfc));
-    expect(lo).toBeGreaterThanOrEqual(0.56);
-    expect(hi).toBeLessThan(0.71);
+    expect(lo).toBeGreaterThanOrEqual(0.535);
+    expect(hi).toBeLessThan(0.685);
   });
 
-  it('exhaust backpressure at rated power: 1.0-1.45× the boost pressure on the turbo presets', () => {
+  it('exhaust backpressure at rated power: 1.0-1.5× the boost pressure on the turbo presets', () => {
     for (const { peak, boosted } of PRESETS) {
       if (!boosted) continue;
       expect(peak.emp / peak.map).toBeGreaterThanOrEqual(0.95);
-      expect(peak.emp / peak.map).toBeLessThanOrEqual(1.45);
+      expect(peak.emp / peak.map).toBeLessThanOrEqual(1.5);
     }
   });
 });
@@ -267,7 +263,7 @@ describe('the known approximations are the size the pages say', () => {
 describe('the pages say where their numbers are checked', () => {
   it('points readers at this test, so a stale page is a failing test and not a quiet one', () => {
     expect(DOC).toContain('tests/accuracy-claims.test.js');
-    expect(LEARN).toContain('39. What this simulator simplifies');
+    expect(LEARN).toContain('34. What this simulator simplifies');
   });
 });
 
@@ -276,7 +272,7 @@ describe('every screen the app sends a player to exists', () => {
   // has to be there, or the advice is a dead end however right it is. Scanned from the
   // source rather than from messages that happen to fire, so a rare event is covered too.
   const VIEWS = {
-    BUILD: ['ENGINE', 'INDUCTION', 'FUEL SYSTEM', 'EXHAUST'],
+    BUILD: ['ENGINE', 'INDUCTION', 'FUEL SYSTEM', 'EXHAUST', 'BOLT-ONS'],
     TUNE: ['AIRFLOW', 'SPARK', 'FUEL', 'INJECTORS', 'SENSORS', 'BOOST', 'VVT', 'IDLE', 'PROTECT', 'TORQUE', 'NITROUS'],
   };
   const files = [];
@@ -293,7 +289,7 @@ describe('every screen the app sends a player to exists', () => {
     const bad = [];
     for (const f of files) {
       const text = readFileSync(f, 'utf8');
-      for (const m of text.matchAll(/\b(BUILD|TUNE) (?:→|›|&rsaquo;) ([A-Z][A-Z ]*[A-Z])/g)) {
+      for (const m of text.matchAll(/\b(BUILD|TUNE) (?:→|›|&rsaquo;) ([A-Z][A-Z -]*[A-Z])/g)) {
         const name = m[2].trim();
         if (!VIEWS[m[1]].some((v) => name === v || name.startsWith(`${v} `))) bad.push(`${f.slice(ROOT.length + 1)}: "${m[0]}"`);
       }

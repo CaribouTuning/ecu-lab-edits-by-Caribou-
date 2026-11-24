@@ -12,6 +12,23 @@ import * as S from '../src/sim/index.js';
 export const makeEngine = S.buildRig;
 
 /**
+ * A pull whose first point sits at a manifold pressure: the throttle opening that holds it
+ * there, found by bisection. A pull's load is a throttle opening (it stays where it is put, so
+ * the pressure falls as the speed rises); a test written for "a pull at 25 kPa" means this.
+ *
+ * @param {ReturnType<typeof makeEngine>} eng
+ * @param {number} kpa the manifold pressure wanted at the first point
+ */
+export function pullAtKpa(eng, kpa) {
+  let lo = 0.5; let hi = 100;
+  for (let i = 0; i < 18; i += 1) {
+    const mid = (lo + hi) / 2;
+    if (eng.pull(mid).points[0].map < kpa) lo = mid; else hi = mid;
+  }
+  return eng.pull((lo + hi) / 2);
+}
+
+/**
  * Runs the live engine through a throttle schedule, returning every step's log row.
  * @param {ReturnType<typeof makeEngine>} eng
  * @param {object} opts
