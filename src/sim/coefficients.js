@@ -843,38 +843,4 @@ export const COEFF = {
   // the flat penalty this rule replaced, so it is never harsher than its predecessor.
   COMPRESSION_PENALTY_PER_POINT: 10,
   COMPRESSION_PENALTY_CAP: 15,
-
-  // --- Drivetrain & drag strip (see drivetrain.js) ---
-  // Fraction of peak grip a tyre still transmits once it has broken loose. Sliding
-  // friction is always below static, which is exactly why a spinning tyre is slower
-  // than one held at the limit — and why the driver model below lifts rather than
-  // staying flat.
-  TIRE_SLIDING_FRACTION: 0.92,
-  // Mass of one wheel and tyre assembly, kg, and the fraction of `m·r²` its rotational
-  // inertia actually comes to. A wheel is not a thin ring — the rim's mass sits well
-  // inboard of the tread — so a radius of gyration around 0.74·r is representative,
-  // giving I ≈ 0.55·m·r². Because I/r² is then just a mass, the wheels contribute a
-  // fixed effective mass regardless of tyre size, which is the correct behaviour: a
-  // taller tyre is harder to spin up but also gears the car taller by the same factor.
-  WHEEL_ASSEMBLY_MASS_KG: 22,
-  WHEEL_RING_FRACTION: 0.55,
-  // Manifold pressure assumed while the throttle is shut mid-shift, kPa. Feeds the
-  // existing pumping-loss model so revs fall against real engine braking rather than
-  // at an invented rate.
-  SHIFT_MANIFOLD_KPA: 30,
-  // How far below the limiter's cut speed the driver takes the next gear. Shifting
-  // exactly at the cut wastes the last few hundred RPM bouncing off it.
-  UPSHIFT_MARGIN_RPM: 60,
-
-  // --- Driver model ---
-  // A real driver does not hold the throttle flat while the tyre is spinning: first
-  // gear runs past 40 mph, so that would be a burnout halfway down the strip. After a
-  // reaction delay they feather it to keep the tyre just at the limit, which is both
-  // what happens and what is fastest. Backing off is quick and getting back in is
-  // deliberate, so the loop settles instead of oscillating.
-  DRIVER_REACTION_S: 0.45,
-  DRIVER_LIFT_RATE: 3.2,        // throttle fraction shed per second while spinning
-  DRIVER_REAPPLY_RATE: 1.1,     // throttle fraction restored per second once hooked
-  DRIVER_MIN_THROTTLE: 0.30,    // how far the driver will lift before riding it out
-  DRIVER_REAPPLY_MARGIN: 0.94,  // fraction of the grip limit they wait to fall under
 };
