@@ -31,7 +31,6 @@ export const TAB_KEYWORDS = {
   tune: ['calibration', 'tables'],
   live: ['engine', 'sound', 'rev'],
   dyno: ['pull', 'power'],
-  drag: ['strip', 'quarter'],
 };
 
 /**
@@ -63,9 +62,6 @@ export const SECTION_LABELS = {
   'dyno/log': { label: 'Pull Log', keywords: ['events'] },
   'dyno/score': { label: 'Score', keywords: ['grade'] },
   'dyno/history': { label: 'History', keywords: ['runs', 'previous'] },
-  'drag/body': { label: 'Car Body', keywords: ['weight', 'aero'] },
-  'drag/gearing': { label: 'Gearbox', keywords: ['gears', 'ratio'] },
-  'drag/tyres': { label: 'Tyres & Drive', keywords: ['tires', 'traction'] },
 };
 
 /** DYNO sections that render nothing until there is a pull to show. */
@@ -75,7 +71,7 @@ const RESULT_SECTIONS = new Set(['dyno/result', 'dyno/log', 'dyno/data', 'dyno/s
  * What decides which sections have anything to show.
  * @typedef {object} SectionFlags
  * @property {boolean} [career] CAREER is being played: its SHOP stands in for HOME, and it has
- *   no drag strip (see `CAREER_NAV_ITEMS` in AppShell.jsx)
+ *   the same screens as SANDBOX otherwise (see `CAREER_NAV_ITEMS` in AppShell.jsx)
  * @property {boolean} hasResult a pull is showing
  * @property {boolean} hasHistory at least one pull is banked
  * @property {boolean} hasNitrous a nitrous kit is fitted
@@ -111,13 +107,13 @@ export function sectionAvailable(key, { hasResult, hasHistory, hasNitrous, runni
 export function pageCommands(flags, go) {
   /** @type {Command[]} */
   const out = [];
-  // CAREER's nav: the shop is home and there is no drag strip, so the palette offers
+  // CAREER's nav: the shop is home, so the palette offers
   // what that nav does. `go('shop', null)` opens the shop as a nav tap does.
   if (flags.career) {
     out.push({ id: 'page:shop', label: 'SHOP', kind: 'page', keywords: ['career', 'customers', 'garage', 'jobs'], run: () => go('shop', null) });
   }
   for (const [tab, sections] of Object.entries(ROUTES)) {
-    if (flags.career && (tab === 'dash' || tab === 'drag')) continue;
+    if (flags.career && tab === 'dash') continue;
     const name = TAB_NAMES[tab];
     out.push({ id: `page:${tab}`, label: name, kind: 'page', keywords: TAB_KEYWORDS[tab], run: () => go(tab, null) });
     if (sections.length < 2) continue;
