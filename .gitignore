@@ -6,6 +6,7 @@
 # The slashless form ignores the name whatever it is on disk.
 node_modules
 dist/
+dist-single/
 release/
 coverage/
 

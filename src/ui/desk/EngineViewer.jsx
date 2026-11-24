@@ -6,8 +6,6 @@
 import React, { useEffect, useRef } from 'react';
 
 import { world as W } from '../tokens.js';
-import { THREE } from '../world/gfx.js';
-import { makeEngine } from '../world/models/engine.js';
 
 import { useStage } from './useStage.js';
 
@@ -15,6 +13,10 @@ import styles from './Desk.module.css';
 
 /** The size the camera is framed for, metres: a big six or a V8 just fills it, so a smaller block is seen smaller. */
 const REF = { len: 0.8, hgt: 0.6 };
+
+/** What the viewer draws with, fetched when it first draws (useStage.js). */
+const loadEngineModel = () => Promise.all([import('../world/gfx.js'), import('../world/models/engine.js')])
+  .then(([gfx, model]) => ({ THREE: gfx.THREE, makeEngine: model.makeEngine }));
 
 /**
  * @param {object} props
@@ -30,7 +32,7 @@ export function EngineViewer({ spec, rpm = 0, label = 'The engine as built', cap
   const key = JSON.stringify(spec);
   useEffect(() => { live.current.spec = spec; live.current.dirty = true; }, [key]); // eslint-disable-line react-hooks/exhaustive-deps -- keyed on the content: the object is new every render, and re-sending it would rebuild the 3D model each frame
 
-  const { canvasRef, failed } = useStage((stage) => {
+  const { canvasRef, failed } = useStage((stage, { THREE, makeEngine }) => {
     stage.setTime(0, true);
     stage.scene.fog = null;
     stage.scene.background = new THREE.Color(W.engine.backdrop);
@@ -38,7 +40,7 @@ export function EngineViewer({ spec, rpm = 0, label = 'The engine as built', cap
     stage.scene.add(floor);
     const turntable = new THREE.Group();
     stage.scene.add(turntable);
-    /** @type {ReturnType<typeof makeEngine>|null} */
+    /** @type {ReturnType<typeof import('../world/models/engine.js').makeEngine>|null} */
     let engine = null;
     /** @type {{len: number, wid: number, hgt: number}|null} */
     let frame = null;
@@ -82,7 +84,7 @@ export function EngineViewer({ spec, rpm = 0, label = 'The engine as built', cap
         stage.followLight(new THREE.Vector3(0, 0, 0));
       },
     };
-  }, { hatch: false });
+  }, { hatch: false, load: loadEngineModel });
 
   const onDown = (e) => { live.current.drag = e.clientX; e.currentTarget.setPointerCapture?.(e.pointerId); };
   const onMove = (e) => {

@@ -28,6 +28,12 @@ declare module '*?worker&inline' {
   export default WorkerFactory;
 }
 
+/** Vite's worker import (sim/warm.js): a Worker class for the worker's own file. */
+declare module '*?worker' {
+  const WorkerFactory: new () => Worker;
+  export default WorkerFactory;
+}
+
 /** Vite's raw import: a file's text, built into the bundle (ui/sim/breathingStore.js). */
 declare module '*?raw' {
   const text: string;

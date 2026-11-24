@@ -5,12 +5,13 @@
 
 import React, { useEffect, useRef } from 'react';
 
-import { THREE } from '../world/gfx.js';
-
-import { buildShopScene } from './shopScene.js';
 import { useStage } from './useStage.js';
 
 import styles from './Desk.module.css';
+
+/** What the shop is drawn with, fetched when it first draws (useStage.js). */
+const loadShop = () => Promise.all([import('../world/gfx.js'), import('./shopScene.js')])
+  .then(([gfx, scene]) => ({ THREE: gfx.THREE, buildShopScene: scene.buildShopScene }));
 
 /** The shop's three hotspots: what each is called and what it opens. */
 export const HOTSPOTS = [
@@ -56,9 +57,9 @@ export function ShopBackdrop({ mode, phone = false, covered = false, engineSpec,
   useEffect(() => { live.current.cars = cars; live.current.carsDirty = true; }, [carsKey]); // eslint-disable-line react-hooks/exhaustive-deps -- keyed on the content, as the engine is
   /** @type {React.MutableRefObject<Record<string, HTMLButtonElement|null>>} */
   const spots = useRef({});
-  const v = new THREE.Vector3();
 
-  const { canvasRef, failed } = useStage((stage) => {
+  const { canvasRef, failed } = useStage((stage, { THREE, buildShopScene }) => {
+    const v = new THREE.Vector3();
     const shop = buildShopScene(stage, { engineSpec: live.current.spec, cars: live.current.cars });
     live.current.carsDirty = false;
     let idle = 0;
@@ -222,7 +223,7 @@ export function ShopBackdrop({ mode, phone = false, covered = false, engineSpec,
         }
       },
     };
-  }, { shadows: true, real: true });
+  }, { shadows: true, real: true, load: loadShop });
 
   // Settings offers to turn the 3D back on once it has fallen back to the flat shop.
   useEffect(() => { if (failed) onFlat?.(); }, [failed, onFlat]);

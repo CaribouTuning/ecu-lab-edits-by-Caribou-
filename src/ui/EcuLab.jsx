@@ -37,7 +37,7 @@ import { advanceSaga, openChapter, unreadCount } from './career/story.js';
 import { Desk } from './desk/Desk.jsx';
 import { LearnApp } from './desk/LearnApp.jsx';
 import { PhysicsApp } from './desk/PhysicsApp.jsx';
-import { engineSpecOf } from './world/models/engine.js';
+import { engineSpecOf } from './world/models/engineSpec.js';
 import { CareerBar } from './career/CareerBar.jsx';
 import { nextStep, spotOf } from './flow.js';
 import { evaluateJob } from './career/evaluate.js';

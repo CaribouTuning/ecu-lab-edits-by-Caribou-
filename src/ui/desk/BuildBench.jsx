@@ -13,7 +13,7 @@ import { BuildBenchMode } from '../components/BuildSection.jsx';
 import { EngineStart } from '../screens/build/EngineStart.jsx';
 import { changedParts } from '../state/baseMap.js';
 import { useBuild, useTune } from '../state/StoreProvider.jsx';
-import { engineSpecOf } from '../world/models/engine.js';
+import { engineSpecOf } from '../world/models/engineSpec.js';
 
 import { EngineViewer } from './EngineViewer.jsx';
 

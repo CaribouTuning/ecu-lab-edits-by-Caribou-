@@ -1,12 +1,15 @@
 /**
  * A small pixel-art 3D stage inside a component: the Build app's engine and the shop behind
  * the laptop both use one.
+ *
+ * three.js and the scenes drawn with it are most of the app's weight, and nothing needs them
+ * before a 3D view first draws: the stage and whatever the view asks for (`opts.load`) are
+ * fetched then, so the start screen, the laptop and every table come up without them.
  */
 
 import { hasHardwareGl, read3d, write3d } from './render3d.js';
 import { useEffect, useRef, useState } from 'react';
 
-import { createStage } from '../world/stage.js';
 import { createGovernor } from './stageGovernor.js';
 
 // Versioned: a phone that stepped down while the shop was still drawn, unseen, behind its apps
@@ -30,8 +33,10 @@ function saveRung(n) {
 }
 
 /**
- * @param {(stage: ReturnType<typeof createStage>) => {update?: (dt: number) => (boolean|void), dispose?: () => void}} setup
- * @param {{shadows?: boolean, hatch?: boolean, real?: boolean}} [opts]
+ * @template [M=null]
+ * @param {(stage: ReturnType<typeof import('../world/stage.js').createStage>, mods: M) => {update?: (dt: number) => (boolean|void), dispose?: () => void}} setup
+ * @param {{shadows?: boolean, hatch?: boolean, real?: boolean, load?: () => Promise<M>}} [opts] `load`: the
+ *   modules `setup` draws with, fetched with the stage and handed to it
  * @returns {{canvasRef: React.MutableRefObject<HTMLCanvasElement|null>, failed: boolean, stageRef: React.MutableRefObject<any>}}
  */
 export function useStage(setup, opts = {}) {
@@ -43,7 +48,6 @@ export function useStage(setup, opts = {}) {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return undefined;
-    let stage;
     if (typeof WebGLRenderingContext === 'undefined') { setFailed(true); return undefined; }
     // The lit shop only: a player who turned the 3D off, or a start that failed last time.
     const choice = read3d();
@@ -51,52 +55,60 @@ export function useStage(setup, opts = {}) {
     // No hardware drawing on this machine: every 3D view stays flat, not just the shop,
     // unless the player has forced the 3D on.
     if (choice !== 'force' && !hasHardwareGl()) { setFailed(true); return undefined; }
-    try {
-      // Hatching only where a scene asks for it: over the shop it read as diagonal stripes.
-      // A software renderer (hardware acceleration off) would draw the shop at a crawl or
-      // black: ask for no context at all rather than a bad one, and the flat shop shows.
-      stage = createStage(canvas, { shadows: opts.shadows ?? false, sketch: true, hatch: opts.hatch ?? false, real: !!opts.real, hardwareOnly: !!opts.real && choice !== 'force' });
-    } catch {
-      setFailed(true);
-      return undefined;
-    }
-    // Whatever stops it drawing from here is the same answer for this visit: the flat shop.
-    const giveUp = () => setFailed(true);
-    const shaderFailed = () => { write3d('off'); setFailed(true); };
-    canvas.addEventListener('webglcontextlost', giveUp);
-    if (opts.real) stage.renderer.debug.onShaderError = shaderFailed;
-    stageRef.current = stage;
-    // Only the lit shop (`real`) is heavy enough to need it; the small engine views are not.
-    const governor = createGovernor(opts.real ? savedRung() : 0);
-    if (governor.rung > 0) stage.setMaxDpr(governor.dpr);
-    const scene = setupRef.current(stage) ?? {};
-    // A resize clears the canvas, so the next frame is drawn whatever update says.
-    let dirty = true;
-    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => { stage.resize(); dirty = true; }) : null;
-    if (ro && canvas.parentElement) ro.observe(canvas.parentElement);
-    let raf = 0;
-    let last = 0;
-    const frame = (now) => {
-      const ms = last ? now - last : 0;
-      const dt = last ? Math.min(0.1, ms / 1000) : 0;
-      last = now;
-      const draw = scene.update?.(dt) !== false || dirty;
-      if (draw) { stage.render(); dirty = false; }
-      if (opts.real && governor.frame(ms, draw)) {
-        stage.setMaxDpr(governor.dpr); dirty = true;
-        saveRung(governor.rung);
+    // Fetched now, once a view is to be drawn; the mount may be gone by the time they arrive.
+    let gone = false;
+    let teardown = () => {};
+    Promise.all([import('../world/stage.js'), opts.load ? opts.load() : null]).then(([{ createStage }, mods]) => {
+      if (gone) return;
+      let stage;
+      try {
+        // Hatching only where a scene asks for it: over the shop it read as diagonal stripes.
+        // A software renderer (hardware acceleration off) would draw the shop at a crawl or
+        // black: ask for no context at all rather than a bad one, and the flat shop shows.
+        stage = createStage(canvas, { shadows: opts.shadows ?? false, sketch: true, hatch: opts.hatch ?? false, real: !!opts.real, hardwareOnly: !!opts.real && choice !== 'force' });
+      } catch {
+        setFailed(true);
+        return;
       }
+      // Whatever stops it drawing from here is the same answer for this visit: the flat shop.
+      const giveUp = () => setFailed(true);
+      const shaderFailed = () => { write3d('off'); setFailed(true); };
+      canvas.addEventListener('webglcontextlost', giveUp);
+      if (opts.real) stage.renderer.debug.onShaderError = shaderFailed;
+      stageRef.current = stage;
+      // Only the lit shop (`real`) is heavy enough to need it; the small engine views are not.
+      const governor = createGovernor(opts.real ? savedRung() : 0);
+      if (governor.rung > 0) stage.setMaxDpr(governor.dpr);
+      const scene = setupRef.current(stage, /** @type {any} */ (mods)) ?? {};
+      // A resize clears the canvas, so the next frame is drawn whatever update says.
+      let dirty = true;
+      const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => { stage.resize(); dirty = true; }) : null;
+      if (ro && canvas.parentElement) ro.observe(canvas.parentElement);
+      let raf = 0;
+      let last = 0;
+      const frame = (now) => {
+        const ms = last ? now - last : 0;
+        const dt = last ? Math.min(0.1, ms / 1000) : 0;
+        last = now;
+        const draw = scene.update?.(dt) !== false || dirty;
+        if (draw) { stage.render(); dirty = false; }
+        if (opts.real && governor.frame(ms, draw)) {
+          stage.setMaxDpr(governor.dpr); dirty = true;
+          saveRung(governor.rung);
+        }
+        raf = requestAnimationFrame(frame);
+      };
       raf = requestAnimationFrame(frame);
-    };
-    raf = requestAnimationFrame(frame);
-    return () => {
-      cancelAnimationFrame(raf);
-      canvas.removeEventListener('webglcontextlost', giveUp);
-      ro?.disconnect();
-      scene.dispose?.();
-      stage.dispose();
-      stageRef.current = null;
-    };
+      teardown = () => {
+        cancelAnimationFrame(raf);
+        canvas.removeEventListener('webglcontextlost', giveUp);
+        ro?.disconnect();
+        scene.dispose?.();
+        stage.dispose();
+        stageRef.current = null;
+      };
+    }).catch(() => { if (!gone) setFailed(true); });
+    return () => { gone = true; teardown(); };
     // The stage is made once per mount; what changes is fed through refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

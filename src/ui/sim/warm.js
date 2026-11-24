@@ -9,8 +9,8 @@
 
 import { breathingSnapshot, seedBreathing } from '../../sim/index.js';
 import { loadBreathing, saveBreathing } from './breathingStore.js';
-// Built into this bundle as a blob, so the single-file build carries it like everything else.
-import SimWorker from './simWorker.js?worker&inline';
+// Its own file, fetched when the first worker starts (the single-file build carries it inside).
+import SimWorker from './simWorker.js?worker';
 
 /** @typedef {{w: Worker|null|false, ready: Promise<void>, next: number, pending: Map<string, Promise<any>>, waiting: Map<number, (r: any) => void>}} Lane */
 
